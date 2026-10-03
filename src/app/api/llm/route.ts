@@ -1,4 +1,5 @@
 import { createGateway, generateText } from "ai";
+import { fakeModel } from "@/ai/mock";
 
 // Thin proxy to the Vercel AI Gateway. The browser orchestrates the band (so the
 // debug panel sees every step); each call here is one short model request.
@@ -28,6 +29,11 @@ export async function POST(req: Request) {
     body = (await req.json()) as Body;
   } catch {
     return Response.json({ error: "Bad JSON body" }, { status: 400 });
+  }
+  // Local development only: key "mock" answers with a canned band so the UI flow can be exercised offline.
+  if (process.env.NODE_ENV !== "production" && body.key === "mock") {
+    await new Promise((r) => setTimeout(r, 400 + Math.random() * 900));
+    return Response.json({ text: fakeModel(body), usage: { inputTokens: 0, outputTokens: 0 }, serverMs: performance.now() - t0 });
   }
   const apiKey = body.key?.trim() || process.env.IMPROV_TROOP_SERVER_KEY;
   if (!apiKey) return Response.json({ error: "Add your Vercel AI Gateway key to let the band think." }, { status: 401 });
