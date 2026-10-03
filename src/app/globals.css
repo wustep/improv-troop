@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+:root {
+  --paper: #f6f0e1;
+  --paper-2: #efe6d0;
+  --ink: #2c2a35;
+  --ink-soft: #5b5666;
+  --pencil-red: #c8463c;
+  --pencil-blue: #3b5bab;
+  --pencil-green: #4f8a3a;
+  --pencil-yellow: #e2a93b;
+  --pencil-purple: #5a4a9e;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --font-hand: var(--font-hand);
+  --font-script: var(--font-script);
+}
+
+html,
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-hand), "Comic Sans MS", system-ui, sans-serif;
+}
