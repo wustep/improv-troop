@@ -41,7 +41,9 @@ export function Stage() {
   // the band on stage is the chart's band when one is loaded (so sketches and takes match what you hear)
   const band = score?.members.length ? score.members : members;
   const n = Math.max(1, band.length);
-  const spriteW = Math.max(118, Math.min(220, (width - 24) / n - 8));
+  // narrow screens: up to three per row, sprites shrink rather than overflow
+  const perRow = width < 560 ? (n === 4 ? 2 : Math.min(n, 3)) : n;
+  const spriteW = Math.max(84, Math.min(220, (width - 8) / perRow - 8));
 
   const computer = useMemo(() => (score ? new FrameComputer(score) : null), [score]);
 
@@ -132,7 +134,7 @@ export function Stage() {
           </div>
         )}
 
-        <div className="relative flex items-end justify-center gap-2 pt-16">
+        <div className="relative flex flex-wrap items-end justify-center gap-x-2 gap-y-6 pt-16">
           {band.map((m, i) => {
             const inst = INSTRUMENTS[m.instrument];
             const bubble = bubbles[m.id];
