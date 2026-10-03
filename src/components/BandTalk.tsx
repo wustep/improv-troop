@@ -33,17 +33,36 @@ export function BandTalk() {
     <div>
       <div className="mb-1 font-[family-name:var(--font-script)] text-xl font-bold">Band talk</div>
       <ol ref={listRef} className="max-h-72 space-y-2 overflow-y-auto pr-1">
-        {msgs.map((c) => {
+        {msgs.map((c, i) => {
           const m = members.find((x) => x.id === c.from);
           const to = c.to && c.to !== "band" ? nameOf(c.to) : null;
+          const prev = msgs[i - 1];
+          const divider =
+            !prev || prev.phase !== c.phase || (c.phase === "jam" && prev.bar !== c.bar)
+              ? c.phase === "jam" && c.bar !== undefined
+                ? `bar ${c.bar + 1}`
+                : c.phase === "count-off"
+                  ? "before the count-off"
+                  : c.phase === "setup"
+                    ? "the plan"
+                    : null
+              : null;
           return (
-            <li key={c.id} className="flex gap-2">
-              <div className="shrink-0">{m ? <AnimalPortrait animal={m.animal} size={30} /> : <span className="inline-block w-[30px] text-center text-xl">✎</span>}</div>
-              <div className="min-w-0 text-[15px] leading-snug">
-                <span className="font-bold">{nameOf(c.from)}</span>
-                {to && <span className="text-ink-soft"> → {to}</span>}
-                {c.bar !== undefined && c.phase === "jam" && <span className="ml-1 text-xs text-ink-soft">bar {c.bar + 1}</span>}
-                <div>{c.text}</div>
+            <li key={c.id} className="flex flex-col gap-1">
+              {divider && (
+                <div className="flex items-center gap-2 text-xs text-ink-soft">
+                  <span className="h-px flex-1 border-t border-dashed border-[rgba(44,42,53,0.3)]" />
+                  {divider}
+                  <span className="h-px flex-1 border-t border-dashed border-[rgba(44,42,53,0.3)]" />
+                </div>
+              )}
+              <div className="flex gap-2">
+                <div className="shrink-0">{m ? <AnimalPortrait animal={m.animal} size={30} /> : <span className="inline-block w-[30px] text-center text-xl">✎</span>}</div>
+                <div className="min-w-0 text-[15px] leading-snug">
+                  <span className="font-bold">{nameOf(c.from)}</span>
+                  {to && <span className="text-ink-soft"> → {to}</span>}
+                  <div>{c.text}</div>
+                </div>
               </div>
             </li>
           );

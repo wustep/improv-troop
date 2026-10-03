@@ -6,6 +6,8 @@ import { troopAudio } from "@/audio/engine";
 import { ANIMALS, INSTRUMENTS } from "@/music/instruments";
 import { useDebug } from "@/state/debug";
 import { useTroop } from "@/state/store";
+import { FormMap } from "./FormMap";
+import { Bunting } from "./stage/Bunting";
 import { FrameComputer } from "./stage/frames";
 import { RoughBox } from "./ui/rough";
 
@@ -20,6 +22,23 @@ function useWidth<T extends HTMLElement>() {
     return () => ro.disconnect();
   }, []);
   return [ref, w] as const;
+}
+
+function IntroNote({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="sticky-note absolute left-1 top-14 z-30 w-[17.5rem] -rotate-[2deg] px-3 py-2 text-[15px] leading-snug" role="note">
+      <button type="button" onClick={onClose} className="absolute right-1.5 top-0.5 text-lg leading-none text-ink-soft hover:text-ink" aria-label="Dismiss">
+        ×
+      </button>
+      <div className="font-[family-name:var(--font-script)] text-xl font-bold">How to jam</div>
+      <ol className="ml-4 list-decimal">
+        <li>Pick the band and their instruments →</li>
+        <li>Press ▶ to hear their sketch</li>
+        <li>Add a gateway key, then <b>Let them jam!</b> to make them think it through</li>
+      </ol>
+      <div className="mt-1 text-xs text-ink-soft">Tap a name to mute them. Tap the form strip to jump around.</div>
+    </div>
+  );
 }
 
 export function Stage() {
@@ -37,6 +56,13 @@ export function Stage() {
   const labelRef = useRef<HTMLDivElement>(null);
   const chordRef = useRef<HTMLDivElement>(null);
   const [bar, setBar] = useState(-1);
+  const muted = useTroop((s) => s.muted);
+  const toggleMute = useTroop((s) => s.toggleMute);
+  const readyBars = useTroop((s) => s.readyBars);
+  const autopilotBars = useTroop((s) => s.autopilotBars);
+  const play = useTroop((s) => s.play);
+  const seenIntro = useTroop((s) => s.seenIntro);
+  const dismissIntro = useTroop((s) => s.dismissIntro);
 
   // the band on stage is the chart's band when one is loaded (so sketches and takes match what you hear)
   const band = score?.members.length ? score.members : members;
@@ -118,15 +144,16 @@ export function Stage() {
   }, [chat, score, bar]);
 
   return (
-    <RoughBox seed="stage" rough={{ strokeWidth: 2 }} className="stage-paper w-full px-3 pb-2 pt-3">
+    <RoughBox seed="stage" rough={{ strokeWidth: 2 }} className="stage-paper w-full px-3 pb-3 pt-3">
       <div ref={wrapRef} className="relative">
-        <div className="flex min-h-7 items-baseline justify-between gap-3 px-2 font-[family-name:var(--font-script)] text-ink-soft">
+        <Bunting />
+        <div className="flex min-h-7 items-baseline justify-between gap-3 px-2 pt-9 font-[family-name:var(--font-script)] text-ink-soft">
           <div ref={labelRef} className="truncate text-xl" aria-live="off" />
           <div ref={chordRef} className="text-2xl font-bold text-[var(--pencil-blue)]" aria-label="current chord" />
         </div>
 
         {(genMode === "composer" || score?.engine === "ai") && (directorNote || thinking.has("director") || thinking.has("critic")) && (
-          <div className="director-card absolute right-2 top-9 z-20 max-w-[16rem] rotate-[1.5deg] px-3 py-2 text-sm leading-snug">
+          <div className="director-card absolute right-2 top-16 z-20 max-w-[16rem] rotate-[1.5deg] px-3 py-2 text-sm leading-snug">
             <div className="font-[family-name:var(--font-script)] text-base font-bold">
               {thinking.has("critic") ? "the judge is listening…" : thinking.has("director") ? "director is writing…" : "director's note"}
             </div>
@@ -134,11 +161,12 @@ export function Stage() {
           </div>
         )}
 
-        <div className="relative flex flex-wrap items-end justify-center gap-x-2 gap-y-6 pt-16">
+        <div className="relative flex flex-wrap items-end justify-center gap-x-2 gap-y-6 pt-10">
           {band.map((m, i) => {
             const inst = INSTRUMENTS[m.instrument];
             const bubble = bubbles[m.id];
             const isThinking = thinking.has(m.id);
+            const isMuted = muted.includes(m.id);
             return (
               <div key={`${m.id}:${m.instrument}`} className="relative flex flex-col items-center" style={{ width: spriteW }}>
                 <div
@@ -150,34 +178,52 @@ export function Stage() {
                 />
                 {(bubble || isThinking) && (
                   <div
-                    className={`bubble absolute z-10 ${i >= n / 2 ? "right-2" : "left-2"} max-w-[15rem] px-3 py-1.5 text-[15px] leading-snug`}
+                    className={`bubble absolute z-10 ${i >= n / 2 ? "bubble-right right-2" : "left-2"} max-w-[15rem] px-3 py-1.5 text-[15px] leading-snug`}
                     style={{ bottom: spriteW * 1.04 }}
                   >
                     {bubble && !isThinking ? bubble : <span className="thinking-dots" aria-label={`${m.name} is thinking`}><i>.</i><i>.</i><i>.</i></span>}
                   </div>
                 )}
-                <AnimalSprite
-                  ref={(h) => {
-                    sprites.current.set(m.id, h);
-                  }}
-                  animal={m.animal}
-                  instrument={m.instrument}
-                  size={spriteW}
-                />
-                <div className="-mt-1 text-center leading-tight">
-                  <div className="font-[family-name:var(--font-script)] text-xl font-bold" style={{ color: ANIMALS[m.animal].ink }}>
-                    {m.name}
-                    {score?.frame.leaderId === m.id && <span className="ml-1 text-sm text-[var(--pencil-red)]">★</span>}
-                  </div>
-                  <div className="text-sm text-ink-soft">{inst.name}</div>
+                <div className={`transition-opacity duration-300 ${isMuted ? "opacity-40 grayscale-[0.6]" : ""}`}>
+                  <AnimalSprite
+                    ref={(h) => {
+                      sprites.current.set(m.id, h);
+                    }}
+                    animal={m.animal}
+                    instrument={m.instrument}
+                    size={spriteW}
+                  />
                 </div>
+                <button
+                  type="button"
+                  onClick={() => toggleMute(m.id)}
+                  aria-pressed={isMuted}
+                  title={isMuted ? `Bring ${m.name} back in` : `Mute ${m.name}`}
+                  className="group -mt-1 rounded px-2 text-center leading-tight hover:bg-[rgba(226,169,59,0.2)]"
+                >
+                  <div className={`font-[family-name:var(--font-script)] text-xl font-bold ${isMuted ? "line-through decoration-2" : ""}`} style={{ color: ANIMALS[m.animal].ink }}>
+                    {m.name}
+                    {score?.frame.leaderId === m.id && <span className="ml-1 text-sm text-[var(--pencil-red)]" aria-label="leader">★</span>}
+                  </div>
+                  <div className="text-sm text-ink-soft">
+                    {isMuted ? "muted · tap to unmute" : inst.name}
+                    {!isMuted && <span className="ml-1 hidden text-xs group-hover:inline">· tap to mute</span>}
+                  </div>
+                </button>
               </div>
             );
           })}
         </div>
-        <svg className="pointer-events-none absolute bottom-10 left-0 h-6 w-full" preserveAspectRatio="none" viewBox="0 0 100 10" aria-hidden>
-          <path d="M0 6 Q 25 3 50 5 T 100 5" stroke="var(--ink)" strokeOpacity="0.35" strokeWidth="0.4" fill="none" vectorEffect="non-scaling-stroke" />
-        </svg>
+        {score && (
+          <FormMap
+            score={score}
+            playing={playing}
+            readyBars={readyBars}
+            autopilotBars={autopilotBars}
+            onSeek={(b) => void play(b)}
+          />
+        )}
+        {!seenIntro && <IntroNote onClose={dismissIntro} />}
       </div>
     </RoughBox>
   );

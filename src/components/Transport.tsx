@@ -27,7 +27,21 @@ export function Transport() {
   const loads = useLoadStates();
   const loading = loads.filter((l) => !l.ready && !l.error);
 
-  const goLabel = mode === "composer" ? (hasKey ? "Compose!" : "New take") : hasKey ? "Let them jam!" : "New take";
+  const goLabel = hasKey ? (mode === "composer" ? "Compose!" : "Let them jam!") : "Sketch a new take";
+
+  // Space toggles play/stop (unless typing)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== "Space" || e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.closest("input, textarea, select, [contenteditable]") || t.closest("button"))) return;
+      e.preventDefault();
+      if (useTroop.getState().playing) useTroop.getState().stop();
+      else void useTroop.getState().play();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   return (
     <div className="flex flex-wrap items-center gap-3">
@@ -39,7 +53,7 @@ export function Transport() {
         onClick={() => (playing ? stop() : void play())}
         disabled={!current}
         aria-label={playing ? "Stop" : "Play"}
-        title={playing ? "Stop" : "Play"}
+        title={playing ? "Stop (space)" : "Play (space)"}
       >
         {playing ? "■" : "▶"}
       </RoughButton>
@@ -73,8 +87,15 @@ export function Transport() {
         ) : gen.error ? (
           <span className="text-[var(--pencil-red)]">{gen.error}</span>
         ) : loading.length ? (
-          <span>
-            unpacking instruments… {loading.map((l) => `${l.instrument} ${l.total ? Math.round((l.loaded / l.total) * 100) : 0}%`).join(" · ")}
+          <span className="flex items-center gap-2">
+            <span>unpacking instruments…</span>
+            <span className="relative inline-block h-2.5 w-28 overflow-hidden rounded-full border-[1.5px] border-[var(--ink)]" aria-hidden>
+              <span
+                className="absolute inset-y-0 left-0 bg-[var(--pencil-yellow)]"
+                style={{ width: `${Math.round((loading.reduce((s, l) => s + (l.total ? l.loaded / l.total : 0), 0) / loading.length) * 100)}%` }}
+              />
+            </span>
+            <span className="text-xs">{loading.map((l) => l.instrument).join(", ")}</span>
           </span>
         ) : current ? (
           <span>
@@ -96,17 +117,18 @@ export function Takes() {
   const takes = useTroop((s) => s.takes);
   const current = useTroop((s) => s.current);
   const select = useTroop((s) => s.selectTake);
+  const remove = useTroop((s) => s.deleteTake);
   if (!takes.length) return null;
   return (
     <div>
       <div className="mb-1 font-[family-name:var(--font-script)] text-xl font-bold">Takes</div>
       <ol className="space-y-1">
         {takes.map((t, i) => (
-          <li key={t.id}>
+          <li key={t.id} className="group flex items-start gap-1">
             <button
               type="button"
               onClick={() => select(t.id)}
-              className={`w-full rounded px-2 py-1 text-left text-[15px] hover:bg-[rgba(226,169,59,0.25)] ${current?.id === t.id ? "bg-[rgba(226,169,59,0.4)]" : ""}`}
+              className={`min-w-0 flex-1 rounded px-2 py-1 text-left text-[15px] hover:bg-[rgba(226,169,59,0.25)] ${current?.id === t.id ? "bg-[rgba(226,169,59,0.4)]" : ""}`}
             >
               <span className="mr-1 text-ink-soft">#{takes.length - i}</span>
               {t.label}
@@ -114,6 +136,15 @@ export function Takes() {
                 {new Date(t.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
                 {t.score.critic?.scores.length ? ` · judge ${t.score.critic.scores.find((x) => x.candidate === t.score.critic!.chosen)?.score ?? ""}` : ""}
               </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => remove(t.id)}
+              className="px-1 pt-1 text-ink-soft opacity-0 hover:text-[var(--pencil-red)] focus:opacity-100 group-hover:opacity-100"
+              aria-label={`Delete take ${takes.length - i}`}
+              title="Delete this take"
+            >
+              ×
             </button>
           </li>
         ))}

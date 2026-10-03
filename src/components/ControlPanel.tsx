@@ -138,6 +138,36 @@ export function ControlPanel() {
       </Field>
 
       <Field>
+        <Label hint={`${members.length}/6 on stage`}>The band</Label>
+        {members.map((m) => (
+          <MemberRow
+            key={m.id}
+            m={m}
+            members={members}
+            onChange={(next) => setMembers(members.map((x) => (x.id === m.id ? next : x)))}
+            onRemove={() => setMembers(members.filter((x) => x.id !== m.id))}
+          />
+        ))}
+        {members.length < 6 && free.length > 0 && (
+          <div className="mt-2 flex flex-wrap items-center gap-1">
+            <span className="mr-1 text-sm text-ink-soft">invite:</span>
+            {free.map((a: AnimalId) => (
+              <button
+                key={a}
+                type="button"
+                onClick={() => setMembers([...members, { id: a, animal: a, name: ANIMALS[a].name, instrument: ANIMALS[a].defaultInstrument }])}
+                className="rounded-full p-0.5 hover:bg-[rgba(226,169,59,0.3)]"
+                title={`Invite ${ANIMALS[a].name} the ${ANIMALS[a].species}`}
+                aria-label={`Invite ${ANIMALS[a].name}`}
+              >
+                <AnimalPortrait animal={a} size={34} />
+              </button>
+            ))}
+          </div>
+        )}
+      </Field>
+
+      <Field>
         <Label hint={STYLES[s.style].blurb}>Style</Label>
         <div className="flex flex-wrap gap-1.5">
           {STYLE_LIST.map((id) => (
@@ -224,36 +254,6 @@ export function ControlPanel() {
       </Field>
 
       <Field>
-        <Label hint={`${members.length}/6 on stage`}>The troop</Label>
-        {members.map((m) => (
-          <MemberRow
-            key={m.id}
-            m={m}
-            members={members}
-            onChange={(next) => setMembers(members.map((x) => (x.id === m.id ? next : x)))}
-            onRemove={() => setMembers(members.filter((x) => x.id !== m.id))}
-          />
-        ))}
-        {members.length < 6 && free.length > 0 && (
-          <div className="mt-2 flex flex-wrap items-center gap-1">
-            <span className="mr-1 text-sm text-ink-soft">invite:</span>
-            {free.map((a: AnimalId) => (
-              <button
-                key={a}
-                type="button"
-                onClick={() => setMembers([...members, { id: a, animal: a, name: ANIMALS[a].name, instrument: ANIMALS[a].defaultInstrument }])}
-                className="rounded-full p-0.5 hover:bg-[rgba(226,169,59,0.3)]"
-                title={`Invite ${ANIMALS[a].name} the ${ANIMALS[a].species}`}
-                aria-label={`Invite ${ANIMALS[a].name}`}
-              >
-                <AnimalPortrait animal={a} size={34} />
-              </button>
-            ))}
-          </div>
-        )}
-      </Field>
-
-      <Field>
         <Label>Leader</Label>
         <div className="flex flex-wrap gap-1.5">
           {leaders.map((m) => (
@@ -316,7 +316,7 @@ export function ControlPanel() {
               </button>
             </div>
             <p className="mt-1 text-xs leading-snug text-ink-soft">
-              Without a key the troop plays from its own sketchbook — no model calls. Models are only called when you press the big button.
+              Without a key the band plays from its own sketchbook — no model calls. Models are only called when you press the big button.
             </p>
           </div>
           <div>

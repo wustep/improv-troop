@@ -196,3 +196,31 @@ body {
     animation: none;
   }
 }
+
+.sticky-note {
+  background: #fff3a8;
+  box-shadow: 2px 3px 0 rgba(44, 42, 53, 0.15);
+  border: 1px solid rgba(44, 42, 53, 0.25);
+}
+.sticky-note::before {
+  content: "";
+  position: absolute;
+  top: -9px;
+  left: 50%;
+  width: 54px;
+  height: 16px;
+  transform: translateX(-50%) rotate(-3deg);
+  background: rgba(220, 210, 180, 0.7);
+  border: 1px solid rgba(44, 42, 53, 0.12);
+}
+
+.bubble-right::after {
+  left: auto;
+  right: 30%;
+}
+
+/* bars the band hasn't played yet: washed out and pencil-hatched, like an unfinished sketch */
+.form-pending {
+  background-color: rgba(246, 240, 225, 0.72);
+  background-image: repeating-linear-gradient(-45deg, rgba(44, 42, 53, 0.3) 0 1.2px, transparent 1.2px 5px);
+}

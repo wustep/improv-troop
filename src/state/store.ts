@@ -42,7 +42,18 @@ interface TroopState {
   chat: ChatMessage[];
   playing: boolean;
   playToken: number;
+  /** Members silenced in the mix (tap a name tag on stage). */
+  muted: string[];
+  /** While the band is still improvising: bars ready from the top (null when the chart is complete). */
+  readyBars: number | null;
+  /** Bars the band vamped through on autopilot (live improv). */
+  autopilotBars: number[];
+  /** First-visit hints dismissed. */
+  seenIntro: boolean;
   hydrate(): void;
+  toggleMute(id: string): void;
+  deleteTake(id: string): void;
+  dismissIntro(): void;
   setSettings(patch: Partial<TroopSettings>): void;
   setStyle(style: TroopSettings["style"]): void;
   setStandard(id: string | null): void;
@@ -57,6 +68,31 @@ interface TroopState {
 }
 
 const LS = "improv-troop:v1";
+const LS_TAKES = "jamming:takes:v1";
+const LS_INTRO = "jamming:intro-seen";
+
+function loadTakes(): Take[] {
+  try {
+    const raw = localStorage.getItem(LS_TAKES);
+    const takes = raw ? (JSON.parse(raw) as Take[]) : [];
+    return takes.filter((t) => t?.score?.members?.every((m) => ANIMALS[m.animal] && INSTRUMENTS[m.instrument]));
+  } catch {
+    return [];
+  }
+}
+
+function saveTakes(takes: Take[]) {
+  try {
+    localStorage.setItem(LS_TAKES, JSON.stringify(takes.slice(0, 8)));
+  } catch {
+    // quota: keep fewer
+    try {
+      localStorage.setItem(LS_TAKES, JSON.stringify(takes.slice(0, 3)));
+    } catch {
+      /* give up quietly */
+    }
+  }
+}
 
 function load(): Partial<Pick<TroopState, "members" | "settings" | "apiKey" | "pianoPack">> {
   try {
@@ -141,13 +177,23 @@ export const useTroop = create<TroopState>((set, get) => {
     chat: [],
     playing: false,
     playToken: 0,
+    muted: [],
+    readyBars: null,
+    autopilotBars: [],
+    seenIntro: true,
 
     hydrate() {
       if (get().hydrated) return;
       const saved = load();
       const members = saved.members?.length ? saved.members.filter((m) => ANIMALS[m.animal] && INSTRUMENTS[m.instrument]) : get().members;
       const settings = reconcile({ ...defaultSettings(members), ...(saved.settings ?? {}) }, members);
-      set({ hydrated: true, members, settings, apiKey: saved.apiKey ?? "", pianoPack: saved.pianoPack ?? "salamander" });
+      let seenIntro = true;
+      try {
+        seenIntro = localStorage.getItem(LS_INTRO) === "1";
+      } catch {
+        /* ignore */
+      }
+      set({ hydrated: true, members, settings, apiKey: saved.apiKey ?? "", pianoPack: saved.pianoPack ?? "salamander", takes: loadTakes(), seenIntro });
       endedUnsub?.();
       endedUnsub = troopAudio.onEnded(() => {
         stopLiveWatch();
@@ -232,7 +278,8 @@ export const useTroop = create<TroopState>((set, get) => {
       if (!st.apiKey) {
         const { score } = generateLocal(settings, members);
         const take: Take = { id: score.id, score, label: `${STYLES[settings.style].name} sketch`, engine: "local", createdAt: Date.now() };
-        set((s) => ({ current: score, isSketch: false, takes: [take, ...s.takes].slice(0, 12), chat: [] }));
+        set((s) => ({ current: score, isSketch: false, takes: [take, ...s.takes].slice(0, 12), chat: [], readyBars: null, autopilotBars: [] }));
+        saveTakes(get().takes);
         void get().play();
         return;
       }
@@ -241,7 +288,7 @@ export const useTroop = create<TroopState>((set, get) => {
       controller = new AbortController();
       const runId = `run-${Date.now().toString(36)}`;
       useDebug.getState().startRun(runId, settings.mode);
-      set({ gen: { running: true, status: "Tuning up…", runId, mode: settings.mode, error: null }, chat: [] });
+      set({ gen: { running: true, status: "Tuning up…", runId, mode: settings.mode, error: null }, chat: [], readyBars: settings.mode === "improviser" ? 0 : null, autopilotBars: [] });
       void troopAudio.unlock().catch(() => {});
       void troopAudio.prepare(members, { pianoPack: st.pianoPack });
 
@@ -253,7 +300,12 @@ export const useTroop = create<TroopState>((set, get) => {
         onChat: (msg) => set((s) => ({ chat: [...s.chat, msg] })),
         onScore: (score) => {
           // live improv: start the band as soon as the first phrase is down
-          set({ current: score, isSketch: false });
+          set({
+            current: score,
+            isSketch: false,
+            readyBars: improv ? improv.readyBars() : null,
+            autopilotBars: improv ? improv.autopilotBars() : [],
+          });
           if (get().playing) troopAudio.updateScore(score);
           else if (improv && improv.readyBars() > 0 && !get().playing) void get().play();
         },
@@ -266,9 +318,11 @@ export const useTroop = create<TroopState>((set, get) => {
           current: score,
           isSketch: false,
           takes: [take, ...s.takes.filter((t) => t.id !== score.id)].slice(0, 12),
+          readyBars: null,
           gen: { running: false, status: "", runId, mode: settings.mode, error: null },
           chat: score.chat,
         }));
+        saveTakes(get().takes);
         if (get().playing) troopAudio.updateScore(score);
         else void get().play();
       };
@@ -286,7 +340,7 @@ export const useTroop = create<TroopState>((set, get) => {
         const err = e as Error;
         const cancelled = err.name === "AbortError";
         useDebug.getState().endRun(runId, cancelled ? "cancelled" : "error");
-        set({ gen: { running: false, status: "", runId, mode: settings.mode, error: cancelled ? null : err.message } });
+        set({ gen: { running: false, status: "", runId, mode: settings.mode, error: cancelled ? null : err.message }, readyBars: null });
       } finally {
         improv = null;
       }
@@ -302,8 +356,10 @@ export const useTroop = create<TroopState>((set, get) => {
       if (!score) return;
       await troopAudio.unlock();
       void troopAudio.prepare(score.members, { pianoPack: get().pianoPack, notesHint: notesHintFromScore(score) });
+      for (const m of score.members) troopAudio.setMute(m.id, get().muted.includes(m.id));
       troopAudio.play(score, { fromBar, countIn: fromBar === 0 });
       set((s) => ({ playing: true, playToken: s.playToken + 1 }));
+      if (!get().seenIntro) get().dismissIntro();
       // live improv watchdog: if playback catches up with the band's thinking, they vamp on autopilot
       stopLiveWatch();
       const tick = () => {
@@ -316,6 +372,7 @@ export const useTroop = create<TroopState>((set, get) => {
             if (improv.ensureReady(ready)) {
               const cur = get().current;
               if (cur) troopAudio.updateScore(cur);
+              set({ readyBars: improv.readyBars(), autopilotBars: improv.autopilotBars() });
             }
           }
         }
@@ -328,6 +385,27 @@ export const useTroop = create<TroopState>((set, get) => {
       troopAudio.stop();
       stopLiveWatch();
       set({ playing: false });
+    },
+
+    toggleMute(id) {
+      const muted = get().muted.includes(id) ? get().muted.filter((x) => x !== id) : [...get().muted, id];
+      troopAudio.setMute(id, muted.includes(id));
+      set({ muted });
+    },
+
+    deleteTake(id) {
+      const takes = get().takes.filter((t) => t.id !== id);
+      set({ takes });
+      saveTakes(takes);
+    },
+
+    dismissIntro() {
+      set({ seenIntro: true });
+      try {
+        localStorage.setItem(LS_INTRO, "1");
+      } catch {
+        /* ignore */
+      }
     },
 
     selectTake(id) {
