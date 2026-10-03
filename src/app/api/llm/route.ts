@@ -67,7 +67,9 @@ export async function POST(req: Request) {
     const err = e as { message?: string; statusCode?: number; status?: number; name?: string };
     const status = err.statusCode ?? err.status ?? 502;
     let message = err.message ?? "Model call failed";
-    if (status === 401 || status === 403) message = "The AI Gateway rejected that key.";
+    if (status === 401 || status === 403 || /unauthenticated|invalid api key|authentication/i.test(message)) {
+      return Response.json({ error: "The AI Gateway rejected that key — check it in “Brains & sounds”." }, { status: 401 });
+    }
     if (status === 429) message = "Rate limited by the AI Gateway — try again in a moment.";
     return Response.json({ error: message, name: err.name }, { status: status >= 400 && status < 600 ? status : 502 });
   }
