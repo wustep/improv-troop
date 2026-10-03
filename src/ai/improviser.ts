@@ -22,6 +22,7 @@ import {
   NOTES_ONLY,
   personaSystem,
   playedBlock,
+  sketchBlock,
   styleBlock,
 } from "./prompts";
 
@@ -304,7 +305,18 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
         ? playedBlock(members, parts, plan, frame, prevBars[0], prevBars.at(-1)!)
         : "  (nothing yet — this is the top of the tune)";
 
-      // 1) featured players
+      // 1) featured players (each gets the engine's sketch of their bars as a reference)
+      const preview = realize({
+        frame,
+        members,
+        plan,
+        motif,
+        seed: settings.seed,
+        bars,
+        memories: new Map([...memories].map(([k, v]) => [k, structuredClone(v)])),
+        priorFeatured: new Map(featuredByBar),
+        filter: (mid, bar) => featuredIds.includes(mid) && isFeaturedRole(plan[bar]?.roles[mid]),
+      });
       const fCalls = featuredIds.map(async (id) => {
         const m = members.find((x) => x.id === id)!;
         const myBars = bars.filter((b) => b !== last && isFeaturedRole(plan[b].roles[id]));
@@ -332,6 +344,8 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
               "",
               `YOUR BARS:`,
               describeBars(myBars, frame, plan, id),
+              "",
+              m.instrument === "drums" ? "" : sketchBlock(m, myBars, preview.parts, frame),
               "",
               NOTES_ONLY,
               m.instrument === "drums"

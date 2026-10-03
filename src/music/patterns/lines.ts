@@ -113,6 +113,8 @@ export function line(ctx: BarCtx): NoteEvent[] {
   const [lo, hi] = featured ? (ctx.inst.solo ?? ctx.inst.sweet) : ctx.inst.sweet;
   const out: NoteEvent[] = [];
   let p = ctx.mem.lastPitch ?? Math.round((lo + hi) / 2);
+  // stepping into the spotlight from an accompaniment register: start where solos live
+  if (featured && (p < lo || p > hi)) p = Math.round(lo + (hi - lo) * 0.4);
   const vel = velFor(ctx, 0.8);
   // solos climb over their section
   const arc = ctx.section.length > 1 ? ctx.barInSection / (ctx.section.length - 1) : 0.5;
@@ -123,11 +125,11 @@ export function line(ctx: BarCtx): NoteEvent[] {
     const c = chordAt(ctx, start);
     const pcs = lineScale(ctx, c);
     const strong = Math.abs(start - Math.round(start)) < 1e-6 && (ctx.beats === 3 || Math.round(start) % 2 === 0 || prior.density < 2.5);
-    // momentum with a pull toward the arc's center
+    // momentum, re-aimed now and then toward the arc's center (which climbs through a solo)
+    const bias = Math.max(-0.45, Math.min(0.45, (targetCenter - p) / 10));
     if (p > hi - 3) ctx.mem.direction = -1;
     else if (p < lo + 3) ctx.mem.direction = 1;
-    else if (ctx.rng.chance(0.22)) ctx.mem.direction = (ctx.mem.direction * -1) as 1 | -1;
-    else if (Math.abs(p - targetCenter) > 9 && ctx.rng.chance(0.4)) ctx.mem.direction = p > targetCenter ? -1 : 1;
+    else if (ctx.rng.chance(0.3)) ctx.mem.direction = ctx.rng.chance(0.5 + bias) ? 1 : -1;
     const dir = ctx.mem.direction;
 
     let next: number;
@@ -151,9 +153,10 @@ export function line(ctx: BarCtx): NoteEvent[] {
       next = target + (ctx.rng.chance(0.5) ? 1 : -1);
     }
     if (next === p && ctx.style.id !== "funk" && ctx.style.id !== "minimal") next = fromDiatonicIndex(diatonicIndex(p, pcs) + dir, pcs);
-    next = fold(next, ctx.inst.range[0], ctx.inst.range[1]);
-    if (next > hi + 4) next -= 12;
-    if (next < lo - 4) next += 12;
+    // bounce off the edges of the register instead of sinking or squeaking
+    if (next < lo) next = p + (p - next);
+    if (next > hi) next = p - (next - p);
+    next = fold(next, Math.max(ctx.inst.range[0], lo - 2), Math.min(ctx.inst.range[1], hi + 2));
 
     const lastOfPhrase = !nextNote || nextNote.start - (start + dur) > 0.4;
     if (lastOfPhrase) next = snapToPcs(next, chordPcs(c)); // end phrases on chord tones

@@ -21,6 +21,7 @@ import {
   motifBlock,
   NOTES_ONLY,
   personaSystem,
+  sketchBlock,
   styleBlock,
 } from "./prompts";
 
@@ -79,7 +80,7 @@ function directorPrompt(settings: TroopSettings, members: Member[], frameText: s
   ].join("\n");
 }
 
-function partsPrompt(member: Member, bars: number[], plan: BarPlan[], frame: ReturnType<typeof buildFrame>, members: Member[], motif: Motif): string {
+function partsPrompt(member: Member, bars: number[], plan: BarPlan[], frame: ReturnType<typeof buildFrame>, members: Member[], motif: Motif, sketch: string): string {
   const inst = INSTRUMENTS[member.instrument];
   const others = members.filter((m) => m.id !== member.id);
   const rows = bars.map((b) => {
@@ -97,6 +98,8 @@ function partsPrompt(member: Member, bars: number[], plan: BarPlan[], frame: Ret
     "",
     `YOUR FEATURED BARS (${inst.name}):`,
     ...rows,
+    "",
+    sketch,
     "",
     NOTES_ONLY,
     inst.breath ? `You play a wind instrument: leave short rests to breathe at least every ${inst.breath} beats.` : "",
@@ -250,6 +253,7 @@ export async function runComposer(settings: TroopSettings, members: Member[], ho
   }
   if (featured.size) {
     step("Writing out the solos…");
+    const draft = realize({ frame, members, plan, motif: chosen.motif, seed: settings.seed });
     const t3 = performance.now();
     await Promise.all(
       [...featured.entries()].map(async ([id, bars]) => {
@@ -263,7 +267,7 @@ export async function runComposer(settings: TroopSettings, members: Member[], ho
             agent: "director",
             model: settings.directorModel,
             system: personaSystem(m, frame, "The director has handed you the chart; write your featured bars."),
-            prompt: partsPrompt(m, bars, plan, frame, members, chosen.motif),
+            prompt: partsPrompt(m, bars, plan, frame, members, chosen.motif, sketchBlock(m, bars, draft.parts, frame)),
             temperature: 0.8,
             maxOutputTokens: 2500,
             reasoning: "none",

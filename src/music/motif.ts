@@ -91,17 +91,34 @@ export function generateMotif(
   const notes: NoteEvent[] = [];
   let pos = 0;
   let k = 0;
+  let prev: number | null = null;
+  const chordTones = chordPcs(chord);
   for (const c of cell) {
     if (!c.rest) {
       const step = contour[k % contour.length] + (k >= contour.length ? Math.floor(k / contour.length) : 0);
       let p = fromDiatonicIndex(startIdx + step, scale);
-      // strong beats lean on chord tones
-      if (Math.abs(pos - Math.round(pos)) < 1e-6 && k > 0 && rng.chance(0.6)) p = snapToPcs(p, chordPcs(chord));
-      p = fold(p, range[0], range[1]);
+      // strong beats lean on chord tones — resolving in the direction the contour is moving
+      if (Math.abs(pos - Math.round(pos)) < 1e-6 && k > 0 && !chordTones.includes(mod(p, 12)) && rng.chance(0.6)) {
+        const dir = prev === null ? -1 : Math.sign(p - prev) || -1;
+        let q = p;
+        for (let i = 0; i < 3 && !chordTones.includes(mod(q, 12)); i++) q += dir;
+        p = chordTones.includes(mod(q, 12)) ? q : snapToPcs(p, chordTones);
+      }
       notes.push({ pitch: p, start: pos, dur: c.dur * 0.95, vel: k === 0 ? 0.85 : 0.78 });
+      prev = p;
       k++;
     }
     pos += c.dur;
+  }
+  // move the whole cell by octaves into the player's range (never fold single notes: that makes jagged leaps)
+  if (notes.length) {
+    const lo = Math.min(...notes.map((n) => n.pitch));
+    const hi = Math.max(...notes.map((n) => n.pitch));
+    const mid = (lo + hi) / 2;
+    let shift = Math.round((center - mid) / 12) * 12;
+    while (lo + shift < range[0] && hi + shift + 12 <= range[1] + 2) shift += 12;
+    while (hi + shift > range[1] && lo + shift - 12 >= range[0] - 2) shift -= 12;
+    for (const n of notes) n.pitch += shift;
   }
   const flats = keyPrefersFlats(key);
   const text = notesToText(notes, Math.max(beats, Math.ceil(pos)), flats);
@@ -238,10 +255,13 @@ export function realizeMotifBar(ctx: BarCtx, ops: MotifOp[], barOffset = 0): Not
   const raw = transformMotif(ctx.motif, ops, ctx.key, ctx.rng, ctx.style);
   const lo = barOffset * ctx.beats;
   const hi = lo + ctx.beats;
-  const range = ctx.inst.sweet;
-  // Keep the register near where the player is (or the motif's own register).
+  const featured = ctx.role === "solo" || ctx.role === "lead";
+  const range = featured ? (ctx.inst.solo ?? ctx.inst.sweet) : ctx.inst.sweet;
+  // Keep the register near where the player is (or the motif's own register) — but a
+  // soloist coming from an accompaniment register moves up into the solo range.
   const motifCenter = raw.length ? raw.reduce((s, n) => s + n.pitch, 0) / raw.length : 60;
-  const target = ctx.mem.lastPitch ?? (range[0] + range[1]) / 2;
+  const last = ctx.mem.lastPitch;
+  const target = last !== null && last >= range[0] && last <= range[1] ? last : (range[0] + range[1]) / 2;
   let shift = Math.round((target - motifCenter) / 12) * 12;
   // never more than an octave away from the motif's register unless out of range
   if (Math.abs(shift) > 12) shift = Math.sign(shift) * 12;

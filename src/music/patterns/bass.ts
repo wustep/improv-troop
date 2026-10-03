@@ -1,5 +1,5 @@
 import { chordAt, chordSpans, velFor, type BarCtx } from "../context";
-import { chordPcs, fold, mod, nearestPc, scaleStep, scalePcs, pcOf, type Chord } from "../theory";
+import { chordPcs, diatonicIndex, fold, mod, nearestPc, scaleStep, scalePcs, pcOf, type Chord } from "../theory";
 import { hashString } from "../rng";
 import type { NoteEvent } from "../types";
 import { bassNote } from "./voicing";
@@ -40,7 +40,7 @@ export function walk(ctx: BarCtx): NoteEvent[] {
     let p: number;
     if (changeHere) {
       p = root(ctx, c, prev);
-      if (b === 0 && ctx.prev.symbol === c.symbol && ctx.rng.chance(0.35)) {
+      if (b === 0 && !ctx.firstBar && ctx.prev.symbol === c.symbol && ctx.rng.chance(0.35)) {
         // same chord as last bar: start on 3rd or 5th instead
         p = nearestPc(mod(c.root + (ctx.rng.chance(0.5) ? c.tones[1] : c.tones[2]), 12), prev);
       }
@@ -184,23 +184,49 @@ export function funk(ctx: BarCtx): NoteEvent[] {
   return out;
 }
 
-/** Baroque walking 8ths: step-wise, octave leaps on strong beats, leading into the next root. */
+/**
+ * Baroque walking 8ths: each chord starts on its root (or third), then the line
+ * travels by step toward the next chord's root and arrives a step away — with the
+ * occasional octave leap on a strong 8th to keep it moving, like a continuo bass.
+ */
 export function baroque(ctx: BarCtx): NoteEvent[] {
   const out: NoteEvent[] = [];
   const [lo, hi] = range(ctx);
-  let p = ctx.mem.lastPitch ?? lo + 12;
   const vel = velFor(ctx, 0.7);
-  const steps = ctx.beats * 2;
-  for (let i = 0; i < steps; i++) {
-    const t = i / 2;
-    const c = chordAt(ctx, t);
-    const changeHere = ctx.chords.some((x) => Math.abs(x.beat - t) < 1e-6);
-    if (changeHere) p = root(ctx, c, p);
-    else if (i === steps - 1) p = scaleStep(root(ctx, ctx.next, p), p > root(ctx, ctx.next, p) ? 1 : -1, ctx.keyPcs);
-    else if (i % 2 === 1 && ctx.rng.chance(0.25)) p = p + 12 <= hi ? p + 12 : p - 12;
-    else p = scaleStep(p, p > (lo + hi) / 2 ? -1 : 1, scalePcs(c));
-    p = fold(p, lo, hi);
-    out.push({ pitch: p, start: t, dur: 0.5, vel: vel + (i % 2 === 0 ? 0.05 : 0) });
+  let p = ctx.mem.lastPitch ?? lo + 12;
+  const spans = chordSpans(ctx);
+  for (let si = 0; si < spans.length; si++) {
+    const s = spans[si];
+    const steps = Math.round((s.end - s.start) * 2);
+    const nextChord = spans[si + 1]?.chord ?? ctx.next;
+    let start = root(ctx, s.chord, p);
+    if (ctx.rng.chance(0.2) && steps >= 4) start = fold(nearestPc(mod(s.chord.root + s.chord.tones[1], 12), start), lo, hi);
+    const goal = root(ctx, nextChord, start);
+    const pcs = scalePcs(s.chord);
+    // go the way that reaches the goal; if it's the same note, take a scenic arch
+    let dir: 1 | -1 = goal > start ? 1 : goal < start ? -1 : start > (lo + hi) / 2 ? -1 : 1;
+    p = start;
+    for (let i = 0; i < steps; i++) {
+      const t = s.start + i / 2;
+      if (i > 0) {
+        const remaining = steps - i;
+        const dist = Math.abs(diatonicIndex(goal, pcs) - diatonicIndex(p, pcs));
+        if (i === steps - 1 && remaining === 1) {
+          // arrive a step (or chromatic half step) from the goal
+          p = ctx.rng.chance(0.3) ? goal + (p > goal ? 1 : -1) : scaleStep(goal, p > goal ? 1 : -1, pcs);
+        } else if (i % 2 === 0 && ctx.rng.chance(0.18) && p + dir * 12 >= lo && p + dir * 12 <= hi) {
+          p += dir * 12; // octave leap, then keep walking back toward the goal
+          dir = (goal > p ? 1 : -1) as 1 | -1;
+        } else {
+          // turn around if we'd overshoot or if the goal is closer the other way
+          if (dist >= remaining && dist > 0) dir = (goal > p ? 1 : -1) as 1 | -1;
+          if (p + dir * 2 > hi || p + dir * 2 < lo) dir = (dir * -1) as 1 | -1;
+          p = scaleStep(p, dir, pcs);
+        }
+      }
+      p = fold(p, lo, hi);
+      out.push({ pitch: p, start: t, dur: 0.5, vel: vel + (i % 2 === 0 ? 0.05 : 0) });
+    }
   }
   ctx.mem.lastPitch = p;
   return out;

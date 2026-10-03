@@ -134,9 +134,14 @@ export function planLocal(frame: Frame, members: Member[], motif: Motif, rng: Rn
       if (slot === "solo") {
         roles[m.id] = "solo";
         const turnStart = s.kind === "trade" ? inSec % 4 === 0 : inSec === 0;
+        // a solo is a story: state a transform, leave space, build, climax, hand off
+        const last = inSec === s.length - 1;
         if (turnStart) directives[m.id] = brng.pick(SOLO_OPENERS);
-        else if (s.kind !== "trade" && inSec === Math.floor(s.length / 2) && s.length >= 4) directives[m.id] = "@motif frag 3 up 4";
-        else if (inSec >= s.length - 1 && isLastSolo) directives[m.id] = "@line dense";
+        else if (s.kind === "trade") directives[m.id] = "@line";
+        else if (last) directives[m.id] = isLastSolo ? "@line dense" : "@line long";
+        else if (inSec === s.length - 2 && s.length >= 4) directives[m.id] = "@line dense";
+        else if (inSec === 1) directives[m.id] = "@line sparse";
+        else if (inSec === Math.floor(s.length / 2) && s.length >= 6) directives[m.id] = "@motif frag 3 up 4";
         else directives[m.id] = "@line";
         continue;
       }

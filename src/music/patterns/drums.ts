@@ -102,7 +102,11 @@ function scale(notes: NoteEvent[], ctx: BarCtx, base = 0.8): NoteEvent[] {
 function swingComping(ctx: BarCtx): NoteEvent[] {
   const out: NoteEvent[] = [];
   const n = ctx.energy > 0.7 ? 2 : ctx.energy > 0.45 ? 1 : 0;
-  const slots = [0.5, 1.5, 2.5, 3.5, 2 + 2 / 3, 1 + 2 / 3].filter((s) => s < ctx.beats);
+  // talk back in the soloist's gaps, not on top of them
+  const lead = ctx.featured.map((x) => x.start);
+  const all = [0.5, 1.5, 2.5, 3.5, 2 + 2 / 3, 1 + 2 / 3].filter((s) => s < ctx.beats);
+  const open = all.filter((s) => !lead.some((o) => Math.abs(o - s) < 0.35));
+  const slots = open.length ? open : all;
   for (let i = 0; i < n; i++) {
     const pos = ctx.rng.pick(slots);
     out.push({ pitch: DRUM.snare, start: pos, dur: 0.2, vel: 0.3 + ctx.rng.next() * 0.2, art: "ghost" });

@@ -88,6 +88,22 @@ export function playedBlock(
   return out.join("\n");
 }
 
+/**
+ * The engine's own rendition of some bars for one player, as a concrete in-style
+ * reference the model can improve on (keeps weaker models in range and in idiom).
+ */
+export function sketchBlock(member: Member, bars: number[], parts: Record<string, NoteEvent[]>, frame: Frame): string {
+  const beats = frame.meter.beats;
+  const flats = keyPrefersFlats(frame.key);
+  const lines = bars.map((b) => {
+    const notes = (parts[member.id] ?? [])
+      .filter((n) => n.start >= b * beats - 1e-6 && n.start < (b + 1) * beats - 1e-6)
+      .map((n) => ({ ...n, start: n.start - b * beats }));
+    return `  bar ${b + 1}: ${notes.length ? notesToText(notes, beats, flats) : "(rest)"}`;
+  });
+  return `A SKETCH of these bars from the band's engine (in range and in style, but plain — don't copy it; write something more musical that develops the motif):\n${lines.join("\n")}`;
+}
+
 export function chatBlock(chat: ChatMessage[], members: Member[], last = 8): string {
   const nameOf = (id: string) => (id === "director" ? "Director" : (members.find((m) => m.id === id)?.name ?? id));
   const recent = chat.slice(-last);

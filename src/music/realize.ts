@@ -205,5 +205,14 @@ export function realize(o: RealizeOptions): RealizeResult {
   }
 
   for (const m of members) parts[m.id] = finishPart(m, parts[m.id]);
+  // hold the last chord a little longer than written (a fermata) so endings breathe
+  const lastStart = (frame.bars - 1) * beats;
+  if (bars.includes(frame.bars - 1)) {
+    for (const m of members) {
+      for (const n of parts[m.id]) {
+        if (n.start >= lastStart - 1e-6 && n.dur >= beats * 0.9) n.dur = beats * 1.6;
+      }
+    }
+  }
   return { parts, issues, ms: performance.now() - t0, featuredByBar };
 }

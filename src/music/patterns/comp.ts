@@ -117,6 +117,25 @@ function playHits(ctx: BarCtx, hits: Hit[], fam?: VoicingFamily, art?: NoteEvent
   return out;
 }
 
+/**
+ * Comping listens: stay out of the soloist's busy beats and answer in their gaps.
+ * (Only when someone else is featured in this bar.)
+ */
+function listen(ctx: BarCtx, cell: Hit[]): Hit[] {
+  if (!ctx.featured.length || ctx.role === "solo" || ctx.role === "lead") return cell;
+  const onsets = ctx.featured.map((n) => n.start);
+  const busyAt = (pos: number) => onsets.some((o) => Math.abs(o - pos) < 0.3);
+  const lastOnset = Math.max(...onsets);
+  let out = cell.filter((h, i) => i === 0 || !busyAt(h.pos));
+  if (onsets.length >= 6) out = out.slice(0, 2); // a busy line wants space
+  // the soloist left the back of the bar open: answer them there
+  if (lastOnset < ctx.beats - 1.5 && !out.some((h) => h.pos > lastOnset + 0.5)) {
+    const pos = lastOnset + 1 <= ctx.beats - 0.5 ? Math.ceil((lastOnset + 0.75) * 2) / 2 : ctx.beats - 0.5;
+    out = [...out, { pos, dur: 0.5 }, ...(pos + 1 < ctx.beats ? [{ pos: pos + 1, dur: 0.5 }] : [])];
+  }
+  return out.filter((h, i, a) => h.pos < ctx.beats && a.findIndex((x) => x.pos === h.pos) === i).sort((a, b) => a.pos - b.pos);
+}
+
 /** Style-aware comping. Args: "sparse", "busy". */
 export function comp(ctx: BarCtx): NoteEvent[] {
   const sparse = ctx.args.includes("sparse") || ctx.texture === "sparse";
@@ -147,6 +166,7 @@ export function comp(ctx: BarCtx): NoteEvent[] {
       let cell = pickCell(SWING_CELLS);
       if (sparse && cell.length > 1 && ctx.rng.chance(0.5)) cell = [cell[0]];
       if (busy && ctx.rng.chance(0.5)) cell = [...cell, ...pickCell(SWING_CELLS.slice(4))].filter((h, i, a) => a.findIndex((x) => x.pos === h.pos) === i);
+      cell = listen(ctx, cell);
       // a chord change mid-bar must be acknowledged
       if (ctx.chords.length > 1 && !cell.some((h) => h.pos >= ctx.chords[1].beat - 0.5 && h.pos < ctx.beats)) {
         cell = [...cell, { pos: ctx.chords[1].beat, dur: 0.5 }];

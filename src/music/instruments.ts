@@ -26,20 +26,20 @@ export interface InstrumentDef {
 }
 
 export const INSTRUMENTS: Record<InstrumentId, InstrumentDef> = {
-  piano: { id: "piano", name: "Piano", fn: "chordal", range: [21, 108], sweet: [48, 84], clef: "grand", notationShift: 0, poly: true, sustain: false },
+  piano: { id: "piano", name: "Piano", fn: "chordal", range: [21, 108], sweet: [48, 84], solo: [57, 86], clef: "grand", notationShift: 0, poly: true, sustain: false },
   bass: { id: "bass", name: "Upright Bass", fn: "bass", range: [28, 67], sweet: [31, 55], solo: [36, 62], clef: "bass", notationShift: 12, poly: false, sustain: false },
   drums: { id: "drums", name: "Drums", fn: "rhythm", range: [35, 81], sweet: [35, 81], clef: "percussion", notationShift: 0, poly: true, sustain: false },
-  trumpet: { id: "trumpet", name: "Trumpet", fn: "melodic", range: [54, 84], sweet: [58, 79], clef: "treble", notationShift: 0, poly: false, sustain: true, breath: 8 },
-  sax: { id: "sax", name: "Tenor Sax", fn: "melodic", range: [44, 75], sweet: [48, 72], clef: "treble", notationShift: 12, poly: false, sustain: true, breath: 8 },
+  trumpet: { id: "trumpet", name: "Trumpet", fn: "melodic", range: [54, 84], sweet: [58, 79], solo: [60, 82], clef: "treble", notationShift: 0, poly: false, sustain: true, breath: 8 },
+  sax: { id: "sax", name: "Tenor Sax", fn: "melodic", range: [44, 75], sweet: [48, 72], solo: [51, 75], clef: "treble", notationShift: 12, poly: false, sustain: true, breath: 8 },
   trombone: { id: "trombone", name: "Trombone", fn: "melodic", range: [40, 72], sweet: [43, 67], solo: [48, 70], clef: "bass", notationShift: 0, poly: false, sustain: true, breath: 8 },
-  clarinet: { id: "clarinet", name: "Clarinet", fn: "melodic", range: [50, 91], sweet: [55, 84], clef: "treble", notationShift: 0, poly: false, sustain: true, breath: 8 },
-  flute: { id: "flute", name: "Flute", fn: "melodic", range: [60, 96], sweet: [64, 91], clef: "treble", notationShift: 0, poly: false, sustain: true, breath: 7 },
-  violin: { id: "violin", name: "Violin", fn: "melodic", range: [55, 100], sweet: [60, 91], clef: "treble", notationShift: 0, poly: false, sustain: true, bowed: true },
+  clarinet: { id: "clarinet", name: "Clarinet", fn: "melodic", range: [50, 91], sweet: [55, 84], solo: [57, 86], clef: "treble", notationShift: 0, poly: false, sustain: true, breath: 8 },
+  flute: { id: "flute", name: "Flute", fn: "melodic", range: [60, 96], sweet: [64, 91], solo: [65, 93], clef: "treble", notationShift: 0, poly: false, sustain: true, breath: 7 },
+  violin: { id: "violin", name: "Violin", fn: "melodic", range: [55, 100], sweet: [60, 91], solo: [62, 93], clef: "treble", notationShift: 0, poly: false, sustain: true, bowed: true },
   // Cello: a tenor voice first (countermelodies, pads, pizz comping, solos up into tenor clef),
   // and the bass chair only when nobody else holds it.
   cello: { id: "cello", name: "Cello", fn: "melodic", range: [36, 81], sweet: [43, 72], clef: "bass", notationShift: 0, poly: true, sustain: true, bassCapable: true, bowed: true, solo: [50, 77] },
-  guitar: { id: "guitar", name: "Guitar", fn: "chordal", range: [40, 84], sweet: [48, 76], clef: "treble", notationShift: 12, poly: true, sustain: false },
-  vibes: { id: "vibes", name: "Vibraphone", fn: "chordal", range: [53, 89], sweet: [60, 84], clef: "treble", notationShift: 0, poly: true, sustain: false },
+  guitar: { id: "guitar", name: "Guitar", fn: "chordal", range: [40, 84], sweet: [48, 76], solo: [52, 79], clef: "treble", notationShift: 12, poly: true, sustain: false },
+  vibes: { id: "vibes", name: "Vibraphone", fn: "chordal", range: [53, 89], sweet: [60, 84], solo: [60, 86], clef: "treble", notationShift: 0, poly: true, sustain: false },
 };
 
 export const INSTRUMENT_LIST: InstrumentId[] = [
