@@ -17,6 +17,8 @@ export interface RealizeResult {
   parts: Record<string, NoteEvent[]>;
   issues: RealizeIssue[];
   ms: number;
+  /** Featured line per bar (relative to bar start), for listeners. */
+  featuredByBar: Map<number, NoteEvent[]>;
 }
 
 const FEATURED: Role[] = ["lead", "solo", "trade"];
@@ -36,6 +38,8 @@ export interface RealizeOptions {
   memories?: Map<string, PlayerMemory>;
   /** Notes already realized for the featured players (incremental improv). */
   priorFeatured?: Map<number, NoteEvent[]>;
+  /** Only realize (member, bar) pairs that pass this filter. */
+  filter?: (memberId: string, bar: number) => boolean;
 }
 
 /** Realize one bar for one member. Exposed for the improviser pipeline. */
@@ -184,6 +188,7 @@ export function realize(o: RealizeOptions): RealizeResult {
     const fid = bp ? featuredOf(bp, members) : null;
     for (const m of members) {
       if (!isFeaturedRole(bp?.roles[m.id])) continue;
+      if (o.filter && !o.filter(m.id, bar)) continue;
       const rel = run(m, bar);
       if (m.id === fid) featuredByBar.set(bar, rel);
     }
@@ -193,10 +198,11 @@ export function realize(o: RealizeOptions): RealizeResult {
     const bp = plan[bar];
     for (const m of members) {
       if (isFeaturedRole(bp?.roles[m.id])) continue;
+      if (o.filter && !o.filter(m.id, bar)) continue;
       run(m, bar);
     }
   }
 
   for (const m of members) parts[m.id] = finishPart(m, parts[m.id]);
-  return { parts, issues, ms: performance.now() - t0 };
+  return { parts, issues, ms: performance.now() - t0, featuredByBar };
 }

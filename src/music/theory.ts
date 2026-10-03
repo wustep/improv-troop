@@ -132,7 +132,7 @@ export function parseChord(symbol: string): Chord {
   }
   const root = pcOf(m[1]);
   const bass = m[3] ? pcOf(m[3]) : root;
-  let q = m[2]
+  const q = m[2]
     .replace(/Δ/g, "maj")
     .replace(/ø/g, "m7b5")
     .replace(/°/g, "dim")

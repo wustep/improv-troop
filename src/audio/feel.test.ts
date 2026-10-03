@@ -1,0 +1,88 @@
+import { describe, expect, it } from "vitest";
+import { applyFeel, beatToSeconds, feelSpan, hash01, jitter, removeFeel, secondsToBeats } from "./feel";
+
+describe("beatToSeconds", () => {
+  it("converts at tempo", () => {
+    expect(beatToSeconds(1, 60)).toBe(1);
+    expect(beatToSeconds(4, 120)).toBe(2);
+    expect(secondsToBeats(2, 120)).toBe(4);
+  });
+});
+
+describe("applyFeel", () => {
+  it("is identity when straight", () => {
+    for (const x of [0, 0.25, 0.5, 0.75, 1.5, 3.333]) expect(applyFeel(x, 0.5)).toBeCloseTo(x);
+  });
+
+  it("never moves downbeats", () => {
+    for (const b of [0, 1, 2, 7, 15]) expect(applyFeel(b, 0.66)).toBeCloseTo(b);
+  });
+
+  it("moves the offbeat 8th to the swing ratio", () => {
+    expect(applyFeel(0.5, 0.62)).toBeCloseTo(0.62);
+    expect(applyFeel(3.5, 0.66)).toBeCloseTo(3.66);
+  });
+
+  it("moves 16ths proportionally and keeps order", () => {
+    const s = 0.62;
+    const a = applyFeel(0.25, s);
+    const b = applyFeel(0.5, s);
+    const c = applyFeel(0.75, s);
+    expect(a).toBeCloseTo(0.31);
+    expect(c).toBeCloseTo(0.62 + 0.19);
+    expect(a).toBeLessThan(b);
+    expect(b).toBeLessThan(c);
+    expect(c).toBeLessThan(1);
+  });
+
+  it("leaves triplets alone", () => {
+    expect(applyFeel(1 / 3, 0.66)).toBeCloseTo(1 / 3);
+    expect(applyFeel(2 + 2 / 3, 0.66)).toBeCloseTo(2 + 2 / 3);
+    expect(applyFeel(1 / 6, 0.66)).toBeCloseTo(1 / 6);
+  });
+
+  it("clamps silly swing values", () => {
+    expect(applyFeel(0.5, 2)).toBeCloseTo(0.75);
+    expect(applyFeel(0.5, 0.1)).toBeCloseTo(0.5);
+    expect(applyFeel(0.5, Number.NaN)).toBeCloseTo(0.5);
+  });
+
+  it("is monotonic across a bar", () => {
+    let prev = -1;
+    for (let i = 0; i <= 64; i++) {
+      const x = applyFeel(i / 16, 0.68);
+      expect(x).toBeGreaterThanOrEqual(prev);
+      prev = x;
+    }
+  });
+
+  it("round-trips with removeFeel", () => {
+    for (const x of [0.1, 0.25, 0.5, 0.75, 0.9, 2.5]) {
+      expect(removeFeel(applyFeel(x, 0.64), 0.64)).toBeCloseTo(x);
+    }
+  });
+});
+
+describe("feelSpan", () => {
+  it("long-short pair of swung 8ths", () => {
+    const first = feelSpan(0, 0.5, 0.66);
+    const second = feelSpan(0.5, 0.5, 0.66);
+    expect(first.end - first.start).toBeCloseTo(0.66);
+    expect(second.end - second.start).toBeCloseTo(0.34);
+    expect(first.end).toBeCloseTo(second.start);
+  });
+});
+
+describe("hash01 / jitter", () => {
+  it("is deterministic and bounded", () => {
+    const a = hash01("fox", 12, 60);
+    expect(a).toBe(hash01("fox", 12, 60));
+    expect(a).toBeGreaterThanOrEqual(0);
+    expect(a).toBeLessThan(1);
+    expect(hash01("fox", 12, 61)).not.toBe(a);
+    for (let i = 0; i < 50; i++) {
+      const j = jitter(0.008, "m", i);
+      expect(Math.abs(j)).toBeLessThanOrEqual(0.008);
+    }
+  });
+});
