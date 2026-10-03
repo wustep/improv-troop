@@ -12,6 +12,7 @@ import { chatMsg, type PipelineHooks } from "./composer";
 import { asRecord, asString, extractJson, parseBarRange } from "./json";
 import { callLLM, noteRepair, setParsed } from "./llm";
 import { asDynamic, asTexture, enforceSlots, resolveMember, validateBarText, validateMotif } from "./merge";
+import { barsSchema, countOffSchema, replySchema } from "./schemas";
 import {
   bandBlock,
   chartBlock,
@@ -176,6 +177,8 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
         temperature: 0.9,
         maxOutputTokens: 1200,
         reasoning: "low",
+        schema: countOffSchema(others.map((m) => m.id)),
+        schemaName: "count_off",
       });
       const { value, error } = extractJson(text);
       if (error) noteRepair(call.id, error);
@@ -236,7 +239,7 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
               asks[m.id] ? `${leader.name} to you: "${asks[m.id]}"` : "",
               "",
               `Your usual accompaniment directive right now: ${plan.find((b) => !isFeaturedRole(b.roles[m.id]) && b.directives?.[m.id] !== "@rest")?.directives?.[m.id] ?? "@rest"}`,
-              "Directives you can use when accompanying: @walk @two @bossa @funk @baroque @pedal (bass) · @comp [sparse|busy] @stride @arp @prelude @continuo @pad @shimmer (chords) · @guide @harmony @canon @riff @counter (horns/strings) · @groove [light|peak] (drums).",
+              "Directives you can use when accompanying: @walk @two @bossa @funk @baroque @pedal (bass) · @comp [sparse|busy] @stride @arp @prelude @continuo @pad @shimmer (chords) · @guide @harmony @canon @riff @counter (horns/strings) · @pizz [sparse|busy] @arco (cello) · @groove [light|peak] (drums).",
               `Reply JSON: {"say": "<= 1 short sentence back to ${leader.name} or the band", "default": "your go-to directive when you're accompanying"}`,
             ]
               .filter(Boolean)
@@ -244,6 +247,8 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
             temperature: 0.9,
             maxOutputTokens: 300,
             reasoning: "none",
+            schema: replySchema(),
+            schemaName: "reply",
           });
           const { value } = extractJson(text);
           const o = asRecord(value);
@@ -258,7 +263,7 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
               rhythm: /^@(groove)$/,
               bass: /^@(walk|two|bossa|funk|baroque|pedal)$/,
               chordal: /^@(comp|stride|arp|prelude|continuo|pad|shimmer)$/,
-              melodic: /^@(guide|harmony|canon|riff|counter|pad|arp)$/,
+              melodic: m.instrument === "cello" ? /^@(guide|harmony|canon|riff|counter|pad|arp|pizz|arco)$/ : /^@(guide|harmony|canon|riff|counter|pad|arp)$/,
             };
             if (okFor[fn].test(head)) {
               for (const bp of plan) {
@@ -335,6 +340,8 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
             temperature: 0.95,
             maxOutputTokens: 1600,
             reasoning: "none",
+            schema: barsSchema(myBars.map((b) => b + 1), true),
+            schemaName: "phrase",
           });
           if (stage[pi] !== "none") {
             noteRepair(call.id, "arrived after the band had already vamped through these bars; not used");
@@ -414,6 +421,8 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
               temperature: 0.85,
               maxOutputTokens: 1000,
               reasoning: "none",
+              schema: barsSchema(myBars.map((b) => b + 1), true),
+              schemaName: "phrase",
             });
             if (stage[pi] === "done") {
               noteRepair(call.id, "arrived after the band had already vamped through these bars; not used");

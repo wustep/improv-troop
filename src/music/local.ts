@@ -1,3 +1,4 @@
+import { DEFAULT_DIRECTOR_MODEL, DEFAULT_PLAYER_MODEL } from "@/ai/models";
 import { buildFrame } from "./form";
 import { INSTRUMENTS } from "./instruments";
 import { generateMotif, motifFromText, transposeMotif } from "./motif";
@@ -24,8 +25,8 @@ export function defaultSettings(members: Member[]): TroopSettings {
     soloists: members.filter((m) => m.id !== leader?.id && m.instrument !== "drums" && m.instrument !== "bass").map((m) => m.id).slice(0, 2),
     bestOf: 4,
     seed: 1,
-    directorModel: "anthropic/claude-sonnet-5.5",
-    playerModel: "anthropic/claude-haiku-4.5",
+    directorModel: DEFAULT_DIRECTOR_MODEL,
+    playerModel: DEFAULT_PLAYER_MODEL,
     phraseBars: 4,
   };
 }

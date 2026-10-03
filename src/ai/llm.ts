@@ -1,4 +1,6 @@
+import type { JSONSchema7 } from "ai";
 import { useDebug, type LlmCall } from "@/state/debug";
+import type { ReasoningLevel } from "./models";
 
 export interface LlmOptions {
   runId: string;
@@ -10,7 +12,10 @@ export interface LlmOptions {
   apiKey: string;
   temperature?: number;
   maxOutputTokens?: number;
-  reasoning?: "none" | "minimal" | "low" | "medium";
+  reasoning?: ReasoningLevel;
+  /** Ask for schema-constrained JSON (falls back to text if the model can't). */
+  schema?: JSONSchema7;
+  schemaName?: string;
   signal?: AbortSignal;
 }
 
@@ -94,6 +99,8 @@ export async function callLLM(o: LlmOptions): Promise<{ text: string; call: LlmC
           temperature: o.temperature,
           maxOutputTokens: o.maxOutputTokens,
           reasoning: o.reasoning,
+          schema: o.schema,
+          schemaName: o.schemaName,
         }),
       });
       const data = (await res.json()) as {
@@ -101,12 +108,26 @@ export async function callLLM(o: LlmOptions): Promise<{ text: string; call: LlmC
         error?: string;
         usage?: LlmCall["usage"];
         serverMs?: number;
+        structured?: boolean;
+        fallbackReason?: string;
+        params?: LlmCall["params"];
       };
       const ms = performance.now() - t0;
       if (!res.ok || typeof data.text !== "string") {
         throw new LlmError(data.error ?? `HTTP ${res.status}`, res.status);
       }
-      call = { ...call, status: "ok", ms, serverMs: data.serverMs, text: data.text, usage: data.usage, attempt };
+      call = {
+        ...call,
+        status: "ok",
+        ms,
+        serverMs: data.serverMs,
+        text: data.text,
+        usage: data.usage,
+        attempt,
+        structured: data.structured,
+        params: data.params,
+        repairs: data.fallbackReason ? [...call.repairs, `structured output unavailable, parsed text instead (${data.fallbackReason})`] : call.repairs,
+      };
       useDebug.getState().upsertCall(call);
       return { text: data.text, call };
     } catch (e) {

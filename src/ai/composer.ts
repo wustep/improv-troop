@@ -11,6 +11,7 @@ import { textureFeatures } from "./features";
 import { asRecord, asString, extractJson } from "./json";
 import { callLLM, noteRepair, setParsed } from "./llm";
 import { mergePlan, validateBarText, validateMotif } from "./merge";
+import { barsSchema, criticSchema, planSchema } from "./schemas";
 import {
   bandBlock,
   chartBlock,
@@ -65,11 +66,11 @@ function directorPrompt(settings: TroopSettings, members: Member[], frameText: s
   "motifIdea": "a few words",
   "bars": [
     { "bars": "1-2", "texture": "groove", "dynamic": "mf", "cue": "short note", "parts": { ${members.map((m) => `"${m.id}": "..."`).join(", ")} } },
-    { "bar": 3, ... }
+    { "bars": "3", ... }
   ]
 }`,
     `Rules:
-- Cover bars 1-${frame.bars} exactly once, in order. Use ranges ("5-8") when parts repeat; single "bar" entries for special bars. Never add or remove bars.
+- Cover bars 1-${frame.bars} exactly once, in order. Use ranges ("5-8") when parts repeat; single bars ("7") for special bars. Never add or remove bars.
 - Every entry's "parts" has every player: ${ids}.
 - The leader states the motif in the head (@motif, @motif up 2, @motif bar2 ...). A soloist opens with a transform of the motif (@motif invert / displace 0.5 / frag 3 / seq -1 ...) then develops it (@line, written notes). Everyone else comps in the style's texture — that texture is what makes the style distinct.
 - Shape dynamics and texture across the form (e.g. sparse → build → peak). Use a drum @fill or a stop-time @hits where a phrase turns.
@@ -161,6 +162,8 @@ export async function runComposer(settings: TroopSettings, members: Member[], ho
         temperature: n > 1 ? 0.75 + i * 0.1 : 0.8,
         maxOutputTokens: 7000,
         reasoning: "low",
+        schema: planSchema(members.map((m) => m.id)),
+        schemaName: "chart",
       }),
     ),
   );
@@ -209,6 +212,8 @@ export async function runComposer(settings: TroopSettings, members: Member[], ho
         temperature: 0.2,
         maxOutputTokens: 800,
         reasoning: "none",
+        schema: criticSchema(),
+        schemaName: "judgement",
       });
       dbg.timing(runId, "judge", performance.now() - t2);
       const { value } = extractJson(text);
@@ -262,6 +267,8 @@ export async function runComposer(settings: TroopSettings, members: Member[], ho
             temperature: 0.8,
             maxOutputTokens: 2500,
             reasoning: "none",
+            schema: barsSchema(bars.map((b) => b + 1), false),
+            schemaName: "bars",
           });
           const { value, error } = extractJson(text);
           if (error) noteRepair(call.id, error);

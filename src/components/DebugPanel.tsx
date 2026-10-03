@@ -38,6 +38,9 @@ function CallRow({ c }: { c: LlmCall }) {
         <td className="pr-2">{c.status === "pending" ? "…" : fmtMs(c.ms)}</td>
         <td className="pr-2 text-ink-soft">{fmtMs(c.serverMs)}</td>
         <td className="pr-2 text-ink-soft">{tok}</td>
+        <td className="pr-2 text-ink-soft" title={c.params ? JSON.stringify(c.params) : undefined}>
+          {c.status === "ok" ? (c.structured ? "schema" : "text") : ""}
+        </td>
         <td className={c.status === "error" ? "text-[var(--pencil-red)]" : c.repairs.length ? "text-[var(--pencil-yellow)]" : "text-[var(--pencil-green)]"}>
           {c.status === "error" ? c.error : c.status === "ok" ? (c.repairs.length ? `${c.repairs.length} repairs` : "ok") : "pending"}
           {c.attempt > 1 ? ` (try ${c.attempt})` : ""}
@@ -46,7 +49,13 @@ function CallRow({ c }: { c: LlmCall }) {
       {open && (
         <tr>
           <td />
-          <td colSpan={8} className="pb-3">
+          <td colSpan={9} className="pb-3">
+            {c.params && (
+              <div className="mb-1 text-ink-soft">
+                sent: {c.params.reasoning ? `reasoning ${c.params.reasoning}` : "provider default reasoning"}
+                {c.params.temperature !== undefined ? `, temperature ${c.params.temperature}` : ", no temperature"}
+              </div>
+            )}
             {c.repairs.length > 0 && (
               <div className="mb-2">
                 <div className="font-bold">Validation & repairs</div>
@@ -143,6 +152,7 @@ function PipelineTab() {
                 <th>wall</th>
                 <th>model time</th>
                 <th>tokens in→out</th>
+                <th>output</th>
                 <th>result</th>
               </tr>
             </thead>

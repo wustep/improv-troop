@@ -23,6 +23,10 @@ export interface LlmCall {
   /** Notes from parsing/validation: what we repaired or fell back on. */
   repairs: string[];
   parsed?: unknown;
+  /** The model returned schema-constrained JSON. */
+  structured?: boolean;
+  /** Parameters actually sent after adapting to the model's capabilities. */
+  params?: { temperature?: number; reasoning?: string };
 }
 
 export interface RunLog {

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { AnimalPortrait } from "@/art/AnimalPortrait";
 import { InstrumentIcon } from "@/art/InstrumentIcon";
+import { modelsByProvider, PROVIDER_LABEL } from "@/ai/models";
 import { lengthOptions } from "@/music/form";
 import { ANIMAL_LIST, ANIMALS, INSTRUMENT_LIST, INSTRUMENTS } from "@/music/instruments";
 import { STANDARDS, getStandard } from "@/music/standards";
@@ -11,15 +12,21 @@ import type { AnimalId, InstrumentId, Member } from "@/music/types";
 import { useTroop } from "@/state/store";
 import { RoughBox, RoughButton } from "./ui/rough";
 
-export const MODELS = [
-  { id: "anthropic/claude-sonnet-5.5", label: "Claude Sonnet 5.5" },
-  { id: "anthropic/claude-haiku-4.5", label: "Claude Haiku 4.5" },
-  { id: "anthropic/claude-opus-5.5", label: "Claude Opus 5.5" },
-  { id: "anthropic/claude-fable-5.1", label: "Claude Fable 5.1" },
-  { id: "google/gemini-3.8-flash", label: "Gemini 3.8 Flash" },
-  { id: "openai/gpt-5.5", label: "GPT-5.5" },
-  { id: "openai/gpt-5.4-mini", label: "GPT-5.4 mini" },
-];
+function ModelSelect({ value, onChange, label }: { value: string; onChange: (id: string) => void; label: string }) {
+  return (
+    <select className="sketch-select w-full" value={value} onChange={(e) => onChange(e.target.value)} aria-label={label}>
+      {modelsByProvider().map((g) => (
+        <optgroup key={g.provider} label={PROVIDER_LABEL[g.provider] ?? g.provider}>
+          {g.models.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.label}
+            </option>
+          ))}
+        </optgroup>
+      ))}
+    </select>
+  );
+}
 
 const TONICS = ["C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"];
 
@@ -314,24 +321,12 @@ export function ControlPanel() {
           </div>
           <div>
             <Label>{s.mode === "composer" ? "Director" : "Leader"} model</Label>
-            <select className="sketch-select w-full" value={s.directorModel} onChange={(e) => set({ directorModel: e.target.value })} aria-label="Director model">
-              {MODELS.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
+            <ModelSelect value={s.directorModel} onChange={(id) => set({ directorModel: id })} label={s.mode === "composer" ? "Director model" : "Leader model"} />
           </div>
           {s.mode === "improviser" && (
             <div>
               <Label>Bandmates model</Label>
-              <select className="sketch-select w-full" value={s.playerModel} onChange={(e) => set({ playerModel: e.target.value })} aria-label="Bandmates model">
-                {MODELS.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.label}
-                  </option>
-                ))}
-              </select>
+              <ModelSelect value={s.playerModel} onChange={(id) => set({ playerModel: id })} label="Bandmates model" />
             </div>
           )}
           <div>

@@ -1,5 +1,6 @@
-import { createGateway, generateText } from "ai";
+import { createGateway, generateText, jsonSchema, Output, type JSONSchema7 } from "ai";
 import { fakeModel } from "@/ai/mock";
+import { callParams, type ReasoningLevel } from "@/ai/models";
 
 // Thin proxy to the Vercel AI Gateway. The browser orchestrates the band (so the
 // debug panel sees every step); each call here is one short model request.
@@ -7,10 +8,15 @@ import { fakeModel } from "@/ai/mock";
 // Keys: the user's own gateway key from the request. A server-side key is only
 // used when IMPROV_TROOP_SERVER_KEY is set explicitly — we never fall back to
 // ambient Vercel OIDC credentials, so a public deployment can't spend the owner's credits.
+//
+// Structured output: when the client sends a JSON schema the model is asked for an
+// object matching it. If the model or provider rejects that, we retry once as plain
+// text and the client's tolerant JSON parser takes over.
 
 export const maxDuration = 120;
 
 const MODEL_RE = /^[a-z0-9-]+\/[a-z0-9.\-]+$/i;
+const KEY_REJECTED = "The AI Gateway rejected that key — check it in “Brains & sounds”.";
 
 interface Body {
   key?: string;
@@ -19,7 +25,16 @@ interface Body {
   prompt: string;
   temperature?: number;
   maxOutputTokens?: number;
-  reasoning?: "none" | "minimal" | "low" | "medium" | "provider-default";
+  reasoning?: ReasoningLevel;
+  schema?: JSONSchema7;
+  schemaName?: string;
+}
+
+type CallError = { message?: string; statusCode?: number; status?: number; name?: string };
+
+function isAuthError(e: CallError) {
+  const status = e.statusCode ?? e.status ?? 0;
+  return status === 401 || status === 403 || /unauthenticated|invalid api key|authentication/i.test(e.message ?? "");
 }
 
 export async function POST(req: Request) {
@@ -33,7 +48,7 @@ export async function POST(req: Request) {
   // Local development only: key "mock" answers with a canned band so the UI flow can be exercised offline.
   if (process.env.NODE_ENV !== "production" && body.key === "mock") {
     await new Promise((r) => setTimeout(r, 400 + Math.random() * 900));
-    return Response.json({ text: fakeModel(body), usage: { inputTokens: 0, outputTokens: 0 }, serverMs: performance.now() - t0 });
+    return Response.json({ text: fakeModel(body), structured: false, usage: { inputTokens: 0, outputTokens: 0 }, serverMs: performance.now() - t0 });
   }
   const apiKey = body.key?.trim() || process.env.IMPROV_TROOP_SERVER_KEY;
   if (!apiKey) return Response.json({ error: "Add your Vercel AI Gateway key to let the band think." }, { status: 401 });
@@ -43,34 +58,63 @@ export async function POST(req: Request) {
   }
 
   const gateway = createGateway({ apiKey });
+  // only send what this model accepts (e.g. Claude Sonnet 5.5 takes no temperature)
+  const params = callParams(body.model, { temperature: body.temperature, reasoning: body.reasoning });
+  const base = {
+    model: gateway(body.model),
+    system: body.system,
+    prompt: body.prompt,
+    maxOutputTokens: Math.min(body.maxOutputTokens ?? 2000, 8000),
+    maxRetries: 1,
+    ...params,
+  };
+  const usage = (u: { inputTokens?: number; outputTokens?: number } | undefined) => ({
+    inputTokens: u?.inputTokens ?? null,
+    outputTokens: u?.outputTokens ?? null,
+  });
+
+  let fallbackReason: string | undefined;
+  if (body.schema && typeof body.schema === "object") {
+    try {
+      const result = await generateText({
+        ...base,
+        abortSignal: AbortSignal.timeout(100_000),
+        output: Output.object({ schema: jsonSchema(body.schema), name: body.schemaName }),
+      });
+      return Response.json({
+        text: JSON.stringify(result.output),
+        structured: true,
+        finishReason: result.finishReason,
+        usage: usage(result.usage),
+        params,
+        serverMs: performance.now() - t0,
+      });
+    } catch (e) {
+      const err = e as CallError;
+      if (isAuthError(err)) return Response.json({ error: KEY_REJECTED }, { status: 401 });
+      if ((err.statusCode ?? err.status) === 429) {
+        return Response.json({ error: "Rate limited by the AI Gateway — try again in a moment." }, { status: 429 });
+      }
+      fallbackReason = (err.message ?? "structured output failed").slice(0, 240);
+    }
+  }
+
   try {
-    const result = await generateText({
-      model: gateway(body.model),
-      system: body.system,
-      prompt: body.prompt,
-      temperature: body.temperature,
-      maxOutputTokens: Math.min(body.maxOutputTokens ?? 2000, 8000),
-      maxRetries: 1,
-      abortSignal: AbortSignal.timeout(110_000),
-      ...(body.reasoning ? { reasoning: body.reasoning } : {}),
-    });
+    const result = await generateText({ ...base, abortSignal: AbortSignal.timeout(100_000) });
     return Response.json({
       text: result.text,
+      structured: false,
+      fallbackReason,
       finishReason: result.finishReason,
-      usage: {
-        inputTokens: result.usage?.inputTokens ?? null,
-        outputTokens: result.usage?.outputTokens ?? null,
-      },
+      usage: usage(result.usage),
+      params,
       serverMs: performance.now() - t0,
     });
   } catch (e) {
-    const err = e as { message?: string; statusCode?: number; status?: number; name?: string };
+    const err = e as CallError;
+    if (isAuthError(err)) return Response.json({ error: KEY_REJECTED }, { status: 401 });
     const status = err.statusCode ?? err.status ?? 502;
-    let message = err.message ?? "Model call failed";
-    if (status === 401 || status === 403 || /unauthenticated|invalid api key|authentication/i.test(message)) {
-      return Response.json({ error: "The AI Gateway rejected that key — check it in “Brains & sounds”." }, { status: 401 });
-    }
-    if (status === 429) message = "Rate limited by the AI Gateway — try again in a moment.";
+    const message = status === 429 ? "Rate limited by the AI Gateway — try again in a moment." : (err.message ?? "Model call failed");
     return Response.json({ error: message, name: err.name }, { status: status >= 400 && status < 600 ? status : 502 });
   }
 }
