@@ -104,7 +104,7 @@ function owl(): AnimalArt {
     body: (
       <>
         {bodyAndFeet(a, ink, fill, belly)}
-        <L d="M106 196 q5 5 10 0 M124 196 q5 5 10 0 M114 210 q5 5 10 0 M106 222 q5 5 10 0 M124 222 q5 5 10 0" ink={mix(ink, fill, 0.3)} seed={sd(a, "scal")} w={1.3} />
+        <L d="M108 194 l4 4 l4 -4 M124 194 l4 4 l4 -4 M116 207 l4 4 l4 -4 M108 220 l4 4 l4 -4 M124 220 l4 4 l4 -4" ink={mix(ink, fill, 0.35)} seed={sd(a, "scal")} w={1.2} />
       </>
     ),
     head: (
