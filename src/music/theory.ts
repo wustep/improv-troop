@@ -338,7 +338,8 @@ export function romanToChord(token: string, key: KeySig): string {
   const deg = numerals.indexOf(m[2].toUpperCase());
   const majorSteps = [0, 2, 4, 5, 7, 9, 11];
   const minorSteps = [0, 2, 3, 5, 7, 8, 10];
-  const steps = key.mode === "minor" ? minorSteps : majorSteps;
+  // accidentals are relative to the major scale (bIII, bVI, bVII), plain numerals follow the mode
+  const steps = m[1] || key.mode !== "minor" ? majorSteps : minorSteps;
   let pc = tonic + steps[deg];
   if (m[1] === "b") pc -= 1;
   if (m[1] === "#") pc += 1;

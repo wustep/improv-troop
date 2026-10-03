@@ -113,6 +113,8 @@ export interface BarPlan {
   dynamic: Dynamic;
   /** Short human note shown in the debug view, e.g. "Fox answers the motif a 3rd up". */
   cue?: string;
+  /** What each member plays in this bar: a directive ("@walk", "@motif invert"), compact notes, or a drum grid. */
+  directives?: Record<string, string>;
 }
 
 /** A short melodic cell everybody refers back to. Stored as concrete notes relative to beat 0. */
