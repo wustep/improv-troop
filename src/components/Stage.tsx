@@ -26,13 +26,16 @@ function useWidth<T extends HTMLElement>() {
 
 function IntroNote({ onClose }: { onClose: () => void }) {
   return (
-    <div className="sticky-note absolute left-1 top-14 z-30 w-[17.5rem] -rotate-[2deg] px-3 py-2 text-[15px] leading-snug" role="note">
+    <div className="sticky-note relative z-30 mx-auto mt-3 w-full max-w-[19rem] -rotate-[1deg] px-3 py-2 text-[15px] leading-snug lg:absolute lg:left-1 lg:top-14 lg:mt-0 lg:w-[17.5rem] lg:-rotate-[2deg]" role="note">
       <button type="button" onClick={onClose} className="absolute right-1.5 top-0.5 text-lg leading-none text-ink-soft hover:text-ink" aria-label="Dismiss">
         ×
       </button>
       <div className="font-[family-name:var(--font-script)] text-xl font-bold">How to jam</div>
       <ol className="ml-4 list-decimal">
-        <li>Pick the band and their instruments →</li>
+        <li>
+          Pick the band and their instruments <span className="hidden lg:inline">→</span>
+          <span className="lg:hidden">(below)</span>
+        </li>
         <li>Press ▶ to hear their sketch</li>
         <li>Add a gateway key, then <b>Let them jam!</b> to make them think it through</li>
       </ol>
