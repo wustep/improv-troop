@@ -6,7 +6,7 @@ const hand = Patrick_Hand({ variable: "--font-hand", subsets: ["latin"], weight:
 const script = Caveat({ variable: "--font-script", subsets: ["latin"], weight: ["500", "700"] });
 
 export const metadata: Metadata = {
-  title: "Improv Troop",
+  title: "Jamming",
   description: "A band of doodled animals that improvise music together.",
 };
 

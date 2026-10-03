@@ -40,7 +40,7 @@ export default function Home() {
       <DoodleDefs />
       <header className="mb-3 flex flex-wrap items-end justify-between gap-2">
         <div>
-          <h1 className="font-[family-name:var(--font-script)] text-5xl font-bold leading-none sm:text-6xl">Improv Troop</h1>
+          <h1 className="font-[family-name:var(--font-script)] text-5xl font-bold leading-none sm:text-6xl">Jamming</h1>
           <Squiggle width={250} seed="title" color="var(--pencil-red)" />
           <p className="text-[15px] text-ink-soft">Pick the band, hand them instruments, and let them make something up.</p>
         </div>
