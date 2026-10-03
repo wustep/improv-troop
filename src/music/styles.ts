@@ -403,3 +403,18 @@ export const STYLES: Record<StyleId, StyleDef> = {
 };
 
 export const STYLE_LIST: StyleId[] = ["swing", "bossa", "funk", "neworleans", "minimal", "baroque", "ambient"];
+
+/**
+ * What a cellist does in each style when someone else holds the bass chair: tenor
+ * countermelodies, bowed pads, pizzicato double-stop comping, imitation. (With no bassist,
+ * the cello takes the style's bass pattern instead — see planner.)
+ */
+export const CELLO_TEXTURE: Record<StyleId, Partial<Record<SectionKind, string>>> = {
+  swing: { intro: "@rest", head: "@counter", solo: "@pizz sparse", trade: "@pizz sparse", vamp: "@pizz", out: "@harmony", tag: "@end" },
+  bossa: { intro: "@pad", head: "@pad", solo: "@pizz", trade: "@pizz", vamp: "@pad", out: "@harmony", tag: "@end" },
+  funk: { intro: "@rest", head: "@riff", solo: "@pizz busy", trade: "@pizz", vamp: "@riff", out: "@riff", tag: "@end" },
+  neworleans: { intro: "@riff", head: "@counter", solo: "@riff", trade: "@riff", vamp: "@riff", out: "@counter", tag: "@end" },
+  minimal: { intro: "@arp", head: "@arp", solo: "@arp", trade: "@arp", vamp: "@arp", out: "@arp", tag: "@end" },
+  baroque: { intro: "@rest", head: "@canon", solo: "@counter", trade: "@canon", vamp: "@counter", out: "@canon", tag: "@end" },
+  ambient: { intro: "@pad", head: "@pad", solo: "@pad", trade: "@pad", vamp: "@pad", out: "@pad", tag: "@end" },
+};

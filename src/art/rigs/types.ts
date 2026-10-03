@@ -123,7 +123,7 @@ export function strokeLift(lastAge: number, nextIn: number, rest = 0.6, win = 0.
 export function newOnsets(
   c: RigCtx,
   f: Frame,
-  fn: (o: { pitch: number; vel: number; age: number; chordSize: number }) => void,
+  fn: (o: { pitch: number; vel: number; age: number; chordSize: number; art?: MemberFrameState["recent"][number]["art"] }) => void,
 ) {
   const s = f.s;
   const bps = (s.bpm || 120) / 60;

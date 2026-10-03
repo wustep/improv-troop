@@ -188,90 +188,310 @@ export const violin: Rig = {
   update: (c, f) => bowedUpdate(VIOLIN, c, f),
 };
 
-// Cello: body centre local origin, neck along −y. Seated, stands on the floor.
-const CELLO: BowGeo = {
-  open: OPEN.cello,
-  across: (i) => -3.3 + i * 2.2,
-  contact: (i) => ({ x: -3.3 + i * 2.2, y: 6 }),
-  stop: (i, semis) => ({ x: -3.3 + i * 2.2 + 7, y: -120 + 132 * stopFrac(semis) }),
-  bowDir: norm(1, 0.12),
-  tilt: 14,
-  bowLen: 98,
-  place: (c, f) => chain(tr(160, 196), rot(11 + Math.sin(f.t * 1.1) * (f.s.active.length ? 1 : 0.3))),
+// ─── Cello ───────────────────────────────────────────────────────────────────
+//
+// Seated on a stool, the cello stands between the knees on its endpin, leaning
+// toward the player's left shoulder (viewer-right) so the scroll sits by the ear.
+// Local coords: body centre at the origin, neck along −y. String 0 is the C string,
+// which (seen from the audience) is on the viewer-right.
+
+const VC = {
+  nut: -84,
+  bridge: 22,
+  fbEnd: 10,
+  /** String x at local y (strings fan out from nut to bridge). */
+  sx: (i: number, y: number) => {
+    const t = (y - -84) / (22 - -84);
+    return (3 - 2 * i) + ((4.5 - 3 * i) - (3 - 2 * i)) * t;
+  },
 };
+const VC_TILT = 17;
+const VC_ENDPIN: Pt = { x: 110, y: 251 };
+const VC_BOW = 100;
+
+function vcPlace(f: Frame): Mat {
+  const sway = Math.sin(f.t * 1.1) * (f.s.active.length ? 1.1 : 0.35);
+  const th = VC_TILT + sway;
+  const r = (th * Math.PI) / 180;
+  // pivot on the endpin so swaying never lifts it off the floor
+  const cx = VC_ENDPIN.x + 60 * Math.sin(r);
+  const cy = VC_ENDPIN.y - 60 * Math.cos(r);
+  return chain(tr(cx, cy), rot(th));
+}
+
+/** Map up to two simultaneous pitches onto adjacent strings. */
+function vcStops(pitches: number[]): { string: number; semis: number }[] {
+  if (!pitches.length) return [];
+  const ps = [...pitches].sort((a, b) => a - b).slice(-2);
+  const hi = stringFor(ps[ps.length - 1], OPEN.cello);
+  if (ps.length === 1) return [hi];
+  let lo = stringFor(ps[0], OPEN.cello);
+  if (lo.string >= hi.string) {
+    if (hi.string > 0) lo = { string: hi.string - 1, semis: Math.max(0, ps[0] - OPEN.cello[hi.string - 1]) };
+    else return [hi];
+  }
+  return [lo, hi];
+}
 
 export const cello: Rig = {
   follow: "world",
   seated: true,
   render(c) {
     const s = hash(c.animal + "vc");
+    const stoolInk = "#5b3a20";
+    const stoolWood = "#b77b45";
+    const fb = (y0: number, y1: number) => {
+      const a = VC.sx(3, y0) - 1.6;
+      const b = VC.sx(0, y0) + 1.6;
+      const cc = VC.sx(3, y1) - 2.2;
+      const d = VC.sx(0, y1) + 2.2;
+      return `M${a.toFixed(1)} ${y0} L${b.toFixed(1)} ${y0} L${d.toFixed(1)} ${y1} L${cc.toFixed(1)} ${y1} Z`;
+    };
     return {
+      back: (
+        <g>
+          {/* little stool behind the player */}
+          <L d="M88 230 L80 252 M152 230 L160 252 M120 232 L120 252 M84 244 H156" ink={stoolInk} seed={s + 20} w={3} />
+          <S d={ellipsePath(120, 228, 42, 8)} ink={stoolInk} base={mix(stoolWood, "#fff", 0.2)} hatch={stoolWood} seed={s + 21} gap={3} />
+        </g>
+      ),
       front: (
         <g ref={c.bag.r("inst")}>
-          <path d="M0 46 V52" stroke="#6d6a75" strokeWidth={2.4} strokeLinecap="round" />
+          <path d="M0 46 L0 60" stroke="#6d6a75" strokeWidth={2.4} strokeLinecap="round" />
           <S
-            d="M0 -44 C-16 -44 -24 -36 -22 -24 C-20 -16 -14 -14 -15 -6 C-16 2 -28 6 -28 22 C-28 38 -14 46 0 46 C14 46 28 38 28 22 C28 6 16 2 15 -6 C14 -14 20 -16 22 -24 C24 -36 16 -44 0 -44 Z"
+            d="M0 -46 C-14 -46 -25 -40 -25 -27 C-25 -16 -17 -14 -17 -4 C-17 6 -31 8 -31 24 C-31 40 -16 46 0 46 C16 46 31 40 31 24 C31 8 17 6 17 -4 C17 -14 25 -16 25 -27 C25 -40 14 -46 0 -46 Z"
             ink={WOOD_INK}
-            base={mix(WOOD, "#fff", 0.2)}
+            base={mix(WOOD, "#fff", 0.18)}
             hatch={WOOD_HATCH}
             seed={s}
             gap={3}
           />
-          <L d="M-10 -8 q-3 6 0 12 q3 6 0 12 M10 -8 q3 6 0 12 q-3 6 0 12" ink={WOOD_INK} seed={s + 1} w={1.2} />
-          <path d="M-4.5 0 L-3.5 -122 L3.5 -122 L4.5 0 Z" fill={BOARD} />
-          <path d="M-4 30 L4 30 L3 40 L-3 40 Z" fill={BOARD} />
-          <path d="M-8 14 H8" stroke={WOOD_INK} strokeWidth={1.8} />
+          {/* purfling + f-holes */}
+          <L d="M-9 -2 q-3 6 0 11 q3 5 0 11 M9 -2 q3 6 0 11 q-3 5 0 11" ink={WOOD_INK} seed={s + 1} w={1.3} />
+          <path d="M-10.5 -3 h3 M-10.5 20 h3 M7.5 -3 h3 M7.5 20 h3" stroke={WOOD_INK} strokeWidth={1.2} />
+          {/* neck + fingerboard + tailpiece */}
+          <path d="M-3.6 -46 L-3 -86 L3 -86 L3.6 -46 Z" fill={mix(WOOD, "#000", 0.25)} />
+          <path d={fb(VC.nut, VC.fbEnd)} fill={BOARD} />
+          <path d="M-4.5 30 L4.5 30 L3.2 42 L-3.2 42 Z" fill={BOARD} />
+          <path d="M-9 22 H9" stroke="#f1d9a8" strokeWidth={2.2} strokeLinecap="round" />
+          <path d="M-8 24 v-3 M8 24 v-3" stroke={WOOD_INK} strokeWidth={1} />
           {[0, 1, 2, 3].map((i) => (
-            <path key={i} ref={c.bag.r("str" + i)} d={`M${CELLO.across(i)} 32 V-121`} stroke={STRING} strokeWidth={0.8} />
+            <path
+              key={i}
+              ref={c.bag.r("str" + i)}
+              d={`M${VC.sx(i, VC.nut).toFixed(2)} ${VC.nut} L${VC.sx(i, VC.bridge).toFixed(2)} ${VC.bridge} L${(VC.sx(i, VC.bridge) * 0.6).toFixed(2)} 31`}
+              stroke={STRING}
+              strokeWidth={i === 0 ? 1.1 : 0.85 - i * 0.05}
+              fill="none"
+            />
           ))}
-          <S d="M-4 -122 H4 V-132 H-4 Z" ink={WOOD_INK} base={WOOD} seed={s + 2} w={1.1} />
-          <S d={ellipsePath(0, -136, 4.5, 4.5)} ink={WOOD_INK} base={WOOD} seed={s + 3} w={1.2} />
+          {/* pegbox + scroll */}
+          <S d="M-3.5 -86 L-4 -100 L4 -100 L3.5 -86 Z" ink={WOOD_INK} base={WOOD} seed={s + 2} w={1.1} />
+          <path d="M-5 -90 h-3 M-5 -95 h-3 M5 -91 h3 M5 -96 h3" stroke={WOOD_INK} strokeWidth={2} strokeLinecap="round" />
+          <S d={ellipsePath(0, -105, 5.4, 5.6)} ink={WOOD_INK} base={WOOD} seed={s + 3} w={1.3} />
+          <path d="M0 -105 m-2 0 a2 2 0 1 1 2 2" stroke={WOOD_INK} strokeWidth={1} fill="none" />
         </g>
       ),
       held: bowParts(c),
     };
   },
-  update: (c, f) => bowedUpdate(CELLO, c, f),
+  update(c, f) {
+    const m = c.mem;
+    const local = vcPlace(f);
+    c.bag.tf("inst", attr(local));
+    const W = chain(f.M, local);
+    const s = f.s;
+
+    // What's sounding: the newest onset group (double-stops share an onset).
+    const newestAge = s.active.length ? Math.min(...s.active.map((a) => a.age)) : Infinity;
+    const group = s.active.filter((a) => a.age - newestAge < 0.03);
+    const upcoming = s.nextOnsetIn < 0.12 && s.nextPitch !== null ? [s.nextPitch] : [];
+    const pitches = group.length ? group.map((a) => a.pitch) : upcoming;
+    const stops = vcStops(pitches);
+    if (stops.length) {
+      m.s0 = stops[0].string;
+      m.m0 = stops[0].semis;
+      m.s1 = stops[stops.length - 1].string;
+      m.m1 = stops[stops.length - 1].semis;
+      m.dbl = stops.length > 1 ? 1 : 0;
+    }
+    const strMid = ((m.s0 ?? 1) + (m.s1 ?? 1)) / 2;
+    m.strS = (m.strS ?? strMid) + (strMid - (m.strS ?? strMid)) * approach(f.dt, 0.05);
+    const semisMid = ((m.m0 ?? 3) + (m.m1 ?? 3)) / 2;
+    m.semisS = (m.semisS ?? semisMid) + (semisMid - (m.semisS ?? semisMid)) * approach(f.dt, 0.035);
+
+    // Pizz or arco? Follow the newest note (or the most recent onset).
+    const lastArt = group[0]?.art ?? s.recent[0]?.art;
+    const pizzNow = lastArt === "pizz" && (group.length > 0 || (s.recent[0]?.age ?? Infinity) < 1.5);
+    m.pz = (m.pz ?? 0) + ((pizzNow ? 1 : 0) - (m.pz ?? 0)) * approach(f.dt, pizzNow ? 0.06 : 0.18);
+    const pz = m.pz;
+
+    // ── arco bow: alternate direction per onset, travel ∝ duration, louder → nearer the bridge
+    if (m.dir === undefined) {
+      m.dir = 1;
+      m.b0 = 0.3;
+      m.bs = 0.3;
+      m.travel = 0.4;
+      m.pluckT = -Infinity;
+    }
+    newOnsets(c, f, (o) => {
+      if (o.art === "pizz") {
+        m.pluckT = f.t - o.age;
+        return;
+      }
+      m.dir = -m.dir;
+      m.b0 = m.bs;
+      const sounding = s.active.find((a) => a.pitch === o.pitch && Math.abs(a.age - o.age) < 0.03);
+      const dur = sounding ? sounding.durSec : 0.4;
+      m.travel = clamp(0.12 + dur * 0.3, 0.12, 0.85);
+      if (m.dir > 0 && m.b0 + m.travel > 0.95) m.b0 = Math.max(0.05, 0.95 - m.travel);
+      if (m.dir < 0 && m.b0 - m.travel < 0.05) m.b0 = Math.min(0.95, 0.05 + m.travel);
+      m.loud = o.vel;
+    });
+    const arcoNote = group.length && group[0].art !== "pizz" ? group[0] : null;
+    if (arcoNote) m.bs = clamp(m.b0 + m.dir * m.travel * Math.min(1, arcoNote.progress * 1.05), 0.04, 0.96);
+    const toBridge = clamp(((m.loud ?? 0.6) - 0.5) * 2, 0, 1);
+    const cy = 12 + toBridge * 6;
+    const cx = VC.sx(0, cy) + (VC.sx(3, cy) - VC.sx(0, cy)) * (m.strS / 3);
+    const C = ap(W, cx, cy);
+    const strings = ap(W, 0, -1);
+    const o0 = ap(W, 0, 0);
+    const along = norm(strings.x - o0.x, strings.y - o0.y);
+    // bow runs perpendicular to the strings, tilting with the string being played
+    const u = rotV({ x: -along.y, y: along.x }, (m.strS - 1.5) * 6);
+    const quiet = !group.length && s.nextOnsetIn > 0.5;
+    m.lift = (m.lift ?? 0) + ((quiet ? 1 : 0) - (m.lift ?? 0)) * approach(f.dt, 0.12);
+    const perp = { x: u.y, y: -u.x };
+    const arcoFrog = {
+      x: C.x - u.x * m.bs * VC_BOW + perp.x * m.lift * 8,
+      y: C.y - u.y * m.bs * VC_BOW + perp.y * m.lift * 8,
+    };
+
+    // ── pizz: the bowing hand plucks near the end of the fingerboard, bow tucked in the palm
+    const str = Math.round(m.s1 ?? 1);
+    const pAge = f.t - (m.pluckT ?? -Infinity);
+    const pull = pAge < 0.1 ? Math.sin((pAge / 0.1) * (Math.PI / 2)) : Math.exp(-(pAge - 0.1) / 0.12);
+    const ready = s.nextOnsetIn < 0.15 ? 1 - s.nextOnsetIn / 0.15 : 0;
+    const flick = Math.max(0, pull * (1 - ready)) * 9;
+    const py = VC.fbEnd - 8;
+    const pluck = ap(W, VC.sx(str, py) - 3 + flick, py + flick * 0.25);
+
+    const hand = { x: arcoFrog.x + (pluck.x - arcoFrog.x) * pz, y: arcoFrog.y + (pluck.y - arcoFrog.y) * pz };
+    // the bow: on the string (arco) or held in the palm pointing down-left (pizz)
+    const parkDir = { x: -0.86, y: 0.5 };
+    const dirX = u.x + (parkDir.x - u.x) * pz;
+    const dirY = u.y + (parkDir.y - u.y) * pz;
+    const dn = norm(dirX, dirY);
+    const frog = { x: hand.x - dn.x * 4 * pz, y: hand.y - dn.y * 4 * pz };
+    const tip = { x: frog.x + dn.x * VC_BOW, y: frog.y + dn.y * VC_BOW };
+    const bp = { x: dn.y, y: -dn.x };
+    c.bag.set("hair", "x1", frog.x);
+    c.bag.set("hair", "y1", frog.y);
+    c.bag.set("hair", "x2", tip.x);
+    c.bag.set("hair", "y2", tip.y);
+    c.bag.set("stick", "x1", frog.x + bp.x * 3);
+    c.bag.set("stick", "y1", frog.y + bp.y * 3);
+    c.bag.set("stick", "x2", tip.x + bp.x * 2);
+    c.bag.set("stick", "y2", tip.y + bp.y * 2);
+    c.bag.set("frog", "cx", frog.x + bp.x * 2);
+    c.bag.set("frog", "cy", frog.y + bp.y * 2);
+    f.arms.L = { hand, bend: 18, pawRot: 10 + pz * 50 };
+
+    // ── left hand on the neck: follows the stopped note(s), spans a double-stop
+    const stopY = VC.nut + (VC.bridge - VC.nut) * stopFrac(m.semisS);
+    const sx = VC.sx(0, stopY) + (VC.sx(3, stopY) - VC.sx(0, stopY)) * (m.strS / 3);
+    const lh = ap(W, sx + 7, stopY);
+    const vib = arcoNote && arcoNote.durSec > 0.5 && arcoNote.progress > 0.2 ? Math.sin(f.t * 34) * 1.2 : 0;
+    m.dblS = (m.dblS ?? 0) + ((m.dbl ?? 0) - (m.dblS ?? 0)) * approach(f.dt, 0.06);
+    f.arms.R = { hand: { x: lh.x + vib, y: lh.y }, bend: -16, pawRot: -30, spread: 1 + m.dblS * 0.35 };
+
+    // ── strings: bowed strings shimmer, plucked strings ring and decay
+    const ring = pAge < 1.4 ? hit(pAge, 0.35) : 0;
+    for (let i = 0; i < 4; i++) {
+      const playing = group.length > 0 && (i === Math.round(m.s0 ?? -1) || i === Math.round(m.s1 ?? -1));
+      const bowed = playing && !!arcoNote;
+      const plucked = (i === Math.round(m.s0 ?? -1) || i === Math.round(m.s1 ?? -1)) && ring > 0.03;
+      const amp = bowed ? 0.55 : plucked ? ring * 1.4 : 0;
+      c.bag.tf("str" + i, amp ? `translate(${(Math.sin(f.t * 91 + i * 1.7) * amp).toFixed(2)} 0)` : "");
+      c.bag.op("str" + i, playing || plucked ? 1 : 0.8);
+    }
+    f.look.bliss = !!arcoNote && arcoNote.durSec > 0.9 && arcoNote.progress > 0.2;
+    f.look.lean = (m.bs - 0.5) * -3 * (1 - pz) + pz * hit(pAge, 0.2) * 1.5;
+  },
 };
 
 // ─── Upright bass (pizzicato) ────────────────────────────────────────────────
+//
+// A double bass is taller than these animals: endpin on the floor, scroll above
+// head height, standing just in front of the player's left side (viewer-right).
+// Local coords: body centre at the origin, neck along −y; string 0 = E (viewer-right).
 
-const BASS_X = (i: number) => -4.2 + i * 2.8;
-const BASS_NUT = -150;
-const BASS_BRIDGE = 14;
+const CB = {
+  nut: -110,
+  bridge: 30,
+  fbEnd: 18,
+  sx: (i: number, y: number) => {
+    const t = (y - -110) / (30 - -110);
+    return (3.3 - 2.2 * i) + ((5.6 - 3.7 * i) - (3.3 - 2.2 * i)) * t;
+  },
+};
+const CB_TILT = 5;
+const CB_ENDPIN: Pt = { x: 150, y: 251 };
+
+const CB_SCALE = 1.12;
+
+function cbPlace(f: Frame): Mat {
+  const th = CB_TILT + Math.sin(f.t * 1.2) * 0.6;
+  const r = (th * Math.PI) / 180;
+  const e = 72 * CB_SCALE;
+  return chain(tr(CB_ENDPIN.x + e * Math.sin(r), CB_ENDPIN.y - e * Math.cos(r)), rot(th), scl(CB_SCALE));
+}
 
 export const bass: Rig = {
   follow: "world",
   render(c) {
     const s = hash(c.animal + "cb");
+    const fb = `M${(CB.sx(3, CB.nut) - 1.8).toFixed(1)} ${CB.nut} L${(CB.sx(0, CB.nut) + 1.8).toFixed(1)} ${CB.nut} L${(CB.sx(0, CB.fbEnd) + 2.4).toFixed(1)} ${CB.fbEnd} L${(CB.sx(3, CB.fbEnd) - 2.4).toFixed(1)} ${CB.fbEnd} Z`;
     return {
       front: (
         <g ref={c.bag.r("inst")}>
-          <path d="M0 58 V64" stroke="#6d6a75" strokeWidth={2.6} strokeLinecap="round" />
+          <path d="M0 60 L0 72" stroke="#6d6a75" strokeWidth={2.8} strokeLinecap="round" />
           <S
-            d="M0 -58 C-20 -58 -30 -48 -28 -32 C-26 -22 -18 -18 -19 -8 C-20 2 -36 8 -36 30 C-36 50 -18 58 0 58 C18 58 36 50 36 30 C36 8 20 2 19 -8 C18 -18 26 -22 28 -32 C30 -48 20 -58 0 -58 Z"
+            d="M0 -60 C-10 -60 -15 -56 -19 -48 C-25 -38 -28 -26 -24 -16 C-21 -8 -21 0 -24 6 C-40 14 -43 40 -37 50 C-31 60 -15 62 0 62 C15 62 31 60 37 50 C43 40 40 14 24 6 C21 0 21 -8 24 -16 C28 -26 25 -38 19 -48 C15 -56 10 -60 0 -60 Z"
             ink={WOOD_INK}
             base={mix("#9a5424", "#fff", 0.2)}
             hatch="#c27a3d"
             seed={s}
-            gap={3}
+            gap={3.2}
           />
-          <L d="M-13 -10 q-4 8 0 16 q4 8 0 16 M13 -10 q4 8 0 16 q-4 8 0 16" ink={WOOD_INK} seed={s + 1} w={1.3} />
-          <path d="M-5.5 -2 L-4 -152 L4 -152 L5.5 -2 Z" fill={BOARD} />
-          <path d="M-5 38 L5 38 L4 50 L-4 50 Z" fill={BOARD} />
-          <path d="M-10 14 H10" stroke={WOOD_INK} strokeWidth={2} />
+          <L d="M-12 2 q-4 8 0 15 q4 8 0 15 M12 2 q4 8 0 15 q-4 8 0 15" ink={WOOD_INK} seed={s + 1} w={1.4} />
+          <path d="M-13.5 1 h3 M-13.5 32 h3 M10.5 1 h3 M10.5 32 h3" stroke={WOOD_INK} strokeWidth={1.3} />
+          <path d="M-4.2 -60 L-3.4 -112 L3.4 -112 L4.2 -60 Z" fill={mix("#9a5424", "#000", 0.25)} />
+          <path d={fb} fill={BOARD} />
+          <path d="M-5.5 38 L5.5 38 L4 54 L-4 54 Z" fill={BOARD} />
+          <path d="M-11 30 H11" stroke="#f1d9a8" strokeWidth={2.6} strokeLinecap="round" />
+          <path d="M-10 32 v-4 M10 32 v-4" stroke={WOOD_INK} strokeWidth={1.1} />
           {[0, 1, 2, 3].map((i) => (
-            <path key={i} ref={c.bag.r("str" + i)} d={`M${BASS_X(i)} 40 V-151`} stroke={STRING} strokeWidth={1} />
+            <path
+              key={i}
+              ref={c.bag.r("str" + i)}
+              d={`M${CB.sx(i, CB.nut).toFixed(2)} ${CB.nut} L${CB.sx(i, CB.bridge).toFixed(2)} ${CB.bridge} L${(CB.sx(i, CB.bridge) * 0.6).toFixed(2)} 40`}
+              stroke={STRING}
+              strokeWidth={1.25 - i * 0.12}
+              fill="none"
+            />
           ))}
-          <S d="M-5 -152 H5 V-164 H-5 Z" ink={WOOD_INK} base="#9a5424" seed={s + 2} w={1.1} />
-          <S d={ellipsePath(0, -168, 5, 5)} ink={WOOD_INK} base="#9a5424" seed={s + 3} w={1.2} />
+          <S d="M-4 -112 L-4.5 -128 L4.5 -128 L4 -112 Z" ink={WOOD_INK} base="#9a5424" seed={s + 2} w={1.1} />
+          <path d="M-5.5 -116 h-4 M-5.5 -123 h-4 M5.5 -117 h4 M5.5 -124 h4" stroke="#c9c5d6" strokeWidth={2.2} strokeLinecap="round" />
+          <S d={ellipsePath(0, -134, 6, 6.2)} ink={WOOD_INK} base="#9a5424" seed={s + 3} w={1.3} />
+          <path d="M0 -134 m-2.4 0 a2.4 2.4 0 1 1 2.4 2.4" stroke={WOOD_INK} strokeWidth={1.1} fill="none" />
         </g>
       ),
     };
   },
   update(c, f) {
     const m = c.mem;
-    const local = chain(tr(172, 192), rot(9 + Math.sin(f.t * 1.2) * 0.5), scl(0.86));
+    const local = cbPlace(f);
     c.bag.tf("inst", attr(local));
     const W = chain(f.M, local);
     const n = lead(f);
@@ -283,6 +503,7 @@ export const bass: Rig = {
       m.semis = p.semis;
     }
     const str = m.str ?? 1;
+    m.strS = (m.strS ?? str) + (str - (m.strS ?? str)) * approach(f.dt, 0.05);
     m.semisS = (m.semisS ?? 3) + ((m.semis ?? 3) - (m.semisS ?? 3)) * approach(f.dt, 0.03);
     const last = f.s.recent[0];
     const age = last ? last.age : Infinity;
@@ -290,15 +511,16 @@ export const bass: Rig = {
     const pull = age < 0.12 ? Math.sin((age / 0.12) * (Math.PI / 2)) : Math.exp(-(age - 0.12) / 0.12);
     const ready = f.s.nextOnsetIn < 0.15 ? 1 - f.s.nextOnsetIn / 0.15 : 0;
     const flick = Math.max(0, pull * (1 - ready)) * 12;
-    const pluckLocal = { x: BASS_X(str) - 3 + flick, y: -16 + flick * 0.3 };
-    f.arms.L = { hand: ap(W, pluckLocal.x, pluckLocal.y), bend: 16, pawRot: 60 };
-    const stopY = BASS_NUT + (BASS_BRIDGE - BASS_NUT) * stopFrac(m.semisS);
-    f.arms.R = { hand: ap(W, BASS_X(str) + 8, stopY), bend: -18, pawRot: -40 };
+    const py = CB.fbEnd - 10;
+    const pluckLocal = { x: CB.sx(m.strS, py) - 4 + flick, y: py + flick * 0.3 };
+    f.arms.L = { hand: ap(W, pluckLocal.x, pluckLocal.y), bend: 14, pawRot: 60 };
+    const stopY = CB.nut + (CB.bridge - CB.nut) * stopFrac(m.semisS);
+    f.arms.R = { hand: ap(W, CB.sx(m.strS, stopY) + 8, stopY), bend: -30, pawRot: -40 };
     for (let i = 0; i < 4; i++) {
       const ring = age < 1.2 && i === str ? hit(age, 0.35) : 0;
       c.bag.tf("str" + i, ring > 0.02 ? `translate(${(Math.sin(f.t * 70) * ring * 1.6).toFixed(2)} 0)` : "");
     }
-    f.look.lean = 2 + hit(age, 0.2) * 1.5;
+    f.look.lean = -1.5 + hit(age, 0.2) * 1.2;
     f.look.dip = hit(age, 0.15) * 1.5;
   },
 };

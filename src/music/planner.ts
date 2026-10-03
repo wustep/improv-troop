@@ -1,7 +1,7 @@
 import { sectionAt } from "./form";
 import { INSTRUMENTS } from "./instruments";
 import type { Rng } from "./rng";
-import { STYLES, type StyleDef } from "./styles";
+import { CELLO_TEXTURE, STYLES, type StyleDef } from "./styles";
 import type { BarPlan, Dynamic, Frame, Member, Motif, Role, Section, Texture } from "./types";
 
 // Level 1 (local): fill roles, textures, dynamics and per-bar directives inside
@@ -85,6 +85,13 @@ export function headLine(style: StyleDef, len: number, motifBars: number, rng: R
   return res;
 }
 
+/** Who holds the bass chair: a bassist, else a bass-capable player (cello), else nobody. */
+export function bassChairOf(members: Member[]): string | null {
+  const bassist = members.find((m) => INSTRUMENTS[m.instrument].fn === "bass");
+  if (bassist) return bassist.id;
+  return members.find((m) => INSTRUMENTS[m.instrument].bassCapable)?.id ?? null;
+}
+
 export function planLocal(frame: Frame, members: Member[], motif: Motif, rng: Rng): BarPlan[] {
   const style = STYLES[frame.style];
   const motifBars = Math.max(1, Math.ceil(motif.length / frame.meter.beats - 1e-6));
@@ -92,6 +99,7 @@ export function planLocal(frame: Frame, members: Member[], motif: Motif, rng: Rn
   const soloSections = frame.sections.filter((s) => s.kind === "solo" || s.kind === "trade");
   const lastSolo = soloSections[soloSections.length - 1];
   const melodic = members.filter((m) => INSTRUMENTS[m.instrument].fn === "melodic");
+  const bassChair = bassChairOf(members);
 
   // per-section lead lines
   const leadLines = new Map<Section, string[]>();
@@ -110,7 +118,8 @@ export function planLocal(frame: Frame, members: Member[], motif: Motif, rng: Rn
     const lastBar = bar === frame.bars - 1;
 
     for (const m of members) {
-      const fn = INSTRUMENTS[m.instrument].fn;
+      // a cellist covering for a missing bassist plays the bass part
+      const fn = m.id === bassChair ? "bass" : INSTRUMENTS[m.instrument].fn;
       const slot = slots[m.id];
       if (lastBar) {
         roles[m.id] = slot ?? (fn === "rhythm" ? "groove" : fn === "bass" ? "bass" : fn === "chordal" ? "comp" : "pad");
@@ -144,7 +153,9 @@ export function planLocal(frame: Frame, members: Member[], motif: Motif, rng: Rn
       const table = style.section[s.kind] ?? style.section.head;
       const leaderPlaying = s.kind === "head" || s.kind === "out";
       let d: string | undefined;
-      if (fn === "melodic") {
+      if (fn === "melodic" && m.instrument === "cello") {
+        d = CELLO_TEXTURE[style.id][s.kind] ?? "@counter";
+      } else if (fn === "melodic") {
         d = (leaderPlaying ? table["melodic-support"] : undefined) ?? table.melodic ?? "@rest";
         // shout riffs behind the last soloist
         if (s.kind === "solo" && isLastSolo && inSec >= s.length - 2 && melodic.length >= 2 && (style.id === "swing" || style.id === "funk")) d = "@riff";

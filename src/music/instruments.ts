@@ -17,19 +17,27 @@ export interface InstrumentDef {
   sustain: boolean;
   /** Breath limit in beats for wind players (phrases get rests). */
   breath?: number;
+  /** Can take the bass chair when the band has no bassist (cello). */
+  bassCapable?: boolean;
+  /** Bowed string: plays arco by default and pizzicato when asked. */
+  bowed?: boolean;
+  /** Where solos and melodies live, when that differs from the comfortable accompaniment range. */
+  solo?: [number, number];
 }
 
 export const INSTRUMENTS: Record<InstrumentId, InstrumentDef> = {
   piano: { id: "piano", name: "Piano", fn: "chordal", range: [21, 108], sweet: [48, 84], clef: "grand", notationShift: 0, poly: true, sustain: false },
-  bass: { id: "bass", name: "Upright Bass", fn: "bass", range: [28, 67], sweet: [31, 55], clef: "bass", notationShift: 12, poly: false, sustain: false },
+  bass: { id: "bass", name: "Upright Bass", fn: "bass", range: [28, 67], sweet: [31, 55], solo: [36, 62], clef: "bass", notationShift: 12, poly: false, sustain: false },
   drums: { id: "drums", name: "Drums", fn: "rhythm", range: [35, 81], sweet: [35, 81], clef: "percussion", notationShift: 0, poly: true, sustain: false },
   trumpet: { id: "trumpet", name: "Trumpet", fn: "melodic", range: [54, 84], sweet: [58, 79], clef: "treble", notationShift: 0, poly: false, sustain: true, breath: 8 },
   sax: { id: "sax", name: "Tenor Sax", fn: "melodic", range: [44, 75], sweet: [48, 72], clef: "treble", notationShift: 12, poly: false, sustain: true, breath: 8 },
-  trombone: { id: "trombone", name: "Trombone", fn: "melodic", range: [40, 72], sweet: [43, 67], clef: "bass", notationShift: 0, poly: false, sustain: true, breath: 8 },
+  trombone: { id: "trombone", name: "Trombone", fn: "melodic", range: [40, 72], sweet: [43, 67], solo: [48, 70], clef: "bass", notationShift: 0, poly: false, sustain: true, breath: 8 },
   clarinet: { id: "clarinet", name: "Clarinet", fn: "melodic", range: [50, 91], sweet: [55, 84], clef: "treble", notationShift: 0, poly: false, sustain: true, breath: 8 },
   flute: { id: "flute", name: "Flute", fn: "melodic", range: [60, 96], sweet: [64, 91], clef: "treble", notationShift: 0, poly: false, sustain: true, breath: 7 },
-  violin: { id: "violin", name: "Violin", fn: "melodic", range: [55, 100], sweet: [60, 91], clef: "treble", notationShift: 0, poly: false, sustain: true },
-  cello: { id: "cello", name: "Cello", fn: "bass", range: [36, 76], sweet: [38, 67], clef: "bass", notationShift: 0, poly: false, sustain: true },
+  violin: { id: "violin", name: "Violin", fn: "melodic", range: [55, 100], sweet: [60, 91], clef: "treble", notationShift: 0, poly: false, sustain: true, bowed: true },
+  // Cello: a tenor voice first (countermelodies, pads, pizz comping, solos up into tenor clef),
+  // and the bass chair only when nobody else holds it.
+  cello: { id: "cello", name: "Cello", fn: "melodic", range: [36, 81], sweet: [43, 72], clef: "bass", notationShift: 0, poly: true, sustain: true, bassCapable: true, bowed: true, solo: [50, 77] },
   guitar: { id: "guitar", name: "Guitar", fn: "chordal", range: [40, 84], sweet: [48, 76], clef: "treble", notationShift: 12, poly: true, sustain: false },
   vibes: { id: "vibes", name: "Vibraphone", fn: "chordal", range: [53, 89], sweet: [60, 84], clef: "treble", notationShift: 0, poly: true, sustain: false },
 };
@@ -71,9 +79,10 @@ export const ANIMALS: Record<AnimalId, AnimalDef> = {
   bunny: { id: "bunny", name: "Clover", species: "rabbit", ink: "#b0546f", fill: "#f4c4cf", defaultInstrument: "violin", persona: "lyrical, quick, sings long lines, loves a sequence" },
   elephant: { id: "elephant", name: "Tuck", species: "elephant", ink: "#4f6b7d", fill: "#a8c3d2", defaultInstrument: "trombone", persona: "big-hearted, plays riffs and pads, a good listener" },
   penguin: { id: "penguin", name: "Pip", species: "penguin", ink: "#22303c", fill: "#54697a", defaultInstrument: "vibes", persona: "precise, sparkly, plays shimmering patterns, a bit nerdy" },
+  sheep: { id: "sheep", name: "Olive", species: "sheep", ink: "#5a4636", fill: "#d9c7a3", defaultInstrument: "cello", persona: "gentle and lyrical, lives in the tenor register; sings long bowed lines and sneaky countermelodies, and plucks a warm pizzicato when the groove needs it" },
 };
 
-export const ANIMAL_LIST: AnimalId[] = ["bear", "frog", "owl", "fox", "cat", "bunny", "elephant", "penguin"];
+export const ANIMAL_LIST: AnimalId[] = ["bear", "frog", "owl", "fox", "cat", "bunny", "elephant", "penguin", "sheep"];
 
 export function defaultMembers(): Member[] {
   return (["bear", "frog", "owl", "fox"] as AnimalId[]).map((a) => ({

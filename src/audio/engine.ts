@@ -8,6 +8,7 @@ import {
   REVERB_SEND,
   lm2Sample,
   packChain,
+  pizzChain,
   type PackSpec,
   type PianoPack,
 } from "./packs";
@@ -138,10 +139,13 @@ function endBeatOf(score: Score): number {
 }
 
 /** Pitches each member plays — handy as `prepare(..., { notesHint })`. */
+/** Pitches each member will need. Plucked notes on bowed strings go under "<id>|pizz". */
 export function notesHintFromScore(score: Score): Record<string, number[]> {
   const out: Record<string, number[]> = {};
   for (const [id, notes] of Object.entries(score.parts ?? {})) {
-    out[id] = [...new Set(notes.map((n) => n.pitch))];
+    out[id] = [...new Set(notes.filter((n) => n.art !== "pizz").map((n) => n.pitch))];
+    const pizz = notes.filter((n) => n.art === "pizz");
+    if (pizz.length) out[`${id}|pizz`] = [...new Set(pizz.map((n) => n.pitch))];
   }
   return out;
 }
@@ -264,6 +268,12 @@ export class TroopAudio {
       if (!key) continue;
       const hint = opts?.notesHint?.[m.id];
       const entry = this.getEntry(key, m.instrument, hint);
+      // bowed strings that pluck in this chart also need a pizzicato voice
+      const pizzHint = opts?.notesHint?.[`${m.id}|pizz`];
+      if (INSTRUMENTS[m.instrument]?.bowed && pizzHint?.length) {
+        const pz = this.getEntry(`${key}|pizz`, m.instrument, pizzHint, pizzChain());
+        waits.push(pz.done);
+      }
       const pan = this.memberPan.get(m.id) ?? 0;
       if (entry.inst) {
         try {
@@ -308,14 +318,14 @@ export class TroopAudio {
     });
   }
 
-  private getEntry(key: string, instrument: InstrumentId, hint?: number[]): InstEntry {
+  private getEntry(key: string, instrument: InstrumentId, hint?: number[], chain?: PackSpec[]): InstEntry {
     const existing = this.entries.get(key);
     if (existing) return existing;
     const entry: InstEntry = {
       key,
       instrument,
       pianoPack: this.pianoPack,
-      chain: packChain(instrument, this.pianoPack),
+      chain: chain ?? packChain(instrument, this.pianoPack),
       spec: null,
       inst: null,
       storage: null,
@@ -385,7 +395,7 @@ export class TroopAudio {
         }
         // Apply the pan of whichever member currently owns this entry.
         for (const [memberId, key] of this.memberEntry) {
-          if (key === entry.key) inst.output.pan = this.memberPan.get(memberId) ?? 0;
+          if (key === entry.key || `${key}|pizz` === entry.key) inst.output.pan = this.memberPan.get(memberId) ?? 0;
         }
         this.emitLoad();
         return;
@@ -778,7 +788,9 @@ export class TroopAudio {
 
   private scheduleNote(track: Track, note: NoteEvent, when: number, swing: number, now: number) {
     if (this.muted.has(track.memberId)) return;
-    const entry = this.entries.get(track.entryKey);
+    // plucked notes on a bowed string use the pizzicato voice when it's loaded
+    const pizz = note.art === "pizz" ? this.entries.get(`${track.entryKey}|pizz`) : undefined;
+    const entry = pizz?.ready ? pizz : this.entries.get(track.entryKey);
     const inst = entry?.inst;
     if (!inst || !entry.ready) {
       this.stats.dropped++;
@@ -824,6 +836,7 @@ export class TroopAudio {
         const span = applyFeel(note.start + Math.max(0.01, note.dur), swing) - applyFeel(note.start, swing);
         let dur = Math.max(0.03, span * this.spb);
         if (note.art === "staccato") dur *= 0.5;
+        if (note.art === "pizz") dur = Math.min(dur, 0.9);
         if (note.art === "legato") dur *= 1.06;
         if (DECAYING[track.instrument]) dur += 0.05;
         const range = INSTRUMENTS[track.instrument]?.range;

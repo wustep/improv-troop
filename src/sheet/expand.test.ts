@@ -153,3 +153,36 @@ describe("triplet detection", () => {
     expect(sumTicks(bar.tokens)).toBe(48);
   });
 });
+
+describe("cello notation", () => {
+  it("switches high cello systems to tenor clef and marks pizz/arco", async () => {
+    const { buildModel } = await import("./model");
+    const notes = [
+      // bars 1-4: low arco
+      ...[0, 4, 8, 12].map((s) => ({ pitch: 43, start: s, dur: 4, vel: 0.6 })),
+      // bars 5-8: high solo
+      ...Array.from({ length: 16 }, (_, i) => ({ pitch: 62 + (i % 5), start: 16 + i, dur: 1, vel: 0.7 })),
+      // bars 9-12: pizz comping
+      ...[32, 34, 36, 38, 40, 42, 44, 46].map((s) => ({ pitch: 50, start: s, dur: 0.5, vel: 0.6, art: "pizz" as const })),
+    ];
+    const score = {
+      id: "t",
+      title: "t",
+      createdAt: 0,
+      settings: { key: { tonic: "C", mode: "major" }, meter: { beats: 4 }, bars: 12, tempo: 100 },
+      members: [{ id: "sheep", animal: "sheep", name: "Olive", instrument: "cello" }],
+      frame: { bars: 12, meter: { beats: 4 }, tempo: 100, key: { tonic: "C", mode: "major" }, sections: [], chords: Array(12).fill([{ beat: 0, symbol: "C" }]) },
+      plan: [],
+      motif: { notes: [], length: 4, chord: "C", text: "" },
+      swing: 0.5,
+      parts: { sheep: notes },
+      chat: [],
+      engine: "local",
+      notes: [],
+    } as unknown as Parameters<typeof buildModel>[0];
+    const m = buildModel(score);
+    const staff = m.staffs[0];
+    expect(staff.rowClef).toEqual(["bass", "tenor", "bass"]);
+    expect(staff.marks?.get(8)?.[0].text).toBe("pizz.");
+  });
+});

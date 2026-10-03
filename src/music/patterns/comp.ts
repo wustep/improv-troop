@@ -1,6 +1,6 @@
 import { chordAt, chordSpans, velFor, type BarCtx } from "../context";
 import { hashString } from "../rng";
-import { chordPcs, fold, mod, nearestPc, pitchesIn, type Chord } from "../theory";
+import { chordPcs, fold, guideTonePcs, mod, nearestPc, pitchesIn, type Chord } from "../theory";
 import type { NoteEvent } from "../types";
 import { strideBass } from "./bass";
 import { bassNote, voiceChord, type VoicingFamily } from "./voicing";
@@ -11,6 +11,8 @@ function compRange(ctx: BarCtx): [number, number] {
       return [50, 76];
     case "vibes":
       return [57, 84];
+    case "cello":
+      return [41, 69];
     case "piano":
       return [50, 77];
     default:
@@ -152,6 +154,56 @@ export function comp(ctx: BarCtx): NoteEvent[] {
       return playHits(ctx, cell);
     }
   }
+}
+
+/**
+ * Cello pizzicato comping: plucked double-stops (guide tones, sometimes root + fifth)
+ * in the style's comping rhythm, low in the tenor register so they sit under the lead.
+ */
+export function pizz(ctx: BarCtx): NoteEvent[] {
+  const sparse = ctx.args.includes("sparse") || ctx.texture === "sparse";
+  const busy = ctx.args.includes("busy") || ctx.texture === "peak";
+  const pick = <T,>(cells: T[]) => cells[hashString(`${ctx.seed}:${ctx.member.id}:pizz:${ctx.bar}`) % cells.length];
+  let hits: Hit[];
+  switch (ctx.style.id) {
+    case "bossa":
+      hits = ctx.beats === 3 ? [{ pos: 0, dur: 1 }, { pos: 1.5, dur: 1 }] : BOSSA_BARS[(ctx.bar + 1) % 2];
+      break;
+    case "funk":
+      hits = pick(FUNK_CELLS);
+      break;
+    case "neworleans":
+      hits = ctx.beats === 3 ? [{ pos: 0, dur: 1 }] : [{ pos: 0, dur: 1 }, { pos: 2, dur: 1 }];
+      break;
+    default:
+      hits = ctx.beats === 3 ? [{ pos: 0, dur: 1 }, { pos: 2, dur: 1 }] : sparse ? [{ pos: 0, dur: 1 }, { pos: 2, dur: 1 }] : pick(SWING_CELLS);
+  }
+  if (sparse && hits.length > 2) hits = hits.slice(0, 2);
+  if (busy && ctx.style.id === "swing" && ctx.beats === 4) hits = [...hits, { pos: 3.5, dur: 0.5, next: true }].filter((h, i, a) => a.findIndex((x) => x.pos === h.pos) === i);
+  const vel = velFor(ctx, 0.62);
+  const out: NoteEvent[] = [];
+  let prev = ctx.mem.lastVoicing;
+  for (const h of hits) {
+    if (h.pos >= ctx.beats) continue;
+    const c = h.next ? ctx.next : chordAt(ctx, h.pos);
+    // guide-tone double-stop voice-led from the last one; root + fifth on downbeats now and then
+    const g = guideTonePcs(c);
+    const center = prev?.length ? prev[0] : 52;
+    let pair = [nearestPc(g[0], center), 0];
+    pair[1] = nearestPc(g[1], pair[0] + 5);
+    if (pair[1] - pair[0] > 9) pair[1] -= 12;
+    if (pair[1] <= pair[0]) pair[1] += 12;
+    if (h.pos === 0 && ctx.rng.chance(0.25)) {
+      const r = bassNote(c, 43, 55, null);
+      pair = [r, r + 7];
+    }
+    pair = pair.map((p) => fold(p, 43, 69)).sort((a, b) => a - b);
+    prev = pair;
+    const dur = Math.min(h.dur, 0.5, ctx.beats - h.pos);
+    for (const p of pair) out.push({ pitch: p, start: h.pos, dur, vel: vel * (h.pos % 1 ? 1.05 : 1), art: "pizz" });
+  }
+  ctx.mem.lastVoicing = prev;
+  return out;
 }
 
 /** Stride / oom-pah: low root on 1 and 3, chord on 2 and 4. */

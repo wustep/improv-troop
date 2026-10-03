@@ -111,3 +111,53 @@ describe("local engine", () => {
     expect(JSON.stringify(a)).toBe(JSON.stringify(b));
   });
 });
+
+describe("cello", () => {
+  const olive: Member = { id: "sheep", animal: "sheep", name: "Olive", instrument: "cello" };
+  const withBassist: Member[] = [...defaultMembers(), olive];
+  const noBassist: Member[] = defaultMembers()
+    .filter((m) => m.instrument !== "bass")
+    .concat(olive);
+
+  for (const style of STYLE_LIST) {
+    it(`writes a tenor part, not a second bass line, in ${style}`, () => {
+      const s = { ...defaultSettings(withBassist), style, seed: 11, soloists: ["sheep", "bear"] };
+      const { score, issues } = generateLocal(s, withBassist);
+      expect(issues.filter((i) => i.detail.startsWith("engine error"))).toEqual([]);
+      const cello = score.parts.sheep;
+      expect(cello.length).toBeGreaterThan(4);
+      for (const n of cello) {
+        expect(n.pitch).toBeGreaterThanOrEqual(36);
+        expect(n.pitch).toBeLessThanOrEqual(81);
+      }
+      for (const bp of score.plan) expect(bp.roles.sheep).not.toBe("bass");
+      // the cello solo climbs into the tenor register
+      const solo = score.frame.sections.find((x) => x.kind === "solo" && x.featured?.[0] === "sheep");
+      if (solo) {
+        const notes = cello.filter((n) => n.start >= solo.start * 4 && n.start < (solo.start + solo.length) * 4);
+        expect(Math.max(...notes.map((n) => n.pitch))).toBeGreaterThan(57);
+      }
+    });
+  }
+
+  it("plucks double-stops when comping in swing", () => {
+    const s = { ...defaultSettings(withBassist), style: "swing" as const, seed: 3, soloists: ["bear"] };
+    const { score } = generateLocal(s, withBassist);
+    const pizz = score.parts.sheep.filter((n) => n.art === "pizz");
+    expect(pizz.length).toBeGreaterThan(4);
+    const onsets = new Map<number, number>();
+    for (const n of pizz) onsets.set(n.start, (onsets.get(n.start) ?? 0) + 1);
+    expect([...onsets.values()].some((c) => c === 2)).toBe(true);
+  });
+
+  it("takes the bass chair (pizzicato) only when there is no bassist", () => {
+    const s = { ...defaultSettings(noBassist), style: "swing" as const, seed: 5, soloists: ["bear"] };
+    const { score } = generateLocal(s, noBassist);
+    const bassBars = score.plan.filter((bp) => bp.roles.sheep === "bass");
+    expect(bassBars.length).toBeGreaterThan(8);
+    const b = bassBars[1].index;
+    const notes = score.parts.sheep.filter((n) => n.start >= b * 4 && n.start < b * 4 + 4);
+    expect(notes.length).toBe(4); // walking quarters
+    expect(notes.every((n) => n.art === "pizz" && n.pitch <= 52)).toBe(true);
+  });
+});

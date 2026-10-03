@@ -1,7 +1,7 @@
 import { applyFeel } from "@/audio/feel";
 import { DYNAMIC_ENERGY } from "@/music/context";
 import { isFeaturedRole } from "@/music/realize";
-import type { ActiveNote, MemberFrameState, OnsetInfo, Score } from "@/music/types";
+import type { ActiveNote, MemberFrameState, NoteEvent, OnsetInfo, Score } from "@/music/types";
 
 // Turns the score + playhead into per-member animation state every frame.
 // Notes are pre-sorted with their *felt* (swung) times so motion lines up with what you hear.
@@ -11,6 +11,7 @@ interface Track {
   end: Float64Array; // felt end, beats
   pitch: Int16Array;
   vel: Float32Array;
+  art: (NoteEvent["art"] | undefined)[];
   maxDur: number;
 }
 
@@ -25,6 +26,7 @@ export class FrameComputer {
         end: new Float64Array(n),
         pitch: new Int16Array(n),
         vel: new Float32Array(n),
+        art: new Array(n),
         maxDur: 0,
       };
       notes.forEach((x, i) => {
@@ -34,10 +36,23 @@ export class FrameComputer {
         t.end[i] = e;
         t.pitch[i] = x.pitch;
         t.vel[i] = x.vel;
+        t.art[i] = x.art;
         t.maxDur = Math.max(t.maxDur, e - s);
       });
       this.tracks.set(m.id, t);
     }
+  }
+
+  /** Screen-relative direction from this member to whoever is featured in `bar`. */
+  private lookX(memberId: string, bar: number): number {
+    const ms = this.score.members;
+    const bp = this.score.plan[bar];
+    if (!bp || ms.length < 2) return 0;
+    const i = ms.findIndex((m) => m.id === memberId);
+    const j = ms.findIndex((m) => isFeaturedRole(bp.roles[m.id]) && m.instrument !== "drums");
+    const jj = j >= 0 ? j : ms.findIndex((m) => isFeaturedRole(bp.roles[m.id]));
+    if (i < 0 || jj < 0 || jj === i) return 0;
+    return Math.max(-1, Math.min(1, (jj - i) / (ms.length - 1)));
   }
 
   /** Index of the last note starting at or before `beat` (or -1). */
@@ -75,6 +90,7 @@ export class FrameComputer {
       role,
       energy: DYNAMIC_ENERGY[bp?.dynamic ?? "mf"],
       featured: isFeaturedRole(role),
+      lookX: this.lookX(memberId, bar),
     };
     const t = this.tracks.get(memberId);
     if (!t || !playing || !Number.isFinite(beat)) return base;
@@ -87,9 +103,9 @@ export class FrameComputer {
       if (beat - s > t.maxDur + 0.01 && recent.length >= 6) break;
       if (t.end[j] > beat) {
         const durSec = (t.end[j] - s) * spb;
-        active.push({ pitch: t.pitch[j], vel: t.vel[j], age: (beat - s) * spb, progress: Math.min(1, (beat - s) / (t.end[j] - s)), durSec });
+        active.push({ pitch: t.pitch[j], vel: t.vel[j], age: (beat - s) * spb, progress: Math.min(1, (beat - s) / (t.end[j] - s)), durSec, art: t.art[j] });
       }
-      if (recent.length < 6) recent.push({ pitch: t.pitch[j], vel: t.vel[j], age: (beat - s) * spb });
+      if (recent.length < 6) recent.push({ pitch: t.pitch[j], vel: t.vel[j], age: (beat - s) * spb, art: t.art[j] });
       if (active.length > 12) break;
     }
     const nx = i + 1 < t.start.length ? i + 1 : -1;

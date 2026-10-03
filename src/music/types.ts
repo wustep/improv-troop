@@ -26,7 +26,8 @@ export type AnimalId =
   | "owl"
   | "cat"
   | "elephant"
-  | "penguin";
+  | "penguin"
+  | "sheep";
 
 export type StyleId =
   | "swing"
@@ -73,7 +74,8 @@ export interface NoteEvent {
   dur: number;
   /** Velocity 0..1 */
   vel: number;
-  art?: "accent" | "staccato" | "ghost" | "legato";
+  /** "pizz" = plucked (bowed strings); everything else is a dynamic/length articulation. */
+  art?: "accent" | "staccato" | "ghost" | "legato" | "pizz";
 }
 
 export interface ChordChange {
@@ -231,6 +233,7 @@ export interface ActiveNote {
   progress: number;
   /** Duration in seconds. */
   durSec: number;
+  art?: NoteEvent["art"];
 }
 
 export interface OnsetInfo {
@@ -238,6 +241,7 @@ export interface OnsetInfo {
   vel: number;
   /** Seconds since onset. */
   age: number;
+  art?: NoteEvent["art"];
 }
 
 /** Computed every animation frame for each member and handed to their sprite. */
@@ -259,4 +263,10 @@ export interface MemberFrameState {
   energy: number;
   /** True during this member's solo/lead slot. */
   featured: boolean;
+  /**
+   * Where the spotlight is, relative to this player, in SCREEN terms: negative = toward the
+   * left of the screen (lower x), positive = toward the right; magnitude 0..1 grows with distance.
+   * 0 when they are the featured player or nobody is. Listeners glance that way.
+   */
+  lookX?: number;
 }

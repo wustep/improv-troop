@@ -19,6 +19,7 @@ export const DIRECTIVE_HELP = `Each bar of each player's part is ONE of:
   @line [dense|sparse|run|long]  — improvise a line over the changes
   @walk @two @bossa @funk @baroque @pedal  — bass patterns
   @comp [sparse|busy] @stride @arp @prelude @continuo @pad @shimmer @hits  — chordal patterns
+  @pizz [sparse|busy] @arco  — bowed strings: plucked double-stop comping / sustained bowed tones
   @guide @harmony @canon @riff @counter @fill  — supporting lines (guide tones, 3rds under the lead, imitation, backing riff)
   @groove [light|peak] @solo @fill  — drums
   @end  — final chord / last note
@@ -47,9 +48,24 @@ function pianoSoloLeftHand(ctx: BarCtx): NoteEvent[] {
   return out;
 }
 
+/** Bowed strings pluck these patterns. */
+const PLUCKED = new Set(["walk", "two", "bossa", "funk", "pizz"]);
+
 export function realizeDirective(ctx: BarCtx, text: string): DirectiveResult {
+  const res = realizeRaw(ctx, text);
+  if (ctx.inst.bowed && res.kind === "directive") {
+    const name = text.trim().slice(1).split(/\s+/)[0]?.toLowerCase() ?? "";
+    // funk cellists pluck their solos too
+    const plucked = PLUCKED.has(name) || (ctx.style.id === "funk" && (name === "line" || name === "motif" || name === "riff"));
+    if (plucked) res.notes = res.notes.map((n) => ({ ...n, art: "pizz" as const, dur: Math.min(n.dur, 1) }));
+  }
+  return res;
+}
+
+function realizeRaw(ctx: BarCtx, text: string): DirectiveResult {
   const t = (text ?? "").trim();
-  const fn = ctx.inst.fn;
+  // a cellist covering the bass chair speaks the bass vocabulary
+  const fn = ctx.role === "bass" && ctx.inst.bassCapable ? "bass" : ctx.inst.fn;
   if (!t || t === "@rest" || t === "rest" || /^r(\/1)?$/i.test(t)) return { notes: [], issues: [], kind: "rest" };
 
   if (!t.startsWith("@")) {
@@ -135,8 +151,15 @@ export function realizeDirective(ctx: BarCtx, text: string): DirectiveResult {
       return done(lines.riff(c));
     case "comp":
       if (fn === "bass") return realizeDirective(ctx, ctx.style.section.head.bass ?? "@walk");
+      if (ctx.inst.id === "cello") return done(comp.pizz(c));
       if (fn === "melodic") return done(lines.guide(c));
       return done(comp.comp(c));
+    case "pizz":
+      if (fn === "bass") return realizeDirective(ctx, ctx.style.section.head.bass ?? "@walk");
+      if (ctx.inst.bowed || fn === "melodic") return done(comp.pizz(c));
+      return done(comp.comp(c));
+    case "arco":
+      return done(ctx.inst.id === "cello" ? lines.celloPad(c) : lines.melodicPad(c));
     case "stride":
       return done(fn === "melodic" ? lines.guide(c) : comp.stride(c));
     case "arp":
@@ -148,6 +171,7 @@ export function realizeDirective(ctx: BarCtx, text: string): DirectiveResult {
     case "pad":
       if (fn === "chordal") return done(comp.pad(c));
       if (fn === "bass") return done(bass.pedal(c));
+      if (ctx.inst.id === "cello") return done(lines.celloPad(c));
       return done(lines.melodicPad(c));
     case "shimmer":
       return done(fn === "chordal" ? comp.shimmer(c) : lines.melodicPad(c));
@@ -163,7 +187,7 @@ export function realizeDirective(ctx: BarCtx, text: string): DirectiveResult {
     case "riff":
       return done(lines.riff(c));
     case "counter":
-      return done(lines.counter(c));
+      return done(ctx.inst.id === "cello" ? lines.celloCounter(c) : lines.counter(c));
     case "fill":
       return done(lines.melodicFill(c));
     case "end":

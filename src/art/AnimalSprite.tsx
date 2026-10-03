@@ -96,6 +96,10 @@ export const AnimalSprite = forwardRef<SpriteHandle, AnimalSpriteProps>(function
     inhale: 0,
     bliss: 0,
     blinkAt: 1.5 + (hash(animal) % 1000) / 400,
+    glance: 0,
+    oh: 0,
+    brow: 0,
+    browUp: 0,
     hands: { L: { x: 100, y: 205 }, R: { x: 140, y: 205 } } as Record<"L" | "R", Pt>,
   });
 
@@ -114,16 +118,29 @@ export const AnimalSprite = forwardRef<SpriteHandle, AnimalSpriteProps>(function
       const bob = playing ? bobAmp * beatPulse : Math.sin(t * 1.1) * 0.8;
       const tilt = playing ? Math.sin(s.beat * Math.PI) * (0.8 + 2 * energy) : Math.sin(t * 0.6) * 2;
       const feat = s.featured ? 1 : 0;
+
+      // ── listening: glance toward whoever has the spotlight, more while resting ──
+      const look = s.lookX ?? 0;
+      const resting = s.role === "rest" || (s.active.length === 0 && s.nextOnsetIn > 1);
+      const phase = (t * 0.21 + (hash(animal) % 97) / 97) % 1;
+      const window = resting ? 0.62 : 0.28;
+      // direction matters more than distance: even a neighbour gets a proper look
+      const lookAmt = Math.sign(look) * (0.55 + 0.45 * Math.min(1, Math.abs(look)));
+      const wantGlance = playing && !s.featured && look !== 0 && phase < window ? lookAmt : 0;
+      r.glance += (wantGlance - r.glance) * approach(dt, 0.28);
+      // wind players keep the mouthpiece where it is: only their eyes wander
+      const headTurn = r.glance * (rig.follow === "head" ? 0.25 : 1);
+
       const charM: Mat = chain(
         rot(r.lean * 0.9, 120, ANCHOR.ground),
         tr(0, r.dip),
         scl(1 + feat * 0.025, 1 + feat * 0.025, 120, ANCHOR.ground),
       );
-      const headM: Mat = chain(charM, tr(0, bob), rot(tilt, ANCHOR.neck.x, ANCHOR.neck.y));
+      const headM: Mat = chain(charM, tr(headTurn * 2.6, bob), rot(tilt + headTurn * 4, ANCHOR.neck.x, ANCHOR.neck.y));
       const M = rig.follow === "world" ? I : rig.follow === "char" ? charM : headM;
 
       me.tf("char", attr(charM));
-      me.tf("head", attr(chain(tr(0, bob), rot(tilt, ANCHOR.neck.x, ANCHOR.neck.y))));
+      me.tf("head", attr(chain(tr(headTurn * 2.6, bob), rot(tilt + headTurn * 4, ANCHOR.neck.x, ANCHOR.neck.y))));
       me.tf("instFront", attr(M));
       me.tf("instBack", attr(M));
 
@@ -171,16 +188,36 @@ export const AnimalSprite = forwardRef<SpriteHandle, AnimalSpriteProps>(function
         else blink = Math.abs(1 - 2 * p);
       }
       const open = Math.max(0.08, blink) * (1 - r.bliss);
-      // pupils glance toward the hands
+      // pupils glance toward the hands, or across the stage at the soloist
       const hx = (r.hands.L.x + r.hands.R.x) / 2 - 120;
       const hy = (r.hands.L.y + r.hands.R.y) / 2 - 110;
       const gl = Math.hypot(hx, hy) || 1;
-      const gx = (hx / gl) * 1.4;
-      const gy = (hy / gl) * 1.4;
+      const g = Math.abs(r.glance);
+      const gx = (hx / gl) * 1.4 * (1 - g) + r.glance * 2.6;
+      const gy = (hy / gl) * 1.4 * (1 - g) - g * 0.6;
       me.tf("eyeL", `translate(${(e1.x + gx).toFixed(2)} ${(e1.y + gy).toFixed(2)}) scale(1 ${open.toFixed(3)})`);
       me.tf("eyeR", `translate(${(e2.x + gx).toFixed(2)} ${(e2.y + gy).toFixed(2)}) scale(1 ${open.toFixed(3)})`);
       me.op("shut", r.bliss);
-      me.op("mouth", f.look.mouthCovered ? 0 : 1);
+
+      // ── expressions: an "o" on big accents, a focused brow on fast passages ──
+      const newest = s.recent[0];
+      const accent = playing && newest !== undefined && newest.age < 0.35 && newest.vel >= 0.86;
+      const peak = playing && s.featured && energy >= 0.88 && s.active.length > 0;
+      const wantOh = !f.look.mouthCovered && (accent || peak) ? 1 : 0;
+      r.oh += (wantOh - r.oh) * approach(dt, wantOh ? 0.04 : 0.16);
+      let quick = 0;
+      for (const o of s.recent) if (o.age < 0.7) quick++;
+      const focus = playing && quick >= 5 && !r.bliss ? 1 : 0;
+      r.brow += (Math.max(focus, wantOh) - r.brow) * approach(dt, 0.12);
+      r.browUp += (wantOh - r.browUp) * approach(dt, 0.06);
+      me.op("brows", r.brow * 0.85 * (1 - r.bliss));
+      const by = (-2.6 * r.browUp).toFixed(2);
+      const ba = (7 * (1 - r.browUp)).toFixed(1);
+      const er = art.face.eyeR;
+      me.tf("browL", `translate(${(e1.x + gx * 0.4).toFixed(1)} ${(e1.y - er * 2.3).toFixed(1)}) translate(0 ${by}) rotate(${ba})`);
+      me.tf("browR", `translate(${(e2.x + gx * 0.4).toFixed(1)} ${(e2.y - er * 2.3).toFixed(1)}) translate(0 ${by}) rotate(-${ba})`);
+      me.op("oh", r.oh * (f.look.mouthCovered ? 0 : 1));
+      me.op("mouth", f.look.mouthCovered ? 0 : 1 - r.oh);
       const ch = r.cheeks;
       me.op("cheeks", ch > 0.02 ? 1 : 0);
       const cs = (0.35 + 0.65 * ch).toFixed(3);
@@ -200,7 +237,7 @@ export const AnimalSprite = forwardRef<SpriteHandle, AnimalSpriteProps>(function
         me.tf("spark" + i, `translate(${SPARKS[i].x} ${SPARKS[i].y}) scale(${(0.7 + 0.4 * Math.max(0, tw)).toFixed(2)}) rotate(${((t * 40 + i * 60) % 360).toFixed(1)})`);
       }
     };
-  }, [ctx, rig, me, art]);
+  }, [ctx, rig, me, art, animal]);
 
   useImperativeHandle(
     ref,
@@ -236,6 +273,7 @@ export const AnimalSprite = forwardRef<SpriteHandle, AnimalSpriteProps>(function
   }, [step]);
 
   const { ink, fill } = def;
+  const eyeR0 = art.face.eyeR;
   const feet = art.feet ?? fill;
   const sd = hash(animal + "sprite");
   const mp = mouthPath(art.face.mouthStyle, art.face.mouth);
@@ -295,6 +333,17 @@ export const AnimalSprite = forwardRef<SpriteHandle, AnimalSpriteProps>(function
               <L d={mp} ink={PENCIL} seed={sd + 5} w={1.8} />
             </g>
           )}
+          <g ref={me.r("oh")} style={{ opacity: 0 }}>
+            <ellipse cx={art.face.mouth.x} cy={art.face.mouth.y + 2} rx={3.6} ry={4.4} fill="#5a2b2b" stroke={PENCIL} strokeWidth={1.4} />
+            <ellipse cx={art.face.mouth.x} cy={art.face.mouth.y + 4} rx={2} ry={1.4} fill="#e9858f" />
+          </g>
+          <g ref={me.r("brows")} style={{ opacity: 0 }}>
+            {(["L", "R"] as const).map((k) => (
+              <g key={k} ref={me.r("brow" + k)}>
+                <path d={`M${-eyeR0 * 0.9} 0 Q0 ${-eyeR0 * 0.45} ${eyeR0 * 0.9} 0`} stroke={PENCIL} strokeWidth={1.7} fill="none" strokeLinecap="round" />
+              </g>
+            ))}
+          </g>
           <g ref={me.r("cheeks")} style={{ opacity: 0 }}>
             {(["L", "R"] as const).map((k) => (
               <g key={k} ref={me.r("cheek" + k)}>
@@ -316,8 +365,17 @@ export const AnimalSprite = forwardRef<SpriteHandle, AnimalSpriteProps>(function
       {parts.held}
       {(["L", "R"] as const).map((k, i) => (
         <g key={k} ref={me.r("paw" + k)} transform={`translate(${i ? 140 : 100} 205)`}>
-          <S d={ellipsePath(0, 0, 8, 7.2)} ink={ink} base={tint(fill, 0.25)} hatch={fill} seed={sd + 6 + i} gap={2.6} w={1.6} />
-          <path d="M-3 -4 v3 M0 -5 v3 M3 -4 v3" stroke={ink} strokeWidth={1} strokeLinecap="round" opacity={0.7} />
+          {art.paw ? (
+            <>
+              <S d={ellipsePath(0, 0, 7.6, 7)} ink={ink} base={art.paw} hatch={mix(art.paw, "#000000", 0.3)} seed={sd + 6 + i} gap={2.4} w={1.6} />
+              <path d="M0 -6 v5" stroke={mix(art.paw, "#f6f0e1", 0.5)} strokeWidth={1.1} strokeLinecap="round" />
+            </>
+          ) : (
+            <>
+              <S d={ellipsePath(0, 0, 8, 7.2)} ink={ink} base={tint(fill, 0.25)} hatch={fill} seed={sd + 6 + i} gap={2.6} w={1.6} />
+              <path d="M-3 -4 v3 M0 -5 v3 M3 -4 v3" stroke={ink} strokeWidth={1} strokeLinecap="round" opacity={0.7} />
+            </>
+          )}
         </g>
       ))}
       {SPARKS.map((_, i) => (

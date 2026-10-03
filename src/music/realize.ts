@@ -61,6 +61,7 @@ export function makeBarCtx(
   const prevBar = frame.chords[Math.max(bar - 1, 0)];
   const barInSection = bar - section.start;
   const has = (fn: string) => members.some((m) => INSTRUMENTS[m.instrument].fn === fn && m.id !== member.id);
+  const someoneOnBass = members.some((m) => m.id !== member.id && (INSTRUMENTS[m.instrument].fn === "bass" || bp?.roles[m.id] === "bass"));
   return {
     bar,
     beats,
@@ -89,7 +90,7 @@ export function makeBarCtx(
     motif,
     featured,
     featuredPrev,
-    hasBass: has("bass"),
+    hasBass: someoneOnBass,
     hasDrums: has("rhythm"),
     hasChordal: has("chordal"),
     args: [],

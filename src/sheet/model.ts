@@ -31,11 +31,17 @@ const ABBR: Record<string, string> = {
   vibes: "Vib.",
 };
 
+export type ClefName = "treble" | "bass" | "tenor" | "percussion";
+
 export interface StaffSpec {
   memberId: string;
   name: string;
   abbr: string;
-  clef: "treble" | "bass" | "percussion";
+  clef: ClefName;
+  /** Per-row clef (cello reads tenor clef for high systems). Falls back to `clef`. */
+  rowClef?: ClefName[];
+  /** Bowing marks ("pizz." / "arco") per bar: token index → text. */
+  marks?: Map<number, { k: number; text: string }[]>;
   drums: boolean;
   bars: BarTokens[];
   /** Grand staff: "top" is braced to the next staff. */
@@ -59,6 +65,46 @@ export interface SheetModel {
   /** Top-line y of each staff within a row. */
   staffY: number[];
   expandMs: number;
+}
+
+/** Cellists switch to tenor clef when a system sits high; decide per row (4 bars). */
+function tenorRows(bars: BarTokens[], nBars: number): ClefName[] {
+  const rows: ClefName[] = [];
+  for (let r = 0; r * BARS_PER_ROW < nBars; r++) {
+    const pitches = bars
+      .slice(r * BARS_PER_ROW, (r + 1) * BARS_PER_ROW)
+      .flatMap((b) => b.tokens.filter((t) => t.kind === "note").flatMap((t) => t.pitches));
+    if (pitches.length < 3) {
+      rows.push("bass");
+      continue;
+    }
+    // choose the clef that needs fewer ledger lines (bass staff G2–A3, tenor staff D3–E4)
+    const ledgers = (lo: number, hi: number) =>
+      pitches.reduce((sum, p) => sum + (p > hi ? Math.ceil((p - hi) / 3.5) : p < lo ? Math.ceil((lo - p) / 3.5) : 0), 0);
+    const bassCost = ledgers(41, 59);
+    const tenorCost = ledgers(48, 66);
+    rows.push(tenorCost < bassCost * 0.7 ? "tenor" : "bass");
+  }
+  return rows;
+}
+
+/** "pizz." / "arco" wherever a bowed string changes how it's playing. */
+function bowingMarks(bars: BarTokens[]): Map<number, { k: number; text: string }[]> {
+  const out = new Map<number, { k: number; text: string }[]>();
+  let state: "arco" | "pizz" = "arco";
+  for (const b of bars) {
+    b.tokens.forEach((t, k) => {
+      if (t.kind !== "note" || t.tiedFrom) return;
+      const s = t.art === "pizz" ? "pizz" : "arco";
+      if (s !== state) {
+        state = s;
+        const list = out.get(b.bar) ?? [];
+        list.push({ k, text: s === "pizz" ? "pizz." : "arco" });
+        out.set(b.bar, list);
+      }
+    });
+  }
+  return out;
 }
 
 export function buildModel(score: Score): SheetModel {
@@ -94,13 +140,16 @@ export function buildModel(score: Score): SheetModel {
     } else if (inst.clef === "percussion") {
       staffs.push({ memberId: m.id, name: m.name, abbr, clef: "percussion", drums: true, bars: expandPart(notes, { bars, beatsPerBar: bpb }) });
     } else {
+      const expanded = expandPart(notes, { bars, beatsPerBar: bpb, shift: inst.notationShift });
       staffs.push({
         memberId: m.id,
         name: m.name,
         abbr,
         clef: inst.clef,
         drums: false,
-        bars: expandPart(notes, { bars, beatsPerBar: bpb, shift: inst.notationShift }),
+        bars: expanded,
+        ...(m.instrument === "cello" ? { rowClef: tenorRows(expanded, bars) } : {}),
+        ...(inst.bowed ? { marks: bowingMarks(expanded) } : {}),
       });
     }
   }

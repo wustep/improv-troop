@@ -51,13 +51,37 @@ function fakePart(inst: InstrumentId, seed: number): NoteEvent[] {
       if (bar % 2 === 1) notes.push({ pitch: DRUM.hatOpen, start: b0 + 3.5, dur: 0.5, vel: 0.6 });
       continue;
     }
-    if (inst === "bass" || inst === "cello") {
+    if (inst === "bass") {
       const lo = def.sweet[0];
       const root = ch[0] - 12 >= lo ? ch[0] - 12 : ch[0];
       const line = [root, root + 4, root + 7, root + 5 + (r() < 0.5 ? 0 : 1)];
-      const long = inst === "cello" && bar % 2 === 0;
-      if (long) notes.push({ pitch: root + 12, start: b0, dur: 4, vel: 0.7 });
-      else line.forEach((p, i) => notes.push({ pitch: p, start: b0 + i, dur: 0.9, vel: 0.75 }));
+      line.forEach((p, i) => notes.push({ pitch: p, start: b0 + i, dur: 0.9, vel: 0.75 }));
+      continue;
+    }
+    if (inst === "cello") {
+      // 4-bar cycle: two bars of arco melody (long + moving notes), a bar of pizz
+      // walking, a bar of pizz double-stops.
+      const phase = bar % 4;
+      const root = ch[0] - 12;
+      if (phase === 0) {
+        notes.push({ pitch: root + 12, start: b0, dur: 2, vel: 0.65 });
+        notes.push({ pitch: root + 16, start: b0 + 2, dur: 1, vel: 0.7 });
+        notes.push({ pitch: root + 19, start: b0 + 3, dur: 1, vel: 0.75 });
+      } else if (phase === 1) {
+        [24, 23, 21, 19, 17, 16].forEach((d, i) => notes.push({ pitch: root + d, start: b0 + i * 0.5, dur: 0.5, vel: 0.7 }));
+        notes.push({ pitch: root + 16, start: b0 + 3, dur: 1, vel: 0.9 });
+      } else if (phase === 2) {
+        [root, root + 7, root + 4, root + 5].forEach((p, i) => notes.push({ pitch: p, start: b0 + i, dur: 0.9, vel: 0.75, art: "pizz" }));
+      } else {
+        for (const at of [0, 1.5, 2.5]) {
+          notes.push({ pitch: root + 4, start: b0 + at, dur: 0.5, vel: 0.7, art: "pizz" });
+          notes.push({ pitch: root + 10, start: b0 + at, dur: 0.5, vel: 0.7, art: "pizz" });
+        }
+      }
+      continue;
+    }
+    if (inst === "violin" && bar % 8 === 7) {
+      [0, 1, 2, 3].forEach((i) => notes.push({ pitch: ch[i] + 12, start: b0 + i, dur: 0.5, vel: 0.7, art: "pizz" }));
       continue;
     }
     if (inst === "piano" || inst === "guitar" || inst === "vibes") {
@@ -97,7 +121,7 @@ function fakePart(inst: InstrumentId, seed: number): NoteEvent[] {
   return notes.sort((a, b) => a.start - b.start);
 }
 
-function stateAt(notes: NoteEvent[], beat: number, playing: boolean, featured: boolean): MemberFrameState {
+function stateAt(notes: NoteEvent[], beat: number, playing: boolean, featured: boolean, lookX: number): MemberFrameState {
   const spb = 60 / BPM;
   const active: MemberFrameState["active"] = [];
   const recent: MemberFrameState["recent"] = [];
@@ -118,8 +142,8 @@ function stateAt(notes: NoteEvent[], beat: number, playing: boolean, featured: b
   for (let i = lo - 1; i >= 0 && beat - notes[i].start < 8; i--) {
     const n = notes[i];
     const age = (beat - n.start) * spb;
-    if (recent.length < 6) recent.push({ pitch: n.pitch, vel: n.vel, age });
-    if (beat < n.start + n.dur) active.push({ pitch: n.pitch, vel: n.vel, age, progress: (beat - n.start) / n.dur, durSec: n.dur * spb });
+    if (recent.length < 6) recent.push({ pitch: n.pitch, vel: n.vel, age, art: n.art });
+    if (beat < n.start + n.dur) active.push({ pitch: n.pitch, vel: n.vel, age, progress: (beat - n.start) / n.dur, durSec: n.dur * spb, art: n.art });
   }
   const phase = beat - Math.floor(beat);
   const silentFor = recent[0] ? recent[0].age : Infinity;
@@ -133,13 +157,14 @@ function stateAt(notes: NoteEvent[], beat: number, playing: boolean, featured: b
     recent,
     nextOnsetIn,
     nextPitch,
-    role: silentFor > 1.5 && nextOnsetIn > 1.5 ? "rest" : "solo",
+    role: silentFor > 1.5 && nextOnsetIn > 1.5 ? "rest" : featured ? "solo" : "comp",
     energy: 0.6,
     featured,
+    lookX,
   };
 }
 
-const DEFAULT_INSTRUMENTS: InstrumentId[] = ["piano", "bass", "drums", "trumpet", "sax", "violin", "trombone", "vibes"];
+const DEFAULT_INSTRUMENTS: InstrumentId[] = ANIMAL_LIST.map((a) => ANIMALS[a].defaultInstrument);
 
 export default function ArtLabPage() {
   return (
@@ -150,14 +175,15 @@ export default function ArtLabPage() {
 }
 
 function ArtLab() {
-  // ?speed=0.25&beat=12&inst=guitar,cello&paused=1 for deterministic screenshots
+  // ?speed=0.25&beat=12&inst=guitar,cello&paused=1&row=1&feat=3 for deterministic screenshots
   const q = useSearchParams();
+  const row = !!q.get("row");
   const [playing, setPlaying] = useState(() => !q.get("paused"));
   const [insts, setInsts] = useState<InstrumentId[]>(() => {
     const list = (q.get("inst") ?? "").split(",").filter((x): x is InstrumentId => (INSTRUMENT_LIST as string[]).includes(x));
-    return [...list, ...DEFAULT_INSTRUMENTS].slice(0, 8);
+    return [...list, ...DEFAULT_INSTRUMENTS.slice(list.length)].slice(0, ANIMAL_LIST.length);
   });
-  const [featured, setFeatured] = useState<number>(3);
+  const [featured, setFeatured] = useState<number>(() => (q.get("feat") !== null ? Number(q.get("feat")) : 3));
   const [speed, setSpeed] = useState(() => Number(q.get("speed")) || 1);
   const sprites = useRef<(SpriteHandle | null)[]>([]);
   const parts = useMemo(() => insts.map((i, k) => fakePart(i, k + 1)), [insts]);
@@ -176,7 +202,8 @@ function ArtLab() {
       c.last = now;
       if (playing) c.beat = (c.beat + dt * (BPM / 60) * speed) % (BARS * 4);
       parts.forEach((notes, i) => {
-        const s = stateAt(notes, c.beat, playing, featured === i);
+        const look = featured < 0 || featured === i ? 0 : Math.max(-1, Math.min(1, (featured - i) / 4));
+        const s = stateAt(notes, c.beat, playing, featured === i, look);
         sprites.current[i]?.update(playing ? s : { ...s, playing: false, active: [], nextOnsetIn: Infinity, nextPitch: null });
       });
       raf = requestAnimationFrame(loop);
@@ -216,7 +243,7 @@ function ArtLab() {
           ))}
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
+      <div className={row ? "flex items-end justify-center gap-1" : "grid grid-cols-2 gap-6 md:grid-cols-3"}>
         {ANIMAL_LIST.map((a: AnimalId, i) => (
           <div key={a} className="flex flex-col items-center" data-testid={`cell-${a}`}>
             <AnimalSprite
@@ -226,7 +253,7 @@ function ArtLab() {
               animal={a}
               instrument={insts[i]}
               name={ANIMALS[a].name}
-              size={240}
+              size={row ? 136 : 240}
             />
             <div className="mt-1 flex items-center gap-2">
               <select

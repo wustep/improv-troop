@@ -3,7 +3,7 @@
 import type * as VexNS from "vexflow";
 import type { StaveNote as StaveNoteT, Stave as StaveT, Tuplet as TupletT, Beam as BeamT, Voice as VoiceT } from "vexflow";
 import { chordText, drumKeys, spell, TPB, type Token } from "./expand";
-import { BARS_PER_ROW, LABEL_W, STAFF_H, type SheetModel, type StaffSpec } from "./model";
+import { BARS_PER_ROW, LABEL_W, STAFF_H, type ClefName, type SheetModel, type StaffSpec } from "./model";
 
 export type VF = typeof VexNS;
 
@@ -26,17 +26,17 @@ export interface RowGeom {
   renderMs: number;
 }
 
-const REST_KEY: Record<StaffSpec["clef"], string> = { treble: "b/4", bass: "d/3", percussion: "b/4" };
+const REST_KEY: Record<ClefName, string> = { treble: "b/4", bass: "d/3", tenor: "a/3", percussion: "b/4" };
 
-function makeNote(vf: VF, t: Token, staff: StaffSpec, model: SheetModel): StaveNoteT {
+function makeNote(vf: VF, t: Token, staff: StaffSpec, model: SheetModel, clef: ClefName): StaveNoteT {
   const { StaveNote, Dot } = vf;
   if (t.kind === "rest") {
     const n = new StaveNote({
-      keys: [REST_KEY[staff.clef]],
+      keys: [REST_KEY[clef]],
       duration: t.fullBar ? "w" : t.dur,
       dots: t.fullBar ? 0 : t.dots,
       type: "r",
-      clef: staff.clef,
+      clef,
       alignCenter: !!t.fullBar,
     });
     if (t.dots && !t.fullBar) Dot.buildAndAttach([n], { all: true });
@@ -47,7 +47,7 @@ function makeNote(vf: VF, t: Token, staff: StaffSpec, model: SheetModel): StaveN
     keys,
     duration: t.dur,
     dots: t.dots,
-    clef: staff.clef,
+    clef,
     ...(staff.drums ? { stemDirection: 1 } : { autoStem: true }),
   });
   if (t.dots) Dot.buildAndAttach([n], { all: true });
@@ -110,17 +110,18 @@ export function renderRow(vf: VF, host: HTMLElement, model: SheetModel, row: num
     const bar = firstBar + i;
     const col: Cell[] = [];
     staffs.forEach((staff, si) => {
+      const clef = staff.rowClef?.[row] ?? staff.clef;
       const stave = new Stave(left, model.staffY[si] - 40, 200);
       stave.setDefaultLedgerLineStyle({ strokeStyle: INK, lineWidth: 1.3 });
       if (i === 0) {
-        stave.addClef(staff.clef);
+        stave.addClef(clef);
         if (!staff.drums) stave.addKeySignature(model.keySpec);
         if (isFirstRow) stave.addTimeSignature(`${bpb}/4`);
       }
       if (bar === model.bars - 1) stave.setEndBarType(BarlineType.END);
 
       const tokens = staff.bars[bar]?.tokens ?? [];
-      const notes = tokens.map((t) => makeNote(vf, t, staff, model));
+      const notes = tokens.map((t) => makeNote(vf, t, staff, model, clef));
 
       // Tuplets per triplet beat (must exist before the voice counts ticks).
       const tuplets: TupletT[] = [];
@@ -360,6 +361,29 @@ export function renderRow(vf: VF, host: HTMLElement, model: SheetModel, row: num
     });
   }
   const chordY = Math.max(52, Math.min(topY - 18, highest - 8));
+
+  // Bowing marks (pizz. / arco) above the first note that changes technique.
+  staffs.forEach((s, si) => {
+    if (!s.marks) return;
+    cells.forEach((col, i) => {
+      const list = s.marks!.get(firstBar + i);
+      const c = col[si];
+      if (!list || !c) return;
+      for (const m of list) {
+        const n = c.notes[m.k];
+        if (!n) continue;
+        let nx: number;
+        let ny = model.staffY[si] - 10;
+        try {
+          nx = n.getAbsoluteX();
+          ny = Math.min(ny, n.getBoundingBox().getY() - 6);
+        } catch {
+          continue;
+        }
+        addText(svg, nx - 2, ny, m.text, { size: 13, fill: INK_SOFT });
+      }
+    });
+  });
   geoms.forEach((g, i) => {
     const section = model.sectionStarts.get(g.bar);
     if (section) addSection(svg, g.x + (i === 0 ? 2 : 4), 6, section);

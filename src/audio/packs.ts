@@ -254,6 +254,11 @@ const vibes: PackSpec = {
   },
 };
 
+/** Plucked voice for bowed strings (cello/violin pizzicato). */
+export function pizzChain(): PackSpec[] {
+  return [soundfont("pizzicato_strings", "MusyngKite"), soundfont("pizzicato_strings", "FluidR3_GM")];
+}
+
 /** Fallback chain per instrument, best first. */
 export function packChain(instrument: InstrumentId, pianoPack: PianoPack = "salamander"): PackSpec[] {
   switch (instrument) {

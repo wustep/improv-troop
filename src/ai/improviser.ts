@@ -31,6 +31,8 @@ export interface ImprovController {
   ensureReady(bar: number): boolean;
   /** Number of bars realized so far (from the top). */
   readyBars(): number;
+  /** Bars the band vamped through on autopilot. */
+  autopilotBars(): number[];
 }
 
 type Stage = "none" | "featured" | "done";
@@ -463,5 +465,5 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
     return final;
   })();
 
-  return { promise, ensureReady, readyBars };
+  return { promise, ensureReady, readyBars, autopilotBars: () => [...autopilot].flatMap((pi) => phrases[pi]) };
 }

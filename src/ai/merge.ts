@@ -172,7 +172,7 @@ export function enforceSlots(plan: BarPlan[], frame: Frame, members: Member[], r
       const locked = slots[m.id];
       let d = bp.directives?.[m.id] ?? "@rest";
       if (isFeaturedRole(locked)) {
-        const accompaniment = /^@(walk|two|bossa|funk|baroque|pedal|comp|stride|arp|prelude|continuo|pad|shimmer|groove|guide|harmony|canon|riff|counter|rest)\b/.test(d);
+        const accompaniment = /^@(walk|two|bossa|funk|baroque|pedal|comp|pizz|arco|stride|arp|prelude|continuo|pad|shimmer|groove|guide|harmony|canon|riff|counter|rest)\b/.test(d);
         if (accompaniment && !(m.instrument === "drums" && locked === "groove")) {
           const fix = defaultFeaturedDirective(locked!, m);
           repairs.push(`bar ${bp.index + 1}: ${m.name} is featured (${locked}) but was given ${d}; playing ${fix}`);

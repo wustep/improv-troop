@@ -11,6 +11,7 @@ import {
   pcOf,
   scalePcs,
   SCALES,
+  scaleStep,
   snapToPcs,
   type Chord,
 } from "../theory";
@@ -108,7 +109,8 @@ export function line(ctx: BarCtx): NoteEvent[] {
   if (ctx.texture === "peak") density *= 1.2;
 
   const rhythm = ctx.args.includes("long") ? cadenceRhythm(ctx) : lineRhythm(ctx, density);
-  const [lo, hi] = ctx.inst.sweet;
+  const featured = ctx.role === "solo" || ctx.role === "lead";
+  const [lo, hi] = featured ? (ctx.inst.solo ?? ctx.inst.sweet) : ctx.inst.sweet;
   const out: NoteEvent[] = [];
   let p = ctx.mem.lastPitch ?? Math.round((lo + hi) / 2);
   const vel = velFor(ctx, 0.8);
@@ -207,18 +209,85 @@ function avoidLead(ctx: BarCtx, notes: NoteEvent[]): NoteEvent[] {
   });
 }
 
-/** Parallel 3rds/6ths under the featured line. Falls back to guide tones. */
+/** Parallel 3rds/6ths under the featured line (a cello sits a 10th below). Falls back to guide tones. */
 export function harmony(ctx: BarCtx): NoteEvent[] {
-  if (!ctx.featured.length) return guide(ctx);
+  if (!ctx.featured.length) return ctx.inst.id === "cello" ? celloCounter(ctx) : guide(ctx);
   const out: NoteEvent[] = [];
   const vel = velFor(ctx, 0.6);
+  const cello = ctx.inst.id === "cello";
   for (const n of ctx.featured) {
     const c = chordAt(ctx, n.start);
     const pcs = scalePcs(c);
     let p = fromDiatonicIndex(diatonicIndex(n.pitch, pcs) - 2, pcs); // a third below
     if (p < ctx.inst.range[0] + 2) p = fromDiatonicIndex(diatonicIndex(n.pitch, pcs) + 5, pcs) - 12; // sixth below
+    if (cello) while (p > 64 && p - 12 >= 45) p -= 12; // tenor register: a tenth under the lead
     p = fold(p, ctx.inst.range[0], ctx.inst.range[1]);
-    out.push({ ...n, pitch: p, vel });
+    out.push({ ...n, pitch: p, vel, art: n.dur >= 1 ? "legato" : undefined });
+  }
+  return out;
+}
+
+/**
+ * Cello countermelody: voice-led guide tones held while the lead is busy, moving
+ * stepwise toward the next chord (or answering with a motif fragment) in the lead's gaps.
+ */
+export function celloCounter(ctx: BarCtx): NoteEvent[] {
+  const out: NoteEvent[] = [];
+  const vel = velFor(ctx, 0.58);
+  const lo = 45;
+  const hi = 66;
+  // beats where the lead is moving (onsets within the beat)
+  const busy = new Set<number>();
+  for (const n of ctx.featured) {
+    for (let b = Math.floor(n.start); b < Math.min(ctx.beats, n.start + n.dur); b++) busy.add(b);
+  }
+  const spans = chordSpans(ctx);
+  for (let si = 0; si < spans.length; si++) {
+    const s = spans[si];
+    const prev = ctx.mem.lastGuide ?? 55;
+    const opts = guideTonePcs(s.chord).map((pc) => fold(nearestPc(pc, prev), lo, hi));
+    const target = opts.reduce((a, b) => (Math.abs(b - prev) < Math.abs(a - prev) ? b : a));
+    const len = s.end - s.start;
+    const nextChord = spans[si + 1]?.chord ?? ctx.next;
+    const nextTarget = fold(nearestPc(guideTonePcs(nextChord)[0], target), lo, hi);
+    const gapStart = [...Array(Math.floor(len)).keys()].map((i) => s.start + i).find((b) => b >= s.start + 1 && !busy.has(b));
+    if (len >= 2 && gapStart !== undefined && nextTarget !== target) {
+      // hold, then walk toward the next chord's guide tone in the gap
+      const hold = gapStart - s.start;
+      out.push({ pitch: target, start: s.start, dur: hold, vel, art: "legato" });
+      const pcs = scalePcs(s.chord);
+      const dir = Math.sign(nextTarget - target);
+      let p = target;
+      for (let t = gapStart; t < s.end - 1e-6; t += 1) {
+        p = fromDiatonicIndex(diatonicIndex(p, pcs) + dir, pcs);
+        if ((dir > 0 && p >= nextTarget) || (dir < 0 && p <= nextTarget)) p = nextTarget + (dir > 0 ? -1 : 1);
+        out.push({ pitch: fold(p, lo, hi), start: t, dur: Math.min(1, s.end - t), vel: vel * 0.92 });
+      }
+      ctx.mem.lastGuide = p;
+    } else if (len >= 4) {
+      // lead never pauses: move in half notes, guide tone then the other guide tone (or a step)
+      const other = opts.find((o) => o !== target) ?? scaleStep(target, target > 55 ? -1 : 1, scalePcs(s.chord));
+      const second = Math.abs(other - target) <= 4 ? other : scaleStep(target, other > target ? 1 : -1, scalePcs(s.chord));
+      out.push({ pitch: target, start: s.start, dur: len / 2, vel, art: "legato" });
+      out.push({ pitch: fold(second, lo, hi), start: s.start + len / 2, dur: len / 2, vel: vel * 0.94, art: "legato" });
+      ctx.mem.lastGuide = second;
+    } else {
+      out.push({ pitch: target, start: s.start, dur: len, vel, art: "legato" });
+      ctx.mem.lastGuide = target;
+    }
+  }
+  return out;
+}
+
+/** Bowed pad: guide tones, with an open-fifth drone double-stop in slow, spacious styles. */
+export function celloPad(ctx: BarCtx): NoteEvent[] {
+  const out = melodicPad(ctx);
+  if (ctx.style.id === "ambient" || ctx.style.id === "minimal") {
+    for (const s of chordSpans(ctx)) {
+      const r = fold(nearestPc(s.chord.root, 43), 36, 50);
+      out.push({ pitch: r, start: s.start, dur: s.end - s.start, vel: velFor(ctx, 0.42), art: "legato" });
+      out.push({ pitch: r + 7, start: s.start, dur: s.end - s.start, vel: velFor(ctx, 0.38), art: "legato" });
+    }
   }
   return out;
 }

@@ -40,9 +40,42 @@ export interface AnimalArt {
   face: FaceSpec;
   /** Foot color (feet are drawn by the sprite so they can tap). */
   feet?: string;
+  /** Paw/hand color when it differs from the body (hooves, mittens). */
+  paw?: string;
 }
 
 const sd = (a: string, part: string) => hash(a + ":" + part);
+
+/**
+ * A puffy cloud outline: `bumps` outward arcs around an ellipse. Rough.js turns it
+ * into a wobbly crayon scallop — wool, smoke, clouds.
+ */
+export function scallopPath(cx: number, cy: number, rx: number, ry: number, bumps: number, puff = 0.22, start = -Math.PI / 2): string {
+  const pt = (a: number, k: number) => [cx + Math.cos(a) * rx * k, cy + Math.sin(a) * ry * k];
+  const step = (Math.PI * 2) / bumps;
+  const [x0, y0] = pt(start, 1);
+  let d = `M${x0.toFixed(1)},${y0.toFixed(1)}`;
+  for (let i = 0; i < bumps; i++) {
+    const a0 = start + i * step;
+    const a1 = a0 + step;
+    // two control points so each bump is a round lobe, not a pointy arch
+    const [c1x, c1y] = pt(a0 + step * 0.12, 1 + puff * 1.15);
+    const [c2x, c2y] = pt(a1 - step * 0.12, 1 + puff * 1.15);
+    const [x1, y1] = pt(a1, 1);
+    d += ` C${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${x1.toFixed(1)},${y1.toFixed(1)}`;
+  }
+  return d + " Z";
+}
+
+/** Little wool curls ("e" loops) scattered at the given points. */
+function curls(points: [number, number][], r = 3.4): string {
+  return points
+    .map(([x, y], i) => {
+      const k = i % 2 ? 1 : -1;
+      return `M${x - r},${y + r * 0.2} a${r},${r} 0 1,1 ${r * 1.6},${r * 0.9 * k}`;
+    })
+    .join(" ");
+}
 
 function bodyAndFeet(a: AnimalId, ink: string, fill: string, belly: string): ReactNode {
   return (
@@ -250,7 +283,51 @@ function penguin(): AnimalArt {
   };
 }
 
-const BUILDERS: Record<AnimalId, () => AnimalArt> = { bear, frog, owl, fox, cat, bunny, elephant, penguin };
+function sheep(): AnimalArt {
+  const a: AnimalId = "sheep";
+  const { ink } = ANIMALS[a];
+  const wool = "#f6eedd";
+  const woolHatch = "#e3d3b0";
+  const face = "#a68b72";
+  const faceHatch = "#8a6f58";
+  const inner = "#e7a9a6";
+  return {
+    back: <S d={scallopPath(166, 212, 11, 10, 6, 0.3)} ink={ink} base={wool} hatch={woolHatch} seed={sd(a, "tail")} gap={3.2} w={1.6} />,
+    body: (
+      <>
+        <S d={scallopPath(120, 200, 43, 41, 13, 0.16)} ink={ink} base={wool} hatch={woolHatch} seed={sd(a, "body")} gap={3.6} />
+        <L d={curls([[100, 186], [138, 182], [118, 204], [96, 218], [142, 214], [121, 228], [108, 170], [134, 166]])} ink={mix(ink, wool, 0.45)} seed={sd(a, "bcurl")} w={1.3} />
+      </>
+    ),
+    head: (
+      <>
+        {/* floppy ears poke out sideways from under the wool */}
+        <g transform="rotate(16 68 108)">
+          <S d={ellipsePath(62, 108, 22, 9)} ink={ink} base={face} hatch={faceHatch} seed={sd(a, "el")} gap={2.8} />
+          <S d={ellipsePath(60, 108, 13, 4.2)} ink={mix(ink, inner, 0.5)} base={inner} seed={sd(a, "eli")} w={1} />
+        </g>
+        <g transform="rotate(-16 172 108)">
+          <S d={ellipsePath(178, 108, 22, 9)} ink={ink} base={face} hatch={faceHatch} seed={sd(a, "er")} gap={2.8} />
+          <S d={ellipsePath(180, 108, 13, 4.2)} ink={mix(ink, inner, 0.5)} base={inner} seed={sd(a, "eri")} w={1} />
+        </g>
+        {/* wool cap behind the face */}
+        <S d={scallopPath(120, 100, 52, 44, 12, 0.2)} ink={ink} base={wool} hatch={woolHatch} seed={sd(a, "wool")} gap={3.6} />
+        <L d={curls([[84, 82], [158, 84], [80, 112], [162, 114], [102, 66], [140, 66]], 3)} ink={mix(ink, wool, 0.45)} seed={sd(a, "hcurl")} w={1.2} />
+        {/* the face: a soft taupe egg */}
+        <S d="M120 84 C96 84 86 102 88 122 C90 144 104 156 120 156 C136 156 150 144 152 122 C154 102 144 84 120 84 Z" ink={ink} base={mix(face, "#fff", 0.25)} hatch={face} seed={sd(a, "face")} gap={3.4} />
+        {/* forehead tuft */}
+        <S d={scallopPath(120, 84, 21, 10, 5, 0.42, Math.PI)} ink={ink} base={wool} hatch={woolHatch} seed={sd(a, "tuft")} gap={3.2} w={1.7} />
+        <S d={ellipsePath(120, 137, 14, 10)} ink={mix(ink, face, 0.35)} base={mix(face, "#fff", 0.45)} seed={sd(a, "muz")} w={1.3} />
+      </>
+    ),
+    front: <L d="M115 130 q5 4 10 0 M120 132 v4" ink={PENCIL} seed={sd(a, "nose")} w={1.8} />,
+    feet: "#4a3a2e",
+    paw: "#5a4636",
+    face: { eyes: [{ x: 105, y: 115 }, { x: 135, y: 115 }], eyeR: 5.2, mouth: { x: 120, y: 141 }, mouthStyle: "w", blush: [{ x: 99, y: 132 }, { x: 141, y: 132 }] },
+  };
+}
+
+const BUILDERS: Record<AnimalId, () => AnimalArt> = { bear, frog, owl, fox, cat, bunny, elephant, penguin, sheep };
 const artCache = new Map<AnimalId, AnimalArt>();
 
 export function animalArt(a: AnimalId): AnimalArt {
