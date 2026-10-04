@@ -1,4 +1,5 @@
-import { chordSpans, velFor, type BarCtx } from "./context";
+import { chordAt, chordSpans, velFor, type BarCtx } from "./context";
+import { chordPcs, keyPrefersFlats, mod, pitchName, scalePcs, snapToPcs } from "./theory";
 import { DRUM } from "./instruments";
 import { parseMotifOps, realizeMotifBar } from "./motif";
 import { looksLikeDrumGrid, parseDrumGrid, parseNotes } from "./notation";
@@ -48,6 +49,42 @@ function pianoSoloLeftHand(ctx: BarCtx): NoteEvent[] {
   return out;
 }
 
+/**
+ * Written notes (usually from a model) get one rehearsal pass: a held note (a dotted 8th
+ * or longer) that clashes with the chord under it — outside the chord and its scale, or an
+ * avoid note a half step above a chord tone held long — bends to the nearest chord tone
+ * in the direction the line was moving. Passing tones and chromatic runs stay as written.
+ */
+function rehearse(ctx: BarCtx, notes: NoteEvent[], issues: string[]): NoteEvent[] {
+  if (ctx.inst.fn === "rhythm") return notes;
+  const flats = keyPrefersFlats(ctx.key);
+  let prev: number | null = ctx.mem.lastPitch;
+  return notes.map((n) => {
+    // only notes long enough to be heard as harmony; short chromatic notes (even on the
+    // beat, like bebop enclosures) are left alone
+    const held = n.dur >= 0.75;
+    const from = prev;
+    prev = n.pitch;
+    if (!held) return n;
+    const c = chordAt(ctx, n.start);
+    const pc = mod(n.pitch, 12);
+    const tones = chordPcs(c);
+    const tensions = c.tensions.map((t) => mod(c.root + t, 12));
+    // a held #9 over a dominant is the blues, not a mistake
+    const blue = c.quality === "dom" && pc === mod(c.root + 3, 12);
+    const inScale = scalePcs(c).includes(pc) || tensions.includes(pc) || blue;
+    const avoid = !tones.includes(pc) && !tensions.includes(pc) && tones.some((t) => mod(pc - t, 12) === 1) && n.dur >= 1.5;
+    if (tones.includes(pc) || (inScale && !avoid)) return n;
+    const dir = from === null ? -1 : Math.sign(n.pitch - from) || -1;
+    let q = n.pitch;
+    for (let i = 0; i < 3 && !tones.includes(mod(q, 12)); i++) q += dir;
+    const fixed = tones.includes(mod(q, 12)) ? q : snapToPcs(n.pitch, tones);
+    issues.push(`held ${pitchName(n.pitch, flats)} clashed with ${c.symbol}; played ${pitchName(fixed, flats)}`);
+    prev = fixed;
+    return { ...n, pitch: fixed };
+  });
+}
+
 /** Bowed strings pluck these patterns. */
 const PLUCKED = new Set(["walk", "two", "bossa", "funk", "pizz"]);
 
@@ -81,10 +118,14 @@ function realizeRaw(ctx: BarCtx, text: string): DirectiveResult {
     const issues = [...r.errors];
     if (r.covered < ctx.beats - 1e-6) issues.push(`bar short by ${(ctx.beats - r.covered).toFixed(2)} beats (padded with rest)`);
     const vel = velFor(ctx, 0.8);
-    const notes = r.notes.map((n) => ({
-      ...n,
-      vel: n.art === "ghost" ? vel * 0.4 : n.art === "accent" ? Math.min(1, vel * 1.2) : vel,
-    }));
+    const notes = rehearse(
+      ctx,
+      r.notes.map((n) => ({
+        ...n,
+        vel: n.art === "ghost" ? vel * 0.4 : n.art === "accent" ? Math.min(1, vel * 1.2) : vel,
+      })),
+      issues,
+    );
     if (notes.length) ctx.mem.lastPitch = notes[notes.length - 1].pitch;
     return { notes, issues, kind: "notes" };
   }

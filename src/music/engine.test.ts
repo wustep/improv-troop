@@ -244,3 +244,27 @@ describe("voicings", () => {
     expect(bad).toBe(0);
   });
 });
+
+describe("rehearsing written notes", () => {
+  it("bends held clashes onto the chord, keeps passing tones and blue notes", async () => {
+    const { realize } = await import("./realize");
+    const band = defaultMembers();
+    const { score } = generateLocal({ ...defaultSettings(band), seed: 3, soloists: [] }, band);
+    // a model-style head: bar 2 holds a major 7th over a dominant, a #9 blue note, and chromatic passing tones
+    const bar = 1;
+    const ch = parseChord("F7");
+    const name = (pc: number, oct: number) => ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"][pc] + oct;
+    const maj7 = name(mod(ch.root + 11, 12), 5);
+    const passing = name(mod(ch.root + 1, 12), 5);
+    const plan = score.plan.map((bp) => ({ ...bp, directives: { ...bp.directives } }));
+    plan[bar].chords = [{ beat: 0, symbol: "F7" }];
+    const blue = name(mod(ch.root + 3, 12), 5);
+    plan[bar].directives!.fox = `${passing}/8 ${name(ch.root, 5)}/8 ${blue}/4 ${maj7}/2`;
+    const res = realize({ frame: score.frame, members: band, plan, motif: score.motif, seed: 3 });
+    const notes = res.parts.fox.filter((n) => n.start >= bar * 4 && n.start < bar * 4 + 4);
+    expect(mod(notes[0].pitch, 12)).toBe(mod(ch.root + 1, 12)); // chromatic passing tone kept
+    expect(mod(notes[2].pitch, 12)).toBe(mod(ch.root + 3, 12)); // blue #9 kept
+    expect(chordPcs(ch)).toContain(mod(notes[3].pitch, 12)); // held major 7th bent onto the chord
+    expect(res.issues.filter((i) => i.detail.includes("clashed")).length).toBe(1);
+  });
+});
