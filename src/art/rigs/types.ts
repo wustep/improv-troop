@@ -36,6 +36,8 @@ export interface RigCtx {
   ink: string;
   fill: string;
   light: string;
+  /** Foot colour (some animals have distinct feet: hooves, webbed feet). */
+  feet: string;
   seed: number;
   /** Where this animal's mouth is (mouthpieces go here). */
   mouth: Pt;
@@ -90,8 +92,10 @@ export interface RigParts {
 export interface Rig {
   /** Which transform the instrument follows: fixed on stage, body sway, or the head (mouthpieces). */
   follow: "world" | "char" | "head";
-  /** Seated / standing behind the instrument (feet hidden, no foot tap). */
+  /** Seated / standing behind the instrument (no foot tap). */
   seated?: boolean;
+  /** The rig draws the player's feet itself (e.g. on pedals), so the sprite skips its own. */
+  hideFeet?: boolean;
   render(c: RigCtx): RigParts;
   update(c: RigCtx, f: Frame): void;
 }

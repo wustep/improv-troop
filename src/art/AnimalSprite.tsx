@@ -46,7 +46,8 @@ const SPARKS: Pt[] = [
   { x: 196, y: 132 },
 ];
 
-function armPath(s: Pt, h: Pt, side: -1 | 1, bend: number): string {
+/** Elbow control point: the arm bows outward, more when the hand is close to the shoulder. */
+function elbow(s: Pt, h: Pt, side: -1 | 1, bend: number): Pt {
   const dx = h.x - s.x;
   const dy = h.y - s.y;
   const d = Math.hypot(dx, dy) || 1;
@@ -57,9 +58,62 @@ function armPath(s: Pt, h: Pt, side: -1 | 1, bend: number): string {
     py = -py;
   }
   const amt = Math.abs(bend) + Math.max(0, 62 - d) * 0.45;
-  const cx = (s.x + h.x) / 2 + px * amt;
-  const cy = (s.y + h.y) / 2 + py * amt;
-  return `M${s.x.toFixed(1)} ${s.y.toFixed(1)} Q${cx.toFixed(1)} ${cy.toFixed(1)} ${h.x.toFixed(1)} ${h.y.toFixed(1)}`;
+  return { x: (s.x + h.x) / 2 + px * amt, y: (s.y + h.y) / 2 + py * amt };
+}
+
+const ARM_SAMPLES = 8;
+const f1 = (n: number) => n.toFixed(1);
+
+/** Smooth a polyline with quadratic midpoints (keeps the doodle soft, not polygonal). */
+function smooth(pts: Pt[], start = true): string {
+  let d = start ? `M${f1(pts[0].x)} ${f1(pts[0].y)}` : `L${f1(pts[0].x)} ${f1(pts[0].y)}`;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const mx = (pts[i].x + pts[i + 1].x) / 2;
+    const my = (pts[i].y + pts[i + 1].y) / 2;
+    d += ` Q${f1(pts[i].x)} ${f1(pts[i].y)} ${f1(mx)} ${f1(my)}`;
+  }
+  const e = pts[pts.length - 1];
+  return d + ` L${f1(e.x)} ${f1(e.y)}`;
+}
+
+/**
+ * A chubby, tapered limb from shoulder to hand along a soft quadratic elbow:
+ * fill (closed), outline (open at the shoulder so it melts into the body), hatch strokes.
+ */
+function armShape(s: Pt, h: Pt, side: -1 | 1, bend: number) {
+  const c = elbow(s, h, side, bend);
+  const left: Pt[] = [];
+  const right: Pt[] = [];
+  const hatch: string[] = [];
+  let tx = 0;
+  let ty = 0;
+  for (let i = 0; i <= ARM_SAMPLES; i++) {
+    const t = i / ARM_SAMPLES;
+    const u = 1 - t;
+    const x = u * u * s.x + 2 * u * t * c.x + t * t * h.x;
+    const y = u * u * s.y + 2 * u * t * c.y + t * t * h.y;
+    tx = 2 * u * (c.x - s.x) + 2 * t * (h.x - c.x);
+    ty = 2 * u * (c.y - s.y) + 2 * t * (h.y - c.y);
+    const tl = Math.hypot(tx, ty) || 1;
+    tx /= tl;
+    ty /= tl;
+    // shoulder 7.2 → wrist 4.6, with a soft forearm swell
+    const w = 7.2 - 2.6 * t + 0.7 * Math.sin(Math.PI * t);
+    left.push({ x: x - ty * w, y: y + tx * w });
+    right.push({ x: x + ty * w, y: y - tx * w });
+    if (i === 2 || i === 4 || i === 6) {
+      const k = w * 0.62;
+      hatch.push(`M${f1(x - ty * k - tx * 2)} ${f1(y + tx * k - ty * 2)} L${f1(x + ty * k + tx * 2)} ${f1(y - tx * k + ty * 2)}`);
+    }
+  }
+  const L = left[left.length - 1];
+  const R = right[right.length - 1];
+  const capW = 4.6 * 1.25;
+  const cap = ` Q${f1((L.x + R.x) / 2 + tx * capW)} ${f1((L.y + R.y) / 2 + ty * capW)} ${f1(R.x)} ${f1(R.y)}`;
+  const rev = [...right].reverse();
+  const sideL = smooth(left);
+  const outline = sideL + cap + " " + smooth(rev, false);
+  return { fill: outline + " Z", outline, hatch: hatch.join(" ") };
 }
 
 export const AnimalSprite = forwardRef<SpriteHandle, AnimalSpriteProps>(function AnimalSprite(
@@ -77,6 +131,7 @@ export const AnimalSprite = forwardRef<SpriteHandle, AnimalSpriteProps>(function
       ink: def.ink,
       fill: def.fill,
       light: tint(def.fill, 0.35),
+      feet: art.feet ?? def.fill,
       seed: hash(animal + instrument),
       mouth: art.face.mouth,
       mem: {},
@@ -171,9 +226,10 @@ export const AnimalSprite = forwardRef<SpriteHandle, AnimalSpriteProps>(function
         const a = f.arms[side];
         r.hands[side] = a.hand;
         const sh = ap(charM, side === "L" ? ANCHOR.shoulderL.x : ANCHOR.shoulderR.x, ANCHOR.shoulderL.y);
-        const d = armPath(sh, a.hand, side === "L" ? -1 : 1, a.bend ?? 12);
-        me.set("arm" + side, "d", d);
-        me.set("armIn" + side, "d", d);
+        const arm = armShape(sh, a.hand, side === "L" ? -1 : 1, a.bend ?? 12);
+        me.set("armFill" + side, "d", arm.fill);
+        me.set("arm" + side, "d", arm.outline);
+        me.set("armHatch" + side, "d", arm.hatch);
         const spread = a.spread ?? 1;
         me.tf("paw" + side, `translate(${a.hand.x.toFixed(1)} ${a.hand.y.toFixed(1)}) rotate(${(a.pawRot ?? 0).toFixed(1)}) scale(${spread.toFixed(2)} 1)`);
         me.op("paw" + side, a.hidePaw ? 0 : 1);
@@ -295,12 +351,16 @@ export const AnimalSprite = forwardRef<SpriteHandle, AnimalSpriteProps>(function
       <g ref={me.r("char")}>
         {art.back}
         <g ref={me.r("body")}>
-          <g>
-            <S d={ellipsePath(ANCHOR.footL.x, ANCHOR.footL.y, 15, 8)} ink={ink} base={tint(feet, 0.25)} hatch={feet} seed={sd + 1} gap={3} />
-          </g>
-          <g ref={me.r("footR")}>
-            <S d={ellipsePath(ANCHOR.footR.x, ANCHOR.footR.y, 15, 8)} ink={ink} base={tint(feet, 0.25)} hatch={feet} seed={sd + 2} gap={3} />
-          </g>
+          {!rig.hideFeet && (
+            <>
+              <g>
+                <S d={ellipsePath(ANCHOR.footL.x, ANCHOR.footL.y, 15, 8)} ink={ink} base={tint(feet, 0.25)} hatch={feet} seed={sd + 1} gap={3} />
+              </g>
+              <g ref={me.r("footR")}>
+                <S d={ellipsePath(ANCHOR.footR.x, ANCHOR.footR.y, 15, 8)} ink={ink} base={tint(feet, 0.25)} hatch={feet} seed={sd + 2} gap={3} />
+              </g>
+            </>
+          )}
           {art.body}
         </g>
         <g ref={me.r("head")}>
@@ -355,11 +415,20 @@ export const AnimalSprite = forwardRef<SpriteHandle, AnimalSpriteProps>(function
         </g>
       </g>
       <g ref={me.r("instFront")}>{parts.front}</g>
-      {/* arms over the instrument */}
+      {/* arms over the instrument: tapered, crayon-outlined, lightly hatched */}
       {(["L", "R"] as const).map((k) => (
         <g key={k}>
-          <path ref={me.r("arm" + k)} stroke={ink} strokeWidth={13} fill="none" strokeLinecap="round" />
-          <path ref={me.r("armIn" + k)} stroke={mix(fill, "#f6f0e1", 0.15)} strokeWidth={8.5} fill="none" strokeLinecap="round" />
+          <path ref={me.r("armFill" + k)} fill={mix(fill, "#f6f0e1", 0.18)} stroke="none" />
+          <path ref={me.r("armHatch" + k)} stroke={fill} strokeWidth={1.3} strokeOpacity={0.75} strokeLinecap="round" fill="none" />
+          <path
+            ref={me.r("arm" + k)}
+            stroke={ink}
+            strokeWidth={2.2}
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeDasharray="22 1.2 9 0.9"
+          />
         </g>
       ))}
       {parts.held}
