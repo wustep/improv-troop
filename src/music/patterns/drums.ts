@@ -61,7 +61,8 @@ const GROOVES: Record<string, Record<number, Grid>> = {
   ambient: {
     4: {
       base: "rd:g.g.g.g.g.g.g.g.",
-      light: "",
+      // a soft mallet swell into the next bar rather than silence
+      light: "rd:........g.g.g.g.",
       peak: "rd:g.g.g.g.x.x.x.x. ft:x...............",
     },
     3: { base: "rd:g.g.g.g.g.g." },

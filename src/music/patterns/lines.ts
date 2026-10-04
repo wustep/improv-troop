@@ -330,6 +330,14 @@ export function canon(ctx: BarCtx): NoteEvent[] {
   const vel = velFor(ctx, 0.62);
   return src.map((n) => {
     let p = fromDiatonicIndex(diatonicIndex(n.pitch, pcs) - 3, pcs); // a 4th below
+    // strict imitation can land on a clash under the new harmony: held or strong-beat
+    // notes bend to the chord, passing notes stay as written
+    const strongBeat = Math.abs(n.start - Math.round(n.start)) < 1e-6;
+    if (strongBeat || n.dur >= 0.75) {
+      const c = chordAt(ctx, n.start);
+      const ok = [...chordPcs(c), ...scalePcs(c)];
+      if (!ok.includes(mod(p, 12)) || (strongBeat && n.dur >= 0.5 && !chordPcs(c).includes(mod(p, 12)))) p = snapToPcs(p, chordPcs(c));
+    }
     p = fold(p, lo, hi);
     return { ...n, pitch: p, vel, dur: Math.min(n.dur, ctx.beats - n.start) };
   });

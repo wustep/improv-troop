@@ -54,6 +54,52 @@ function rootlessForms(c: Chord): number[][] {
   }
 }
 
+/**
+ * Open, fourth-based voicings that belong to the chord (a blind stack of perfect 4ths
+ * from the 3rd put b6/b9/b5 on a minor 7th). Intervals above the root.
+ */
+function quartalForms(c: Chord): number[][] {
+  switch (c.quality) {
+    case "min7":
+    case "min":
+    case "m6":
+    case "minMaj7":
+      // "So What": 11 b7 b3 5, and b3 5 b7 9
+      return [
+        [5, 10, 15, 19],
+        [3, 7, 10, 14],
+        [10, 14, 17, 19],
+      ];
+    case "maj7":
+    case "maj":
+    case "6":
+      // 3 6 9 5, and 9 5 1 3 — open and airy, no root-heavy 7th rub
+      return [
+        [4, 9, 14, 19],
+        [2, 7, 12, 16],
+        [7, 11, 14, 16],
+      ];
+    case "sus":
+      return [
+        [5, 10, 14, 19],
+        [0, 5, 10, 14],
+      ];
+    case "dom":
+      return [
+        [4, 10, 14, 21],
+        [10, 16, 21, 26],
+      ];
+    case "m7b5":
+      return [[0, 6, 10, 15]];
+    case "aug":
+      return [[4, 8, 10, 14]];
+    case "power":
+      return [[0, 7, 12, 19]];
+    default:
+      return rootlessForms(c);
+  }
+}
+
 function triadTones(c: Chord): number[] {
   return c.tones.slice(0, 3);
 }
@@ -81,12 +127,8 @@ function candidates(c: Chord, fam: VoicingFamily): number[][] {
         return [dropped, s[0], s[1], s[3]].sort((a, b) => a - b);
       });
     }
-    case "quartal": {
-      const third = c.tones[1] ?? 4;
-      const base = [third, third + 5, third + 10, third + 15];
-      const fromRoot = [0, 7, 14, 16];
-      return [base, fromRoot, [7, 12, 14, 19]];
-    }
+    case "quartal":
+      return quartalForms(c);
     case "shell": {
       const third = c.tones[1] ?? 4;
       const seventh = c.tones[3] ?? (c.quality === "maj" ? 9 : 7);

@@ -219,3 +219,28 @@ describe("standards form", () => {
     }
   });
 });
+
+describe("voicings", () => {
+  it("keeps sustained pads and end chords on the chord (no b6/b9/b5 from blind 4ths)", () => {
+    const band: Member[] = [...defaultMembers(), { id: "penguin", animal: "penguin", name: "Pip", instrument: "vibes" }];
+    let bad = 0;
+    for (const mode of ["major", "minor"] as const) {
+      for (let seed = 1; seed <= 10; seed++) {
+        const { score } = generateLocal({ ...defaultSettings(band), style: "ambient", key: { tonic: "D", mode }, seed }, band);
+        for (const id of ["bear", "penguin"]) {
+          for (const n of score.parts[id]) {
+            if (n.dur < 1) continue;
+            const bar = Math.floor(n.start / 4);
+            const bp = score.plan[bar];
+            let sym = bp.chords[0].symbol;
+            for (const c of bp.chords) if (c.beat <= n.start - bar * 4 + 1e-6) sym = c.symbol;
+            const ch = parseChord(sym);
+            const ok = new Set([...chordPcs(ch), ...scalePcs(ch), ...ch.tensions.map((t) => mod(ch.root + t, 12))]);
+            if (!ok.has(mod(n.pitch, 12))) bad++;
+          }
+        }
+      }
+    }
+    expect(bad).toBe(0);
+  });
+});
