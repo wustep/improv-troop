@@ -5,7 +5,7 @@ import { defaultSettings, generateLocal } from "./local";
 import { parseDrumGrid, parseNotes } from "./notation";
 import { STANDARDS } from "./standards";
 import { STYLE_LIST } from "./styles";
-import { parseChord, parsePitch } from "./theory";
+import { chordPcs, mod, parseChord, parsePitch, scalePcs } from "./theory";
 import type { Member } from "./types";
 
 const band: Member[] = [
@@ -159,5 +159,46 @@ describe("cello", () => {
     const notes = score.parts.sheep.filter((n) => n.start >= b * 4 && n.start < b * 4 + 4);
     expect(notes.length).toBe(4); // walking quarters
     expect(notes.every((n) => n.art === "pizz" && n.pitch <= 52)).toBe(true);
+  });
+});
+
+describe("melodic hygiene", () => {
+  const band: Member[] = [...defaultMembers(), { id: "sheep", animal: "sheep", name: "Olive", instrument: "cello" }];
+  it("restates the head motif in one register (no octave jumps between statements)", () => {
+    for (const style of STYLE_LIST) {
+      for (const seed of [1, 5, 9]) {
+        const { score } = generateLocal({ ...defaultSettings(band), style, seed, soloists: ["sheep"] }, band);
+        const head = score.frame.sections.find((s) => s.kind === "head")!;
+        const centers: number[] = [];
+        for (let b = head.start; b < head.start + head.length; b++) {
+          if (!score.plan[b].directives?.fox?.startsWith("@motif")) continue;
+          const ns = score.parts.fox.filter((n) => n.start >= b * 4 && n.start < b * 4 + 4);
+          if (ns.length) centers.push(ns.reduce((s, n) => s + n.pitch, 0) / ns.length);
+        }
+        if (centers.length > 1) expect(Math.max(...centers) - Math.min(...centers)).toBeLessThan(10);
+      }
+    }
+  });
+  it("keeps held and strong-beat notes of improvised lines on the harmony", () => {
+    let bad = 0;
+    for (const style of STYLE_LIST) {
+      for (let seed = 1; seed <= 12; seed++) {
+        const { score } = generateLocal({ ...defaultSettings(band), style, seed, soloists: ["sheep", "bear"] }, band);
+        for (const id of ["fox", "sheep"]) {
+          for (const n of score.parts[id]) {
+            const bar = Math.floor(n.start / 4);
+            const bp = score.plan[bar];
+            if (!bp || !/^@line/.test(bp.directives?.[id] ?? "")) continue;
+            if (n.dur < 0.75 && Math.abs(n.start - Math.round(n.start)) > 1e-6) continue;
+            let sym = bp.chords[0].symbol;
+            for (const c of bp.chords) if (c.beat <= n.start - bar * 4 + 1e-6) sym = c.symbol;
+            const ch = parseChord(sym);
+            const ok = new Set([...chordPcs(ch), ...scalePcs(ch), ...ch.tensions.map((t) => mod(ch.root + t, 12))]);
+            if (!ok.has(mod(n.pitch, 12))) bad++;
+          }
+        }
+      }
+    }
+    expect(bad).toBe(0);
   });
 });

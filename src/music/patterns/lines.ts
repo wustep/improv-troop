@@ -108,8 +108,14 @@ export function line(ctx: BarCtx): NoteEvent[] {
   if (ctx.texture === "sparse") density *= 0.7;
   if (ctx.texture === "peak") density *= 1.2;
 
-  const rhythm = ctx.args.includes("long") ? cadenceRhythm(ctx) : lineRhythm(ctx, density);
   const featured = ctx.role === "solo" || ctx.role === "lead";
+  let rhythm = ctx.args.includes("long") ? cadenceRhythm(ctx) : lineRhythm(ctx, density);
+  // "leave space" means a short answer, not a silent bar in the middle of a solo
+  if (featured && rhythm.length === 0) {
+    const cell = ctx.beats === 3 ? [{ start: 1, dur: 0.5 }, { start: 1.5, dur: 1.5 }] : [{ start: 1.5, dur: 0.5 }, { start: 2, dur: 0.5 }, { start: 2.5, dur: 1.5 }];
+    rhythm = cell;
+    ctx.mem.sinceRest = 0;
+  }
   const [lo, hi] = featured ? (ctx.inst.solo ?? ctx.inst.sweet) : ctx.inst.sweet;
   const out: NoteEvent[] = [];
   let p = ctx.mem.lastPitch ?? Math.round((lo + hi) / 2);
@@ -153,9 +159,12 @@ export function line(ctx: BarCtx): NoteEvent[] {
       next = target + (ctx.rng.chance(0.5) ? 1 : -1);
     }
     if (next === p && ctx.style.id !== "funk" && ctx.style.id !== "minimal") next = fromDiatonicIndex(diatonicIndex(p, pcs) + dir, pcs);
-    // bounce off the edges of the register instead of sinking or squeaking
-    if (next < lo) next = p + (p - next);
-    if (next > hi) next = p - (next - p);
+    // bounce off the edges of the register instead of sinking or squeaking — and land the
+    // bounced note back on the harmony (a mirrored interval can fall between the cracks)
+    if (next < lo || next > hi) {
+      next = next < lo ? p + (p - next) : p - (next - p);
+      next = snapToPcs(next, strong ? chordPcs(c) : pcs);
+    }
     next = fold(next, Math.max(ctx.inst.range[0], lo - 2), Math.min(ctx.inst.range[1], hi + 2));
 
     const lastOfPhrase = !nextNote || nextNote.start - (start + dur) > 0.4;
@@ -170,6 +179,19 @@ export function line(ctx: BarCtx): NoteEvent[] {
     });
     p = next;
   }
+  // Consonance guard: passing colours (bebop passing tones, blue notes) are for short,
+  // weak-beat notes. Anything held or on a strong beat sits in the chord or its scale.
+  for (let i = 0; i < out.length; i++) {
+    const n = out[i];
+    const strongBeat = Math.abs(n.start - Math.round(n.start)) < 1e-6;
+    if (!strongBeat && n.dur < 0.75) continue;
+    const c = chordAt(ctx, n.start);
+    const ok = new Set([...chordPcs(c), ...scalePcs(c), ...c.tensions.map((t) => mod(c.root + t, 12))]);
+    if (c.quality === "dom") ok.delete(mod(c.root + 11, 12)); // the bebop major 7th is only ever passing
+    if (ok.has(mod(n.pitch, 12))) continue;
+    out[i] = { ...n, pitch: snapToPcs(n.pitch, chordPcs(c)) };
+  }
+  if (out.length) p = out[out.length - 1].pitch;
   ctx.mem.lastPitch = p;
   return out;
 }

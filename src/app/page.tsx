@@ -26,6 +26,10 @@ export default function Home() {
 
   useEffect(() => {
     hydrate();
+    // dev-only handle for automated play-throughs (transport + store)
+    if (process.env.NODE_ENV !== "production") {
+      (window as unknown as { __jamming?: unknown }).__jamming = { audio: troopAudio, store: useTroop };
+    }
     try {
       if (new URLSearchParams(location.search).has("debug")) setDebugOpen(true);
     } catch {

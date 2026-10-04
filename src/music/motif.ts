@@ -255,16 +255,7 @@ export function realizeMotifBar(ctx: BarCtx, ops: MotifOp[], barOffset = 0): Not
   const raw = transformMotif(ctx.motif, ops, ctx.key, ctx.rng, ctx.style);
   const lo = barOffset * ctx.beats;
   const hi = lo + ctx.beats;
-  const featured = ctx.role === "solo" || ctx.role === "lead";
-  const range = featured ? (ctx.inst.solo ?? ctx.inst.sweet) : ctx.inst.sweet;
-  // Keep the register near where the player is (or the motif's own register) — but a
-  // soloist coming from an accompaniment register moves up into the solo range.
-  const motifCenter = raw.length ? raw.reduce((s, n) => s + n.pitch, 0) / raw.length : 60;
-  const last = ctx.mem.lastPitch;
-  const target = last !== null && last >= range[0] && last <= range[1] ? last : (range[0] + range[1]) / 2;
-  let shift = Math.round((target - motifCenter) / 12) * 12;
-  // never more than an octave away from the motif's register unless out of range
-  if (Math.abs(shift) > 12) shift = Math.sign(shift) * 12;
+  const shift = motifOctave(ctx, raw);
   const out: NoteEvent[] = [];
   const keyPcs = keyScale(ctx.key);
   let prevRaw: number | null = null;
@@ -308,6 +299,39 @@ function scaleStepAway(p: number, interval: number, pcs: number[]): number {
   let q = p + dir;
   while (!pcs.includes(mod(q, 12))) q += dir;
   return q;
+}
+
+/**
+ * Which octave to play a motif statement in. A head restates the motif in its own
+ * register (so statements don't jump octaves bar to bar); a soloist plays it near
+ * where they are, as long as it stays inside their solo range.
+ */
+function motifOctave(ctx: BarCtx, raw: NoteEvent[]): number {
+  if (!raw.length) return 0;
+  const featured = ctx.role === "solo" || ctx.role === "lead";
+  const range = featured ? (ctx.inst.solo ?? ctx.inst.sweet) : ctx.inst.sweet;
+  const center = raw.reduce((s, n) => s + n.pitch, 0) / raw.length;
+  const lo = Math.min(...raw.map((n) => n.pitch));
+  const hi = Math.max(...raw.map((n) => n.pitch));
+  const own = ctx.motif.notes.length ? ctx.motif.notes.reduce((s, n) => s + n.pitch, 0) / ctx.motif.notes.length : center;
+  const last = ctx.mem.lastPitch;
+  const ref =
+    ctx.role === "solo" && last !== null && last >= range[0] && last <= range[1]
+      ? last
+      : ctx.role === "lead" || !featured
+        ? own
+        : (range[0] + range[1]) / 2;
+  let best = 0;
+  let bestCost = Infinity;
+  for (const shift of [-24, -12, 0, 12, 24]) {
+    const out = Math.max(0, range[0] - (lo + shift)) + Math.max(0, hi + shift - range[1]);
+    const cost = out * 8 + Math.abs(center + shift - ref) + Math.abs(shift) * 0.05;
+    if (cost < bestCost) {
+      bestCost = cost;
+      best = shift;
+    }
+  }
+  return best;
 }
 
 export function motifPitchCenter(m: Motif): number {
