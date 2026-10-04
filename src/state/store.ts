@@ -307,7 +307,11 @@ export const useTroop = create<TroopState>((set, get) => {
             autopilotBars: improv ? improv.autopilotBars() : [],
           });
           if (get().playing) troopAudio.updateScore(score);
-          else if (improv && improv.readyBars() > 0 && !get().playing) void get().play();
+          else if (improv && improv.readyBars() > 0 && !get().playing) {
+            // start as soon as the band can stay ahead of the playhead at the pace it's thinking
+            if (improv.readyToPlay(60 / score.frame.tempo)) void get().play();
+            else set((s) => ({ gen: { ...s.gen, status: `${s.gen.status.replace(/ · .*$/, "")} · getting a phrase ahead before we start…` } }));
+          }
         },
       };
 

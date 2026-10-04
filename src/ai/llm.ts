@@ -28,8 +28,9 @@ export class LlmError extends Error {
   }
 }
 
-// A small concurrency gate so a big band doesn't trip gateway rate limits.
-const MAX_IN_FLIGHT = 4;
+// A small concurrency gate so a big band doesn't trip gateway rate limits (six covers a
+// pipelined phrase: the next soloist thinking while up to five bandmates answer).
+const MAX_IN_FLIGHT = 6;
 let inFlight = 0;
 const waiters: (() => void)[] = [];
 

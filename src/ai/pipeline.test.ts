@@ -107,3 +107,21 @@ describe("improviser pipeline", () => {
     }
   });
 });
+
+describe("improviser pacing", () => {
+  it("pipelines phrases: the next soloist thinks while the band answers", async () => {
+    installFakeFetch(20);
+    const settings = { ...defaultSettings(band), mode: "improviser" as const, soloists: ["bear"] };
+    const h = hooks("t-pipe");
+    const ctl = startImproviser(settings, band, h);
+    await ctl.promise;
+    const calls = useDebug.getState().calls.filter((c) => c.runId === "t-pipe");
+    const phraseCalls = calls.filter((c) => /^bars /.test(c.label));
+    // the featured call for bars 5-8 starts before the band's calls for bars 1-4 have all finished
+    const nextSolo = phraseCalls.find((c) => c.label.startsWith("bars 5") && c.agent === "bear")!;
+    const bandFirst = phraseCalls.filter((c) => c.label.startsWith("bars 1") && c.agent !== "fox");
+    const bandFirstDone = Math.max(...bandFirst.map((c) => c.startedAt + (c.ms ?? 0)));
+    expect(nextSolo.startedAt).toBeLessThan(bandFirstDone);
+    expect(ctl.readyToPlay(0.375)).toBe(true);
+  });
+});

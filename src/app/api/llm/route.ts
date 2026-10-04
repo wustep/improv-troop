@@ -45,9 +45,12 @@ export async function POST(req: Request) {
   } catch {
     return Response.json({ error: "Bad JSON body" }, { status: 400 });
   }
-  // Local development only: key "mock" answers with a canned band so the UI flow can be exercised offline.
-  if (process.env.NODE_ENV !== "production" && body.key === "mock") {
-    await new Promise((r) => setTimeout(r, 400 + Math.random() * 900));
+  // Local development only: key "mock" (or "mock:<ms>" for a given latency) answers with a
+  // canned band so the UI flow can be exercised offline.
+  const mock = process.env.NODE_ENV !== "production" ? /^mock(?::(\d+))?$/.exec(body.key ?? "") : null;
+  if (mock) {
+    const ms = mock[1] ? +mock[1] : 400 + Math.random() * 900;
+    await new Promise((r) => setTimeout(r, ms * (0.8 + Math.random() * 0.4)));
     return Response.json({ text: fakeModel(body), structured: false, usage: { inputTokens: 0, outputTokens: 0 }, serverMs: performance.now() - t0 });
   }
   const apiKey = body.key?.trim() || process.env.IMPROV_TROOP_SERVER_KEY;

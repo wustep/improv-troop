@@ -34,6 +34,11 @@ export interface ImprovController {
   readyBars(): number;
   /** Bars the band vamped through on autopilot. */
   autopilotBars(): number[];
+  /**
+   * Is it safe to start playback now? True once the remaining phrases will (at the band's
+   * measured pace) be ready before the playhead reaches them.
+   */
+  readyToPlay(secondsPerBeat: number): boolean;
 }
 
 type Stage = "none" | "featured" | "done";
@@ -71,6 +76,7 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
   const style = STYLES[settings.style];
   const scoreId = newScoreId();
   let started = false;
+  const phraseDoneAt: number[] = [];
 
   const say = (msg: ChatMessage) => {
     chat.push(msg);
@@ -218,9 +224,9 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
       throw new Error(`${leader.name} couldn't call the tune: ${(e as Error).message}`);
     }
 
-    // ── Bandmates answer and pick their go-to texture ──
+    // ── Bandmates answer and pick their go-to texture (while the leader plays the first phrase) ──
     step("The band is talking it over…");
-    await Promise.all(
+    const repliesDone = Promise.all(
       others.map(async (m) => {
         try {
           const { text, call } = await callLLM({
@@ -282,15 +288,13 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
         }
       }),
     );
-    plan = enforceSlots(plan, frame, members, []);
-    dbg.timing(runId, "count-off", performance.now() - tStart);
-    started = true;
-    hooks.onScore(snapshot(false), false);
 
-    // ── The jam: phrase by phrase, featured player first, then the band answers ──
-    for (let pi = 0; pi < phrases.length; pi++) {
+    // ── The jam, pipelined: each phrase is the featured player first, then the band answering
+    // what it heard; the next phrase's featured player starts thinking while the band answers,
+    // so the band needs one model round per phrase, not two, to keep up with playback. ──
+    const featuredPhase = async (pi: number) => {
       if (signal.aborted) throw new DOMException("Aborted", "AbortError");
-      if (stage[pi] === "done") continue;
+      if (stage[pi] !== "none") return;
       const bars = phrases[pi];
       const last = frame.bars - 1;
       const sec = sectionAt(frame, bars[0]);
@@ -301,9 +305,16 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
       step(`Bars ${bars[0] + 1}–${bars.at(-1)! + 1}: ${featuredIds.length ? `${featuredIds.map(nameOf).join(" & ")} ${sec.kind === "head" || sec.kind === "out" ? "on the head" : "stretching out"}` : "the band"}…`);
       const tPhrase = performance.now();
 
-      const heard = prevBars.length
-        ? playedBlock(members, parts, plan, frame, prevBars[0], prevBars.at(-1)!)
-        : "  (nothing yet — this is the top of the tune)";
+      // the previous phrase's accompaniment may still be in flight: share what has been played
+      const prevFeatured = prevBars.length
+        ? members.filter((m) => prevBars.some((b) => b !== last && isFeaturedRole(plan[b].roles[m.id]))).map((m) => m.id)
+        : [];
+      const heard = !prevBars.length
+        ? "  (nothing yet — this is the top of the tune)"
+        : stage[pi - 1] === "done"
+          ? playedBlock(members, parts, plan, frame, prevBars[0], prevBars.at(-1)!)
+          : playedBlock(members, parts, plan, frame, prevBars[0], prevBars.at(-1)!, prevFeatured.length ? prevFeatured : [leader.id]) +
+            "\n  (the rest of the band was comping in style underneath)";
 
       // 1) featured players (each gets the engine's sketch of their bars as a reference)
       const preview = realize({
@@ -387,10 +398,22 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
         }
       });
       await Promise.all(fCalls);
-      if (stage[pi] !== "none") continue; // autopilot took this phrase
+      if (stage[pi] !== "none") return; // autopilot took this phrase
       realizeStage(pi, "featured");
       stage[pi] = "featured";
+      dbg.timing(runId, `phrase ${pi + 1} featured`, performance.now() - tPhrase);
+    };
 
+    const accompanimentPhase = async (pi: number) => {
+      if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+      if (stage[pi] !== "featured") return; // autopilot took it (or nobody was featured and it was realized already)
+      const bars = phrases[pi];
+      const last = frame.bars - 1;
+      const prevBars = pi > 0 ? phrases[pi - 1] : [];
+      const tPhrase = performance.now();
+      const featuredIds = members
+        .filter((m) => bars.some((b) => b !== last && isFeaturedRole(plan[b].roles[m.id])))
+        .map((m) => m.id);
       // 2) everyone else listens to the featured line and answers
       const listenIds = featuredIds.length ? featuredIds : [leader.id];
       const listening = playedBlock(members, parts, plan, frame, bars[0], bars.at(-1)!, listenIds);
@@ -465,13 +488,29 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
           }
         }),
       );
-      if (stage[pi] === "done") continue;
+      // re-read: autopilot may have taken this phrase while the band was thinking
+      if ((stage[pi] as Stage) === "done") return;
       plan = enforceSlots(plan, frame, members, []);
       realizeStage(pi, "rest");
       stage[pi] = "done";
-      dbg.timing(runId, `phrase ${pi + 1}`, performance.now() - tPhrase);
+      phraseDoneAt.push(performance.now());
+      dbg.timing(runId, `phrase ${pi + 1} band`, performance.now() - tPhrase);
       hooks.onScore(snapshot(false), false);
+    };
+
+    let nextFeatured = featuredPhase(0);
+    await repliesDone;
+    plan = enforceSlots(plan, frame, members, []);
+    dbg.timing(runId, "count-off", performance.now() - tStart);
+    started = true;
+    hooks.onScore(snapshot(false), false);
+    for (let pi = 0; pi < phrases.length; pi++) {
+      await nextFeatured;
+      const band = accompanimentPhase(pi);
+      nextFeatured = pi + 1 < phrases.length ? featuredPhase(pi + 1) : Promise.resolve();
+      await band;
     }
+    await nextFeatured;
 
     dbg.timing(runId, "total", performance.now() - tStart);
     const final = snapshot(true);
@@ -479,5 +518,30 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
     return final;
   })();
 
-  return { promise, ensureReady, readyBars, autopilotBars: () => [...autopilot].flatMap((pi) => phrases[pi]) };
+  /** Seconds the band takes per phrase: measured between finished phrases, else from call latency. */
+  const pace = (): number => {
+    if (phraseDoneAt.length >= 2) return (phraseDoneAt[phraseDoneAt.length - 1] - phraseDoneAt[0]) / (phraseDoneAt.length - 1) / 1000;
+    const done = useDebug.getState().calls.filter((c) => c.runId === runId && c.status === "ok" && c.ms);
+    const avg = done.length ? done.reduce((s, c) => s + (c.ms ?? 0), 0) / done.length : 3000;
+    return (avg * 1.25) / 1000; // one round per phrase (pipelined) plus jitter
+  };
+
+  const readyToPlay = (spb: number): boolean => {
+    let r = 0;
+    while (r < phrases.length && stage[r] === "done") r++;
+    if (r === 0) return false;
+    if (r === phrases.length) return true;
+    const beats = frame.meter.beats;
+    const countIn = beats * spb;
+    const P = pace();
+    const margin = spb * 1.5; // autopilot steps in ~¾ beat early; leave a little more
+    // phrase k starts playing at countIn + start(k)·spb; it's ready ~ (k − r + 1)·P from now
+    for (let k = r; k < phrases.length; k++) {
+      const playsAt = countIn + phrases[k][0] * beats * spb;
+      if ((k - r + 1) * P > playsAt - margin) return false;
+    }
+    return true;
+  };
+
+  return { promise, ensureReady, readyBars, autopilotBars: () => [...autopilot].flatMap((pi) => phrases[pi]), readyToPlay };
 }
