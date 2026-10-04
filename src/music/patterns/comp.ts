@@ -200,7 +200,7 @@ export function pizz(ctx: BarCtx): NoteEvent[] {
   }
   if (sparse && hits.length > 2) hits = hits.slice(0, 2);
   if (busy && ctx.style.id === "swing" && ctx.beats === 4) hits = [...hits, { pos: 3.5, dur: 0.5, next: true }].filter((h, i, a) => a.findIndex((x) => x.pos === h.pos) === i);
-  const vel = velFor(ctx, 0.62);
+  const vel = velFor(ctx, 0.78);
   const out: NoteEvent[] = [];
   let prev = ctx.mem.lastVoicing;
   for (const h of hits) {

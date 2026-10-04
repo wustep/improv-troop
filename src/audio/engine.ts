@@ -9,6 +9,7 @@ import {
   lm2Sample,
   packChain,
   pizzChain,
+  PIZZ_VOLUME,
   type PackSpec,
   type PianoPack,
 } from "./packs";
@@ -361,7 +362,7 @@ export class TroopAudio {
           destination: this.master,
           scheduler: this.scheduler,
           storage,
-          volume: DEFAULT_VOLUME[entry.instrument],
+          volume: entry.key.endsWith("|pizz") ? PIZZ_VOLUME : DEFAULT_VOLUME[entry.instrument],
           pan: 0,
           notes: hint,
           onProgress: (loaded, total) => {

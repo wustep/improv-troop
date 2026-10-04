@@ -254,6 +254,9 @@ const vibes: PackSpec = {
   },
 };
 
+/** Level-matched volume for the pizzicato voice (that pack runs ~3 dB quieter than arco). */
+export const PIZZ_VOLUME = 121;
+
 /** Plucked voice for bowed strings (cello/violin pizzicato). */
 export function pizzChain(): PackSpec[] {
   return [soundfont("pizzicato_strings", "MusyngKite"), soundfont("pizzicato_strings", "FluidR3_GM")];
@@ -296,20 +299,26 @@ const SOUNDFONT_NAME: Record<InstrumentId, string> = {
   vibes: "vibraphone",
 };
 
-/** Default instrument volume (smplr 0..127) so drums/bass don't swamp the melody. */
+/**
+ * Default instrument volume (smplr 0..127), level-matched: each pack was measured playing
+ * the same line at the same velocity in the browser and brought to ~−31 dB RMS (the sample
+ * packs differ by up to 9 dB out of the box — the VCSL vibraphone and the clarinet/sax
+ * soundfonts are hot, the violin is quiet). Musical balance (melody on top) is done by
+ * role in the engine, not here.
+ */
 export const DEFAULT_VOLUME: Record<InstrumentId, number> = {
-  piano: 100,
-  bass: 108,
-  drums: 84,
-  trumpet: 92,
-  sax: 100,
-  trombone: 98,
-  clarinet: 100,
-  flute: 100,
-  violin: 98,
+  piano: 106,
+  bass: 111,
+  drums: 80,
+  trumpet: 93,
+  sax: 79,
+  trombone: 106,
+  clarinet: 78,
+  flute: 87,
+  violin: 114,
   cello: 102,
   guitar: 104,
-  vibes: 102,
+  vibes: 63,
 };
 
 /** Reverb send per instrument. */

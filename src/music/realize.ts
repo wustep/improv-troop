@@ -23,6 +23,24 @@ export interface RealizeResult {
 
 const FEATURED: Role[] = ["lead", "solo", "trade"];
 
+/**
+ * Mix by role: whoever carries the tune sits on top. Comping and the rhythm section
+ * sit a little under; sustained counter-lines and pads further under (long tones
+ * add up fast).
+ */
+const ROLE_MIX: Record<Role, number> = {
+  lead: 1.08,
+  solo: 1.08,
+  trade: 1,
+  bass: 0.92,
+  groove: 0.84,
+  comp: 0.82,
+  fill: 0.9,
+  counter: 0.6,
+  pad: 0.55,
+  rest: 1,
+};
+
 export function isFeaturedRole(r: Role | undefined) {
   return !!r && FEATURED.includes(r);
 }
@@ -179,7 +197,8 @@ export function realize(o: RealizeOptions): RealizeResult {
     if (res.kind !== "rest" && rel.length === 0 && directive !== "@rest") {
       // silence where the plan asked for sound is fine for rests, suspicious otherwise
     }
-    for (const n of rel) parts[m.id].push({ ...n, start: n.start + bar * beats, dur: Math.min(n.dur, beats * 2) });
+    const mix = ROLE_MIX[ctx.role] ?? 1;
+    for (const n of rel) parts[m.id].push({ ...n, start: n.start + bar * beats, dur: Math.min(n.dur, beats * 2), vel: n.vel * mix });
     return rel;
   };
 

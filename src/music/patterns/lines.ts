@@ -258,7 +258,8 @@ export function harmony(ctx: BarCtx): NoteEvent[] {
  */
 export function celloCounter(ctx: BarCtx): NoteEvent[] {
   const out: NoteEvent[] = [];
-  const vel = velFor(ctx, 0.58);
+  // the countermelody is the cello's voice in the band: under the lead, but heard
+  const vel = velFor(ctx, 0.74);
   const lo = 45;
   const hi = 66;
   // beats where the lead is moving (onsets within the beat)
