@@ -202,3 +202,20 @@ describe("melodic hygiene", () => {
     expect(bad).toBe(0);
   });
 });
+
+describe("standards form", () => {
+  it("always comes back to the melody, and defaults to a full head-solos-out performance", async () => {
+    const { defaultStandardLength } = await import("./form");
+    const band = defaultMembers();
+    for (const std of STANDARDS) {
+      expect(lengthOptions(std.id)).toContain(defaultStandardLength(std.id));
+      for (const bars of lengthOptions(std.id)) {
+        const s = { ...defaultSettings(band), standard: std.id, key: std.key, style: std.style, bars, meter: { beats: std.meter }, soloists: ["bear"] };
+        const { score } = generateLocal(s, band);
+        const last = score.frame.sections[score.frame.sections.length - 1];
+        expect(["head", "out"]).toContain(last.kind);
+        if (bars > std.bars.length || std.bars.length >= 16) expect(score.frame.sections.some((x) => x.kind === "solo")).toBe(true);
+      }
+    }
+  });
+});

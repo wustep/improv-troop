@@ -4,7 +4,7 @@ import { create } from "zustand";
 import { runComposer, type PipelineHooks } from "@/ai/composer";
 import { startImproviser, type ImprovController } from "@/ai/improviser";
 import { notesHintFromScore, troopAudio, type PianoPack } from "@/audio/engine";
-import { snapLength } from "@/music/form";
+import { defaultStandardLength, snapLength } from "@/music/form";
 import { ANIMALS, defaultMembers, INSTRUMENTS } from "@/music/instruments";
 import { defaultSettings, generateLocal } from "@/music/local";
 import { getStandard } from "@/music/standards";
@@ -240,7 +240,7 @@ export const useTroop = create<TroopState>((set, get) => {
         patch.meter = { beats: std.meter };
         patch.style = std.style;
         patch.tempo = std.tempo;
-        patch.bars = snapLength(id, get().settings.bars);
+        patch.bars = defaultStandardLength(id);
       } else {
         patch.bars = 16;
       }

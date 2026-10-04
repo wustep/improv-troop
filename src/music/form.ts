@@ -20,6 +20,14 @@ export function lengthOptions(standardId: string | null): number[] {
   return out.length ? out : [len];
 }
 
+/** A full performance of a standard: head, solos, out head — three choruses when they fit. */
+export function defaultStandardLength(standardId: string | null): number {
+  const opts = lengthOptions(standardId);
+  const std = getStandard(standardId);
+  if (!std) return 16;
+  return opts.includes(std.bars.length * 3) ? std.bars.length * 3 : opts[opts.length - 1];
+}
+
 export function snapLength(standardId: string | null, bars: number): number {
   const opts = lengthOptions(standardId);
   let best = opts[0];
@@ -163,21 +171,28 @@ export function buildFrame(settings: TroopSettings, members: Member[]): Frame {
   if (std) {
     const formLen = std.bars.length;
     const choruses = Math.max(1, Math.round(total / formLen));
+    // Every performance comes back to the melody. With fewer than three choruses the
+    // leader "takes it out" on the tune's last section (or last quarter) instead of
+    // the tune ending in the middle of a solo.
+    const lastSection = std.form.length > 1 ? std.form[std.form.length - 1][1] : Math.max(4, Math.floor(formLen / 4));
     if (choruses === 1) {
       if (soloists.length && formLen >= 16) {
-        const half = Math.floor(formLen / 2);
-        sections.push({ name: "Head", kind: "head", start: 0, length: half, featured: [leaderId] });
-        pushSolos(half, total - half);
+        // AABA-style: head on the first sections, solo the bridge, take the last A out.
+        // Two-part or through-composed tunes: head on the first half, solo, last quarter out.
+        const sectioned = std.form.length > 2;
+        const out = sectioned ? lastSection : Math.max(4, Math.floor(formLen / 4));
+        const head = sectioned ? formLen - out - std.form[std.form.length - 2][1] : Math.floor(formLen / 2);
+        sections.push({ name: "Head", kind: "head", start: 0, length: head, featured: [leaderId] });
+        pushSolos(head, formLen - head - out);
+        sections.push({ name: "Out", kind: "out", start: formLen - out, length: out, featured: [leaderId] });
       } else {
         sections.push({ name: "Head", kind: "head", start: 0, length: total, featured: [leaderId] });
       }
     } else {
       sections.push({ name: "Head", kind: "head", start: 0, length: formLen, featured: [leaderId] });
-      const hasOut = choruses >= 3;
-      const soloStart = formLen;
-      const soloLen = total - formLen - (hasOut ? formLen : 0);
-      pushSolos(soloStart, soloLen);
-      if (hasOut) sections.push({ name: "Out Head", kind: "out", start: total - formLen, length: formLen, featured: [leaderId] });
+      const out = choruses >= 3 ? formLen : lastSection;
+      pushSolos(formLen, total - formLen - out);
+      sections.push({ name: choruses >= 3 ? "Out Head" : "Out", kind: "out", start: total - out, length: out, featured: [leaderId] });
     }
   } else {
     let head = total >= 24 ? 8 : 4;
