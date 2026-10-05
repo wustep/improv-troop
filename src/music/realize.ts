@@ -1,6 +1,8 @@
 import { DYNAMIC_ENERGY, newMemory, type BarCtx, type PlayerMemory } from "./context";
 import { realizeDirective } from "./directives";
+import { ensemble } from "./ensemble";
 import { sectionAt } from "./form";
+import { buildHarmony, type Harmony } from "./harmony";
 import { INSTRUMENTS } from "./instruments";
 import { makeRng } from "./rng";
 import { STYLES } from "./styles";
@@ -45,6 +47,36 @@ export function isFeaturedRole(r: Role | undefined) {
   return !!r && FEATURED.includes(r);
 }
 
+/** The chart's harmony in context, from the plan's chords (falling back to the frame's). */
+export function harmonyOf(frame: Frame, plan: BarPlan[]): Harmony {
+  const chords = Array.from({ length: frame.bars }, (_, i) => plan[i]?.chords ?? frame.chords[i]);
+  return buildHarmony(chords, frame.meter.beats, frame.key, frame.style);
+}
+
+const directiveName = (d: string | undefined) => (d && d.startsWith("@") ? d.slice(1).split(/\s+/)[0].toLowerCase() : "");
+const LINE_LIKE = new Set(["line", "solo", "counter"]);
+
+/**
+ * Where a player's run of improvised-line bars ends (absolute beat): phrases may cross
+ * bar lines inside the run but never run into a different kind of bar, past the end of
+ * the section, or across a 4-bar group.
+ */
+export function lineRunEnd(frame: Frame, plan: BarPlan[], memberId: string, bar: number): number {
+  const beats = frame.meter.beats;
+  const d = plan[bar]?.directives?.[memberId];
+  const name = directiveName(d);
+  if (!LINE_LIKE.has(name) || /\b(long|run)\b/.test(d ?? "")) return (bar + 1) * beats;
+  // a run is bars with the same instruction ("@line sparse" then "@line dense" is a change of plan)
+  const norm = (x: string | undefined) => (x ?? "").trim().replace(/^@solo\b/, "@line").replace(/\s+/g, " ");
+  const sec = sectionAt(frame, bar);
+  let b = bar;
+  while (b + 1 < frame.bars && b + 1 < sec.start + sec.length && (b + 1 - sec.start) % 4 !== 0) {
+    if (norm(plan[b + 1]?.directives?.[memberId]) !== norm(d)) break;
+    b++;
+  }
+  return (b + 1) * beats;
+}
+
 export interface RealizeOptions {
   frame: Frame;
   members: Member[];
@@ -68,6 +100,7 @@ export function makeBarCtx(
   mem: PlayerMemory,
   featured: NoteEvent[],
   featuredPrev: NoteEvent[],
+  played: Map<number, NoteEvent[]> = new Map(),
 ): BarCtx {
   const { frame, plan, members, motif, seed } = o;
   const style = STYLES[frame.style];
@@ -80,6 +113,11 @@ export function makeBarCtx(
   const barInSection = bar - section.start;
   const has = (fn: string) => members.some((m) => INSTRUMENTS[m.instrument].fn === fn && m.id !== member.id);
   const someoneOnBass = members.some((m) => m.id !== member.id && (INSTRUMENTS[m.instrument].fn === "bass" || bp?.roles[m.id] === "bass"));
+  // players of the same kind given the same directive this bar split the voices / interlock instead of doubling
+  const mine = directiveName(bp?.directives?.[member.id]);
+  const kind = (m: Member) => (INSTRUMENTS[m.instrument].fn === "chordal" ? "chordal" : "other");
+  const peers = members.filter((m) => !isFeaturedRole(bp?.roles[m.id]) && directiveName(bp?.directives?.[m.id]) === mine && kind(m) === kind(member));
+  const peerIndex = Math.max(0, peers.findIndex((m) => m.id === member.id));
   return {
     bar,
     beats,
@@ -113,12 +151,34 @@ export function makeBarCtx(
     hasChordal: has("chordal"),
     args: [],
     seed,
+    harmony: harmonyOf(frame, plan),
+    runEnd: lineRunEnd(frame, plan, member.id, bar),
+    peerIndex,
+    peerCount: Math.max(1, peers.length),
+    playedIn: (b: number) => played.get(b) ?? null,
   };
 }
 
 function featuredOf(plan: BarPlan, members: Member[]): string | null {
   for (const m of members) if (isFeaturedRole(plan.roles[m.id]) && m.instrument !== "drums") return m.id;
   return null;
+}
+
+/** The melody of a featured part: the top note at each onset (a pianist's left hand isn't the tune). */
+export function topLine(notes: NoteEvent[]): NoteEvent[] {
+  const byOnset = new Map<number, NoteEvent[]>();
+  for (const n of notes) {
+    const k = Math.round(n.start * 96);
+    byOnset.set(k, [...(byOnset.get(k) ?? []), n]);
+  }
+  const out: NoteEvent[] = [];
+  for (const group of byOnset.values()) {
+    const top = group.reduce((a, b) => (b.pitch > a.pitch ? b : a));
+    // a low chord on its own is the left hand comping, not the tune
+    if (group.length >= 2 && top.pitch < 62) continue;
+    out.push(top);
+  }
+  return out.sort((a, b) => a.start - b.start);
 }
 
 /** Monophonic cleanup, range folding, and breathing for one part. */
@@ -179,12 +239,12 @@ export function realize(o: RealizeOptions): RealizeResult {
   const run = (m: Member, bar: number) => {
     const bp = plan[bar];
     const directive = bp?.directives?.[m.id] ?? "@rest";
-    const featured = featuredByBar.get(bar) ?? [];
+    const featured = topLine(featuredByBar.get(bar) ?? []);
     const prev = [
-      ...(featuredByBar.get(bar - 2) ?? []).map((n) => ({ ...n, start: n.start - 2 * beats })),
-      ...(featuredByBar.get(bar - 1) ?? []).map((n) => ({ ...n, start: n.start - beats })),
+      ...topLine(featuredByBar.get(bar - 2) ?? []).map((n) => ({ ...n, start: n.start - 2 * beats })),
+      ...topLine(featuredByBar.get(bar - 1) ?? []).map((n) => ({ ...n, start: n.start - beats })),
     ];
-    const ctx = makeBarCtx(o, m, bar, memOf(m.id), featured, prev);
+    const ctx = makeBarCtx(o, m, bar, memOf(m.id), featured, prev, featuredByBar);
     let res;
     try {
       res = realizeDirective(ctx, directive);
@@ -203,6 +263,7 @@ export function realize(o: RealizeOptions): RealizeResult {
   };
 
   // pass 1: featured players (others listen to them)
+  const featuredHere = new Map<number, string>();
   for (const bar of bars) {
     const bp = plan[bar];
     const fid = bp ? featuredOf(bp, members) : null;
@@ -210,7 +271,10 @@ export function realize(o: RealizeOptions): RealizeResult {
       if (!isFeaturedRole(bp?.roles[m.id])) continue;
       if (o.filter && !o.filter(m.id, bar)) continue;
       const rel = run(m, bar);
-      if (m.id === fid) featuredByBar.set(bar, rel);
+      if (m.id === fid) {
+        featuredByBar.set(bar, rel);
+        featuredHere.set(bar, m.id);
+      }
     }
   }
   // pass 2: everyone else
@@ -224,6 +288,28 @@ export function realize(o: RealizeOptions): RealizeResult {
   }
 
   for (const m of members) parts[m.id] = finishPart(m, parts[m.id]);
+
+  // the band listens to itself: held notes against the harmony, the melody on top, no unison pads
+  const barSet = new Set(bars);
+  const lead = new Map<number, { id: string; notes: NoteEvent[] }>();
+  for (const bar of bars) {
+    const bp = plan[bar];
+    const fid = bp ? featuredOf(bp, members) : null;
+    const rel = featuredByBar.get(bar);
+    if (fid && rel) {
+      const notes = featuredHere.has(bar) ? parts[fid].filter((n) => Math.floor(n.start / beats + 1e-9) === bar) : rel.map((n) => ({ ...n, start: n.start + bar * beats }));
+      lead.set(bar, { id: fid, notes: INSTRUMENTS[members.find((m) => m.id === fid)!.instrument].poly ? topLine(notes) : notes });
+    }
+  }
+  const fixes = ensemble({ frame, plan, members, harmony: harmonyOf(frame, plan), parts, bars: barSet, lead });
+  for (const f of fixes) issues.push({ bar: f.bar, member: f.member, detail: `ensemble: ${f.detail}` });
+  // the featured line as finally played is what listeners (and a replayed head) hear
+  for (const [bar, id] of featuredHere) {
+    featuredByBar.set(
+      bar,
+      parts[id].filter((n) => Math.floor(n.start / beats + 1e-9) === bar).map((n) => ({ ...n, start: n.start - bar * beats })),
+    );
+  }
   // hold the last chord a little longer than written (a fermata) so endings breathe
   const lastStart = (frame.bars - 1) * beats;
   if (bars.includes(frame.bars - 1)) {

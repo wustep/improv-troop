@@ -1,6 +1,7 @@
 import { sectionAt } from "./form";
 import { INSTRUMENTS } from "./instruments";
 import type { Rng } from "./rng";
+import { getStandard } from "./standards";
 import { CELLO_TEXTURE, STYLES, type StyleDef } from "./styles";
 import type { BarPlan, Dynamic, Frame, Member, Motif, Role, Section, Texture } from "./types";
 
@@ -51,8 +52,43 @@ function textureFor(style: StyleDef, frame: Frame, bar: number, s: Section, isLa
   return "groove";
 }
 
+/**
+ * Where each bar sits in the tune: a section letter and the bar's offset in it. Standards
+ * use their form (A A B A); a free chart's head and out head are the same "tune".
+ */
+function tunePlace(frame: Frame, bar: number): { letter: string; offset: number } | null {
+  const s = sectionAt(frame, bar);
+  if (s.kind !== "head" && s.kind !== "out") return null;
+  const std = getStandard(frame.standard);
+  if (!std) return { letter: "tune", offset: bar - s.start };
+  const formLen = std.bars.length;
+  let pos = bar % formLen;
+  for (const [letter, len] of std.form) {
+    if (pos < len) return { letter, offset: pos };
+    pos -= len;
+  }
+  return null;
+}
+
+/**
+ * The earlier bar whose melody this lead bar repeats: same letter, same place in it, same
+ * chord at the top of the bar. That's how a tune comes back — the second A, the out head.
+ */
+export function melodySource(frame: Frame, bar: number): number | null {
+  const here = tunePlace(frame, bar);
+  if (!here) return null;
+  for (let b = 0; b < bar; b++) {
+    const there = tunePlace(frame, b);
+    if (!there || there.letter !== here.letter || there.offset !== here.offset) continue;
+    if (frame.chords[b][0].symbol !== frame.chords[bar][0].symbol) continue;
+    if (frame.slots[b]?.[frame.leaderId] !== "lead") continue;
+    return b;
+  }
+  return null;
+}
+
 /** Lead directives across a head of `len` bars for a motif of `motifBars` bars. */
-export function headLine(style: StyleDef, len: number, motifBars: number, rng: Rng, out = false): string[] {
+export function headLine(style: StyleDef, len: number, motifBars: number, rng: Rng, out = false, blues = false): string[] {
   const res: string[] = [];
   const answer = rng.pick(["@motif up 2", "@motif up 3", "@motif down 1", "@motif invert"]);
   for (let i = 0; i < len; i++) {
@@ -82,6 +118,8 @@ export function headLine(style: StyleDef, len: number, motifBars: number, rng: R
         : ["@motif rhythm", "@motif up 4", "@motif frag 3", "@line long"];
     res.push(cycle[inPhrase]);
   }
+  // a blues head is A A B: the first line again over the IV chord, then the answer
+  if (blues && len >= 12) for (let i = 4; i < 8; i++) res[i] = res[i - 4];
   return res;
 }
 
@@ -103,8 +141,9 @@ export function planLocal(frame: Frame, members: Member[], motif: Motif, rng: Rn
 
   // per-section lead lines
   const leadLines = new Map<Section, string[]>();
+  const blues = !!getStandard(frame.standard)?.form.some(([letter]) => letter === "Blues");
   for (const s of frame.sections) {
-    if (s.kind === "head" || s.kind === "out") leadLines.set(s, headLine(style, s.length, motifBars, rng.fork(s.start), s.kind === "out"));
+    if (s.kind === "head" || s.kind === "out") leadLines.set(s, headLine(style, s.length, motifBars, rng.fork(s.start), s.kind === "out", blues));
   }
 
   for (let bar = 0; bar < frame.bars; bar++) {
@@ -128,7 +167,8 @@ export function planLocal(frame: Frame, members: Member[], motif: Motif, rng: Rn
       }
       if (slot === "lead") {
         roles[m.id] = "lead";
-        directives[m.id] = leadLines.get(s)?.[inSec] ?? "@motif";
+        const src = melodySource(frame, bar);
+        directives[m.id] = src !== null ? `@head ${src + 1}` : (leadLines.get(s)?.[inSec] ?? "@motif");
         continue;
       }
       if (slot === "solo") {

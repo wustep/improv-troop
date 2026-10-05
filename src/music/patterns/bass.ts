@@ -1,5 +1,5 @@
-import { chordAt, chordSpans, velFor, type BarCtx } from "../context";
-import { chordPcs, diatonicIndex, fold, mod, nearestPc, scaleStep, scalePcs, pcOf, type Chord } from "../theory";
+import { chordAt, chordSpans, harmAt, velFor, type BarCtx } from "../context";
+import { diatonicIndex, fold, mod, nearestPc, scaleStep, pcOf, type Chord } from "../theory";
 import { hashString } from "../rng";
 import type { NoteEvent } from "../types";
 import { bassNote } from "./voicing";
@@ -18,12 +18,17 @@ function root(ctx: BarCtx, c: Chord, near: number | null): number {
   return bassNote(c, lo, hi, target);
 }
 
-function approach(ctx: BarCtx, from: number, target: number): number {
+function approach(ctx: BarCtx, from: number, target: number, nextScale: number[]): number {
   const r = ctx.rng.next();
-  if (r < 0.45) return target + (from > target ? 1 : -1); // chromatic from the side we're coming from
-  if (r < 0.7) return target + (ctx.rng.chance(0.5) ? 1 : -1);
-  if (r < 0.9) return target + 7 > range(ctx)[1] ? target - 5 : target + 7; // fifth above/below
-  return scaleStep(target, from > target ? 1 : -1, scalePcs(ctx.next));
+  let p: number;
+  if (r < 0.45) p = target + (from > target ? 1 : -1); // chromatic from the side we're coming from
+  else if (r < 0.7) p = target + (ctx.rng.chance(0.5) ? 1 : -1);
+  else if (r < 0.9) p = target + 7 > range(ctx)[1] ? target - 5 : target + 7; // fifth above/below
+  else p = scaleStep(target, from > target ? 1 : -1, nextScale);
+  // never sit on the note we're already on: that stalls the walk
+  if (p === from) p = target + (from > target ? 1 : -1);
+  if (p === from) p = target - (from > target ? 1 : -1);
+  return p;
 }
 
 /** Swing walking bass: chord tone on 1, scale/chord motion, approach note into the next chord. */
@@ -38,6 +43,7 @@ export function walk(ctx: BarCtx): NoteEvent[] {
     const lastBeatBeforeChange =
       b === ctx.beats - 1 || ctx.chords.some((x) => Math.abs(x.beat - (b + 1)) < 1e-6);
     let p: number;
+    const hm = harmAt(ctx, b);
     if (changeHere) {
       p = root(ctx, c, prev);
       if (b === 0 && !ctx.firstBar && ctx.prev.symbol === c.symbol && ctx.rng.chance(0.35)) {
@@ -45,14 +51,13 @@ export function walk(ctx: BarCtx): NoteEvent[] {
         p = nearestPc(mod(c.root + (ctx.rng.chance(0.5) ? c.tones[1] : c.tones[2]), 12), prev);
       }
     } else if (lastBeatBeforeChange) {
-      const nextChord = b === ctx.beats - 1 ? ctx.next : chordAt(ctx, b + 1);
-      const target = root(ctx, nextChord, prev);
-      p = approach(ctx, prev, target);
+      const nh = ctx.harmony.at(ctx.start + b + 1);
+      const target = root(ctx, nh.chord, prev);
+      p = approach(ctx, prev, target, nh.scale);
     } else {
-      const tones = chordPcs(c);
       const dir = prev > (lo + hi) / 2 + 5 ? -1 : prev < lo + 5 ? 1 : ctx.mem.direction;
-      p = ctx.rng.chance(0.55) ? scaleStep(prev, dir, scalePcs(c)) : nearestPc(ctx.rng.pick(tones), prev + dir * 3);
-      if (p === prev) p = scaleStep(prev, dir, scalePcs(c));
+      p = ctx.rng.chance(0.55) ? scaleStep(prev, dir, hm.scale) : nearestPc(ctx.rng.pick(hm.tones), prev + dir * 3);
+      if (p === prev) p = scaleStep(prev, dir, hm.scale);
       ctx.mem.direction = dir as 1 | -1;
     }
     p = fold(p, lo, hi);
@@ -85,8 +90,9 @@ export function two(ctx: BarCtx): NoteEvent[] {
     const pickup = b + half === ctx.beats && ctx.rng.chance(ctx.style.id === "neworleans" ? 0.55 : 0.3);
     out.push({ pitch: p, start: b, dur: pickup ? half - 0.5 : half, vel });
     if (pickup) {
-      const target = root(ctx, ctx.next, p);
-      out.push({ pitch: fold(approach(ctx, p, target), lo, hi), start: ctx.beats - 0.5, dur: 0.5, vel: vel * 0.8 });
+      const nh = ctx.harmony.at(ctx.start + ctx.beats);
+      const target = root(ctx, nh.chord, p);
+      out.push({ pitch: fold(approach(ctx, p, target, nh.scale), lo, hi), start: ctx.beats - 0.5, dur: 0.5, vel: vel * 0.8 });
     }
     prev = p;
   }
@@ -202,7 +208,7 @@ export function baroque(ctx: BarCtx): NoteEvent[] {
     let start = root(ctx, s.chord, p);
     if (ctx.rng.chance(0.2) && steps >= 4) start = fold(nearestPc(mod(s.chord.root + s.chord.tones[1], 12), start), lo, hi);
     const goal = root(ctx, nextChord, start);
-    const pcs = scalePcs(s.chord);
+    const pcs = harmAt(ctx, s.start).scale;
     // go the way that reaches the goal; if it's the same note, take a scenic arch
     let dir: 1 | -1 = goal > start ? 1 : goal < start ? -1 : start > (lo + hi) / 2 ? -1 : 1;
     p = start;

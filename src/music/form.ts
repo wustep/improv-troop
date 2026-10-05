@@ -63,6 +63,12 @@ function dominantOf(settings: TroopSettings): string {
   return `${names[mod(pc, 12)]}7`;
 }
 
+/** Head and out-head lengths for a free (non-standard) chart. */
+function freeForm(total: number): { head: number; out: number } {
+  if (total <= 8) return { head: 4, out: 0 };
+  return { head: total >= 24 ? 8 : 4, out: total >= 12 ? (total >= 24 ? 8 : 4) : 0 };
+}
+
 interface SoloPlan {
   start: number;
   length: number;
@@ -112,15 +118,26 @@ export function buildFrame(settings: TroopSettings, members: Member[]): Frame {
     }
   } else {
     const prog = rng.pick(style.progressions[settings.key.mode]);
-    const romanBars = Array.from({ length: total }, (_, i) => prog[i % prog.length]);
-    barTexts = romanBars.map((bar) =>
+    const toText = (bar: string) =>
       bar
         .split(/\s+/)
         .map((tok) => romanToChord(tok, settings.key))
-        .join(" "),
-    );
-    // cadence: dominant then tonic at the very end
-    if (total >= 4) barTexts[total - 2] = dominantOf(settings);
+        .join(" ");
+    barTexts = Array.from({ length: total }, (_, i) => toText(prog[i % prog.length]));
+    const { head, out } = freeForm(total);
+    if (out > 0) {
+      const outStart = total - out;
+      // the out head is the head again: the same changes under the same melody,
+      // and the bar before it turns the progression around into the top
+      for (let i = 0; i < out; i++) barTexts[outStart + i] = barTexts[i];
+      if (outStart - 1 >= head) barTexts[outStart - 1] = toText(prog[prog.length - 1]);
+    }
+    // cadence: the dominant into the tonic at the very end (keeping the bar's own first chord)
+    if (total >= 4) {
+      const first = barTexts[total - 2].split(/\s+/)[0];
+      const v7 = dominantOf(settings);
+      barTexts[total - 2] = first === v7 ? v7 : `${first} ${v7}`;
+    }
     barTexts[total - 1] = tonicChord(settings);
   }
   const chords = barTexts.map((t) => splitBar(t, beats));
@@ -195,12 +212,7 @@ export function buildFrame(settings: TroopSettings, members: Member[]): Frame {
       sections.push({ name: choruses >= 3 ? "Out Head" : "Out", kind: "out", start: total - out, length: out, featured: [leaderId] });
     }
   } else {
-    let head = total >= 24 ? 8 : 4;
-    let out = total >= 12 ? (total >= 24 ? 8 : 4) : 0;
-    if (total <= 8) {
-      head = 4;
-      out = 0;
-    }
+    const { head, out } = freeForm(total);
     const soloLen = total - head - out;
     sections.push({ name: "Head", kind: "head", start: 0, length: head, featured: [leaderId] });
     if (soloLen > 0) pushSolos(head, soloLen);

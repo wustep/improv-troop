@@ -18,6 +18,7 @@ import {
   CRITIC_SYSTEM,
   DIRECTOR_SYSTEM,
   GRAMMAR,
+  harmonyBlock,
   motifBlock,
   NOTES_ONLY,
   personaSystem,
@@ -99,11 +100,13 @@ function partsPrompt(member: Member, bars: number[], plan: BarPlan[], frame: Ret
     `YOUR FEATURED BARS (${inst.name}):`,
     ...rows,
     "",
+    harmonyBlock(frame, plan, bars),
+    "",
     sketch,
     "",
     NOTES_ONLY,
     inst.breath ? `You play a wind instrument: leave short rests to breathe at least every ${inst.breath} beats.` : "",
-    `Write every one of these bars note by note. Solos are transforms of the motif: start from it (inverted, sequenced, displaced, fragmented), develop it, build toward the end of your feature, and land phrases on chord tones. A head restates the motif recognizably. Keep inside your range and the style's texture.`,
+    `Write every one of these bars note by note. Solos are transforms of the motif: start from it (inverted, sequenced, displaced, fragmented), develop it, build toward the end of your feature. Think in phrases that cross bar lines: a pickup, a direction (climb, fall, arch), a landing on a chord tone on a strong beat, a breath. A head restates the motif recognizably. Keep inside your range, on the beat grid, and in the style's texture.`,
     `Reply: {"bars": {${bars.map((b) => `"${b + 1}": "..."`).join(", ")}}}`,
   ]
     .filter(Boolean)
@@ -245,7 +248,8 @@ export async function runComposer(settings: TroopSettings, members: Member[], ho
   for (const bp of plan) {
     for (const m of members) {
       if (m.instrument === "drums") continue;
-      if (isFeaturedRole(bp.roles[m.id]) && bp.index !== frame.bars - 1) {
+      // the tune coming back (@head) replays what was written for the head: nothing to write
+      if (isFeaturedRole(bp.roles[m.id]) && bp.index !== frame.bars - 1 && !bp.directives?.[m.id]?.startsWith("@head")) {
         if (!featured.has(m.id)) featured.set(m.id, []);
         featured.get(m.id)!.push(bp.index);
       }

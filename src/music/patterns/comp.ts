@@ -1,6 +1,7 @@
-import { chordAt, chordSpans, velFor, type BarCtx } from "../context";
+import { chordAt, chordSpans, harmAt, velFor, type BarCtx } from "../context";
+import type { Harm } from "../harmony";
 import { hashString } from "../rng";
-import { chordPcs, fold, guideTonePcs, mod, nearestPc, pitchesIn, type Chord } from "../theory";
+import { fold, mod, nearestPc, pitchesIn } from "../theory";
 import type { NoteEvent } from "../types";
 import { strideBass } from "./bass";
 import { bassNote, voiceChord, type VoicingFamily } from "./voicing";
@@ -25,11 +26,32 @@ function family(ctx: BarCtx): VoicingFamily {
   return ctx.style.voicing;
 }
 
-function voice(ctx: BarCtx, c: Chord, fam = family(ctx)): number[] {
-  const [lo, hi] = compRange(ctx);
-  const v = voiceChord(c, fam, lo, hi, ctx.mem.lastVoicing);
+/**
+ * Where to voice a chord: the instrument's comping range, kept under the melody that's
+ * sounding around `pos` (a pianist voices below the tune, not on top of it).
+ */
+function voiceRange(ctx: BarCtx, pos?: number): [number, number] {
+  let [lo, hi] = compRange(ctx);
+  if (!ctx.featured.length || ctx.role === "solo" || ctx.role === "lead") return [lo, hi];
+  const near = pos === undefined ? ctx.featured : ctx.featured.filter((n) => n.start + n.dur > pos - 0.25 && n.start < pos + 1.5);
+  const tune = near.length ? near : ctx.featured;
+  const low = Math.min(...tune.map((n) => n.pitch));
+  if (low - 1 < 55) return [lo, hi]; // a low solo: stay put rather than comp in the basement
+  hi = Math.min(hi, low - 1);
+  lo = Math.max(43, Math.min(lo, hi - 15));
+  return [lo, hi];
+}
+
+function voice(ctx: BarCtx, h: Harm, fam = family(ctx), pos?: number): number[] {
+  const [lo, hi] = voiceRange(ctx, pos);
+  const v = voiceChord(h.chord, fam, lo, hi, ctx.mem.lastVoicing, h);
   ctx.mem.lastVoicing = v;
   return v;
+}
+
+/** The harmony a hit belongs to (an anticipation belongs to the next bar's chord). */
+function harmOf(ctx: BarCtx, pos: number, next?: boolean): Harm {
+  return next ? ctx.harmony.at(ctx.start + ctx.beats) : harmAt(ctx, pos);
 }
 
 function chordHit(pitches: number[], start: number, dur: number, vel: number, art?: NoteEvent["art"]): NoteEvent[] {
@@ -108,8 +130,7 @@ function playHits(ctx: BarCtx, hits: Hit[], fam?: VoicingFamily, art?: NoteEvent
   const vel = velFor(ctx, ctx.style.id === "funk" ? 0.7 : 0.6);
   for (const h of hits) {
     if (h.pos >= ctx.beats) continue;
-    const c = h.next ? ctx.next : chordAt(ctx, h.pos);
-    const v = voice(ctx, c, fam);
+    const v = voice(ctx, harmOf(ctx, h.pos, h.next), fam, h.pos);
     const dur = Math.min(h.dur, ctx.beats - h.pos);
     out.push(...chordHit(v, h.pos, dur, vel * (h.pos % 1 === 0.5 ? 1.05 : 1), art));
     if (h.pos === 0 || ctx.chords.some((x) => x.beat === h.pos)) out.push(...leftHand(ctx, h.pos, Math.max(dur, 1), vel));
@@ -136,19 +157,38 @@ function listen(ctx: BarCtx, cell: Hit[]): Hit[] {
   return out.filter((h, i, a) => h.pos < ctx.beats && a.findIndex((x) => x.pos === h.pos) === i).sort((a, b) => a.pos - b.pos);
 }
 
+/**
+ * A second chordal player doesn't double the first: lighter shells, fewer hits, placed where
+ * the first comper isn't (vibes over piano, guitar with keys).
+ */
+function secondComper(ctx: BarCtx, hits: Hit[]): Hit[] {
+  if (ctx.peerIndex < 1 || hits.length <= 1) return hits;
+  return hits.filter((_, i) => (i + ctx.bar + ctx.peerIndex) % 2 === 1);
+}
+
 /** Style-aware comping. Args: "sparse", "busy". */
 export function comp(ctx: BarCtx): NoteEvent[] {
+  if (ctx.peerIndex >= 1 && !["minimal", "baroque", "ambient", "neworleans"].includes(ctx.style.id)) {
+    // the second comper: lighter and fewer, in the spaces of the first
+    return compCore(ctx, true).map((n) => ({ ...n, vel: n.vel * 0.85 }));
+  }
+  return compCore(ctx, false);
+}
+
+function compCore(ctx: BarCtx, second: boolean): NoteEvent[] {
   const sparse = ctx.args.includes("sparse") || ctx.texture === "sparse";
   const busy = ctx.args.includes("busy") || ctx.texture === "peak";
-  const pickCell = <T,>(cells: T[]) => cells[hashString(`${ctx.seed}:${ctx.member.id}:${ctx.bar}`) % cells.length];
+  // the second comper takes a different cell than the first
+  const pickCell = <T,>(cells: T[]) => cells[(hashString(`${ctx.seed}:${ctx.member.id}:${ctx.bar}`) + (second ? 1 : 0)) % cells.length];
+  const play = (hits: Hit[], fam?: VoicingFamily, art?: NoteEvent["art"]) => playHits(ctx, second ? secondComper(ctx, hits) : hits, second ? "shell" : fam, art);
 
   switch (ctx.style.id) {
     case "bossa":
-      return playHits(ctx, ctx.beats === 3 ? [{ pos: 0, dur: 1 }, { pos: 1.5, dur: 1 }] : BOSSA_BARS[ctx.bar % 2]);
+      return play(ctx.beats === 3 ? [{ pos: 0, dur: 1 }, { pos: 1.5, dur: 1 }] : BOSSA_BARS[(ctx.bar + (second ? 1 : 0)) % 2]);
     case "funk": {
       const cell = pickCell(FUNK_CELLS);
       const hits = sparse ? cell.slice(0, 2) : cell;
-      return playHits(ctx, hits, "shell", "staccato");
+      return play(hits, "shell", "staccato");
     }
     case "neworleans":
       return stride(ctx);
@@ -161,7 +201,7 @@ export function comp(ctx: BarCtx): NoteEvent[] {
     case "swing":
     default: {
       if (ctx.beats === 3) {
-        return playHits(ctx, sparse ? [{ pos: 1, dur: 0.5 }] : [{ pos: 1, dur: 0.5 }, { pos: 2, dur: 0.5 }]);
+        return play(sparse ? [{ pos: 1, dur: 0.5 }] : [{ pos: 1, dur: 0.5 }, { pos: 2, dur: 0.5 }]);
       }
       let cell = pickCell(SWING_CELLS);
       if (sparse && cell.length > 1 && ctx.rng.chance(0.5)) cell = [cell[0]];
@@ -171,7 +211,7 @@ export function comp(ctx: BarCtx): NoteEvent[] {
       if (ctx.chords.length > 1 && !cell.some((h) => h.pos >= ctx.chords[1].beat - 0.5 && h.pos < ctx.beats)) {
         cell = [...cell, { pos: ctx.chords[1].beat, dur: 0.5 }];
       }
-      return playHits(ctx, cell);
+      return play(cell);
     }
   }
 }
@@ -205,9 +245,10 @@ export function pizz(ctx: BarCtx): NoteEvent[] {
   let prev = ctx.mem.lastVoicing;
   for (const h of hits) {
     if (h.pos >= ctx.beats) continue;
-    const c = h.next ? ctx.next : chordAt(ctx, h.pos);
+    const hm = harmOf(ctx, h.pos, h.next);
+    const c = hm.chord;
     // guide-tone double-stop voice-led from the last one; root + fifth on downbeats now and then
-    const g = guideTonePcs(c);
+    const g = hm.guides;
     const center = prev?.length ? prev[0] : 52;
     let pair = [nearestPc(g[0], center), 0];
     pair[1] = nearestPc(g[1], pair[0] + 5);
@@ -235,27 +276,41 @@ export function stride(ctx: BarCtx): NoteEvent[] {
   out.push(...bassPart);
   const offs = ctx.beats === 3 ? [1, 2] : [1, 3];
   for (const b of offs) {
-    const c = chordAt(ctx, b);
-    const [lo, hi] = compRange(ctx);
-    const v = voiceChord(c, "triad", Math.max(lo, 55), hi, ctx.mem.lastVoicing);
+    const hm = harmAt(ctx, b);
+    const [lo, hi] = voiceRange(ctx, b);
+    const v = voiceChord(hm.chord, "triad", Math.max(Math.min(lo + 5, hi - 11), 48), hi, ctx.mem.lastVoicing, hm);
     ctx.mem.lastVoicing = v;
     out.push(...chordHit(v, b, 0.5, vel, "staccato"));
   }
   return out;
 }
 
-/** Minimalist broken-chord ostinato in 8ths; the cell changes one note at a time. */
+/**
+ * Minimalist ostinato; the cell changes one note at a time (additive process). Players
+ * sharing it interlock instead of doubling: the first plays broken-chord 8ths in the
+ * middle, the second a 3-note cell on the offbeats up high (it phases against the bar),
+ * the third a 3+3+2 pulse underneath. Horns and strings rock between two chord tones.
+ */
 export function arp(ctx: BarCtx): NoteEvent[] {
   const out: NoteEvent[] = [];
   const vel = velFor(ctx, 0.55);
-  const steps = ctx.beats * 2;
-  const [lo, hi] = compRange(ctx);
+  const melodic = ctx.inst.fn === "melodic";
+  const variant = melodic ? 3 : ctx.peerIndex % 3;
+  const regs: [number, number][] = [[55, 79], [64, 86], [45, 67], [ctx.inst.sweet[0] + 3, ctx.inst.sweet[1] - 3]];
+  let [lo, hi] = regs[variant];
+  lo = Math.max(lo, ctx.inst.range[0]);
+  hi = Math.min(hi, ctx.inst.range[1]);
+  // the ostinato is planned under the tune, so nothing has to be pulled out of it later
+  if (ctx.featured.length && ctx.role !== "lead" && ctx.role !== "solo") {
+    const tune = Math.min(...ctx.featured.map((n) => n.pitch));
+    if (tune - 1 >= ctx.inst.range[0] + 12) hi = Math.min(hi, tune - 1);
+  }
+  if (hi - lo < 14) lo = Math.max(ctx.inst.range[0], hi - 14);
+  const cells = [[0, 1, 2, 1, 0, 1, 2, 3], [2, 0, 1], [0, 2, 1], [0, 1]];
   if (!ctx.mem.arpCell) {
-    const base = [0, 1, 2, 1, 0, 1, 2, 3];
-    ctx.mem.arpCell = base.slice(0, steps);
+    ctx.mem.arpCell = cells[variant].slice(0, variant === 0 ? ctx.beats * 2 : undefined);
     ctx.mem.arpChangedAt = ctx.bar;
   } else if (ctx.bar - ctx.mem.arpChangedAt >= 2) {
-    // additive process: change one cell index
     const cell = [...ctx.mem.arpCell];
     const i = ctx.rng.int(0, cell.length - 1);
     cell[i] = (cell[i] + ctx.rng.pick([1, 2, 3])) % 4;
@@ -263,15 +318,21 @@ export function arp(ctx: BarCtx): NoteEvent[] {
     ctx.mem.arpChangedAt = ctx.bar;
   }
   const cell = ctx.mem.arpCell;
-  for (let i = 0; i < steps; i++) {
-    const t = i / 2;
-    const c = chordAt(ctx, t);
-    const v = voiceChord(c, "triad", Math.max(lo, 55), Math.min(hi + 5, 84), ctx.mem.lastVoicing);
-    const tones = [...v, v[0] + 12];
-    const p = tones[cell[i % cell.length] % tones.length];
-    out.push({ pitch: p, start: t, dur: 0.5, vel: vel * (i % 2 === 0 ? 1 : 0.85) });
-    if (i === 0) ctx.mem.lastVoicing = v;
-  }
+  const eighths = Array.from({ length: ctx.beats * 2 }, (_, i) => i / 2);
+  const grid =
+    variant === 0 ? eighths : variant === 1 ? eighths.filter((t) => t % 1 !== 0 || t > 0) : variant === 2 ? (ctx.beats === 4 ? [0, 1.5, 3] : [0, 1.5]) : Array.from({ length: ctx.beats }, (_, i) => i);
+  grid.forEach((t, gi) => {
+    const hm = harmAt(ctx, t);
+    const v = voiceChord(hm.chord, "triad", lo, hi, ctx.mem.lastVoicing, hm);
+    const tones = v[0] + 12 <= hi + 5 ? [...v, v[0] + 12] : v;
+    // the cell keeps cycling across bar lines, so a 3-note cell phases against the bar
+    const k = variant === 1 ? Math.round((ctx.start + t) * 2) : gi;
+    const p = tones[cell[k % cell.length] % tones.length];
+    const nextT = grid[gi + 1] ?? ctx.beats;
+    const dur = variant === 0 || variant === 1 ? 0.5 : nextT - t;
+    out.push({ pitch: p, start: t, dur, vel: vel * (variant === 1 ? 0.85 : 1) * (t % 1 === 0 ? 1 : 0.88), art: variant >= 2 ? "legato" : undefined });
+    if (gi === 0) ctx.mem.lastVoicing = v;
+  });
   out.push(...leftHand(ctx, 0, ctx.beats, vel));
   return out;
 }
@@ -282,9 +343,10 @@ export function prelude(ctx: BarCtx): NoteEvent[] {
   const vel = velFor(ctx, 0.55);
   const groupLen = ctx.beats === 3 ? 1 : 2;
   for (let g = 0; g < ctx.beats; g += groupLen) {
-    const c = chordAt(ctx, g);
+    const hm = harmAt(ctx, g);
+    const c = hm.chord;
     const bass = ctx.inst.id === "piano" ? bassNote(c, 43, 55, ctx.mem.lastPitch) : null;
-    const v = voiceChord(c, "triad", 60, 79, ctx.mem.lastVoicing);
+    const v = voiceChord(c, "triad", 60, 79, ctx.mem.lastVoicing, hm);
     ctx.mem.lastVoicing = v;
     if (bass !== null) {
       out.push({ pitch: bass, start: g, dur: groupLen, vel: vel * 0.95 });
@@ -307,8 +369,7 @@ export function continuo(ctx: BarCtx): NoteEvent[] {
   const vel = velFor(ctx, 0.55);
   const step = ctx.beats === 3 ? 1 : 2;
   for (let b = 0; b < ctx.beats; b += step) {
-    const c = chordAt(ctx, b);
-    const v = voice(ctx, c, "triad");
+    const v = voice(ctx, harmAt(ctx, b), "triad", b);
     out.push(...chordHit(v, b, step, vel));
     out.push(...leftHand(ctx, b, step, vel));
   }
@@ -320,8 +381,10 @@ export function pad(ctx: BarCtx): NoteEvent[] {
   const out: NoteEvent[] = [];
   const vel = velFor(ctx, 0.45);
   for (const s of chordSpans(ctx)) {
-    const v = voice(ctx, s.chord, ctx.style.voicing === "rootless" ? "open" : ctx.style.voicing);
-    out.push(...chordHit(v, s.start, s.end - s.start, vel, "legato"));
+    // a second chordal pad thins to a shell instead of doubling the first player's voicing
+    const fam = ctx.peerIndex >= 1 ? "shell" : ctx.style.voicing === "rootless" ? "open" : ctx.style.voicing;
+    const v = voice(ctx, harmAt(ctx, s.start), fam, s.start);
+    out.push(...chordHit(v, s.start, s.end - s.start, vel * (ctx.peerIndex >= 1 ? 0.8 : 1), "legato"));
     if (!ctx.hasBass && ctx.inst.id === "piano") out.push(...leftHand(ctx, s.start, s.end - s.start, vel));
   }
   return out;
@@ -331,9 +394,15 @@ export function pad(ctx: BarCtx): NoteEvent[] {
 export function shimmer(ctx: BarCtx): NoteEvent[] {
   const out: NoteEvent[] = [];
   const vel = velFor(ctx, 0.42);
-  const c = chordAt(ctx, 0);
-  const pcs = [...chordPcs(c), ...c.tensions.map((t) => mod(c.root + t, 12)), mod(c.root + 14, 12)];
-  const pool = pitchesIn(pcs, 67, 88);
+  const hm = harmAt(ctx, 0);
+  const c = hm.chord;
+  // bells ring high, but under the tune when someone is carrying it
+  let [blo, bhi] = [67, 88];
+  if (ctx.featured.length) {
+    const tune = Math.min(...ctx.featured.map((n) => n.pitch));
+    if (tune - 1 >= 62) [blo, bhi] = [Math.max(55, tune - 19), tune - 1];
+  }
+  const pool = pitchesIn(hm.stable, blo, bhi);
   const count = ctx.rng.int(1, ctx.energy > 0.6 ? 4 : 2);
   const slots = [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5].filter((x) => x < ctx.beats);
   const used = new Set<number>();
@@ -346,7 +415,7 @@ export function shimmer(ctx: BarCtx): NoteEvent[] {
   }
   // a soft low pad underneath
   if (ctx.inst.id === "piano") {
-    const v = voiceChord(c, "quartal", 50, 70, ctx.mem.lastVoicing);
+    const v = voiceChord(c, "quartal", 50, 70, ctx.mem.lastVoicing, hm);
     ctx.mem.lastVoicing = v;
     out.push(...chordHit(v, 0, ctx.beats, vel * 0.7, "legato"));
   }
@@ -366,10 +435,11 @@ export function hits(ctx: BarCtx): NoteEvent[] {
 
 /** Final chord, held through the bar. */
 export function endChord(ctx: BarCtx): NoteEvent[] {
-  const c = chordAt(ctx, 0);
+  const hm = harmAt(ctx, 0);
+  const c = hm.chord;
   const [lo, hi] = compRange(ctx);
   const fam = ctx.style.voicing === "rootless" ? "open" : ctx.style.voicing;
-  const v = voiceChord(c, fam, lo, hi, ctx.mem.lastVoicing);
+  const v = voiceChord(c, fam, lo, hi, ctx.mem.lastVoicing, hm);
   const vel = velFor(ctx, 0.7);
   const out = chordHit(v, 0, ctx.beats, vel, "legato");
   if (ctx.inst.id === "piano") {

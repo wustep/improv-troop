@@ -18,6 +18,7 @@ import {
   chartBlock,
   chatBlock,
   GRAMMAR,
+  harmonyBlock,
   motifBlock,
   NOTES_ONLY,
   personaSystem,
@@ -299,9 +300,9 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
       const last = frame.bars - 1;
       const sec = sectionAt(frame, bars[0]);
       const prevBars = pi > 0 ? phrases[pi - 1] : [];
-      const featuredIds = members
-        .filter((m) => bars.some((b) => b !== last && isFeaturedRole(plan[b].roles[m.id])))
-        .map((m) => m.id);
+      // bars where the tune comes back (@head) are the melody as already played: nobody rewrites them
+      const writes = (id: string, b: number) => b !== last && isFeaturedRole(plan[b].roles[id]) && !plan[b].directives?.[id]?.startsWith("@head");
+      const featuredIds = members.filter((m) => bars.some((b) => writes(m.id, b))).map((m) => m.id);
       step(`Bars ${bars[0] + 1}–${bars.at(-1)! + 1}: ${featuredIds.length ? `${featuredIds.map(nameOf).join(" & ")} ${sec.kind === "head" || sec.kind === "out" ? "on the head" : "stretching out"}` : "the band"}…`);
       const tPhrase = performance.now();
 
@@ -330,7 +331,7 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
       });
       const fCalls = featuredIds.map(async (id) => {
         const m = members.find((x) => x.id === id)!;
-        const myBars = bars.filter((b) => b !== last && isFeaturedRole(plan[b].roles[id]));
+        const myBars = bars.filter((b) => writes(id, b));
         try {
           const { text, call } = await callLLM({
             runId,
@@ -356,12 +357,14 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
               `YOUR BARS:`,
               describeBars(myBars, frame, plan, id),
               "",
+              m.instrument === "drums" ? "" : harmonyBlock(frame, plan, myBars),
+              "",
               m.instrument === "drums" ? "" : sketchBlock(m, myBars, preview.parts, frame),
               "",
               NOTES_ONLY,
               m.instrument === "drums"
                 ? "You're trading with the band: write each bar as a drum grid (lanes like sd:..x. t1:x... ft:...x bd:x...) built from the motif's rhythm, or use @solo."
-                : `${INSTRUMENTS[m.instrument].breath ? `Breathe: leave a rest at least every ${INSTRUMENTS[m.instrument].breath} beats. ` : ""}A head states the motif recognizably; a solo starts from a transform of it (inverted, sequenced, displaced, fragmented) and develops — answer what you just heard, build toward the end of your solo, land on chord tones. You may also use a directive ("@motif invert", "@line dense") for a bar.`,
+                : `${INSTRUMENTS[m.instrument].breath ? `Breathe: leave a rest at least every ${INSTRUMENTS[m.instrument].breath} beats. ` : ""}A head states the motif recognizably; a solo starts from a transform of it (inverted, sequenced, displaced, fragmented) and develops — answer what you just heard, build toward the end of your solo. Think in phrases, not bars: start a phrase on a pickup, give it a direction (climb, fall, arch), land it on a chord tone on a strong beat, then breathe. Keep rhythms on the beat grid (whole beats of 8ths, a full triplet, 16ths in funk). You may also use a directive ("@motif invert", "@line dense") for a bar.`,
               `Reply: ${REPLY_SHAPE(myBars)}`,
             ].join("\n"),
             temperature: 0.95,

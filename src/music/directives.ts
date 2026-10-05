@@ -1,5 +1,6 @@
-import { chordAt, chordSpans, velFor, type BarCtx } from "./context";
-import { chordPcs, keyPrefersFlats, mod, pitchName, scalePcs, snapToPcs } from "./theory";
+import { chordSpans, harmAt, velFor, type BarCtx } from "./context";
+import { holdable, nearestIn } from "./harmony";
+import { keyPrefersFlats, mod, pitchName } from "./theory";
 import { DRUM } from "./instruments";
 import { parseMotifOps, realizeMotifBar } from "./motif";
 import { looksLikeDrumGrid, parseDrumGrid, parseNotes } from "./notation";
@@ -17,6 +18,7 @@ export const DIRECTIVE_HELP = `Each bar of each player's part is ONE of:
 - drum grid (drums only): "rd:x...x.x.x...x.x. ph:....x.......x... sd:..g.......X..... bd:x.......x......." lanes bd sd hh oh ph rd cr t1 t2 ft rim sh tamb cb; x hit, X accent, g ghost, . rest; 16 steps = 16ths in 4/4 (12 in 3/4).
 - a directive the band's engine realizes in style:
   @motif [up N|down N|seq N|invert|retro|aug|dim|frag N|displace 0.5|ornament|rhythm] [bar2]  — the shared motif or a transform of it ("bar2" = 2nd bar of a 2-bar statement)
+  @head N  — play again exactly what the leader played in bar N (how a tune comes back: repeated A sections, the out head)
   @line [dense|sparse|run|long]  — improvise a line over the changes
   @walk @two @bossa @funk @baroque @pedal  — bass patterns
   @comp [sparse|busy] @stride @arp @prelude @continuo @pad @shimmer @hits  — chordal patterns
@@ -51,9 +53,10 @@ function pianoSoloLeftHand(ctx: BarCtx): NoteEvent[] {
 
 /**
  * Written notes (usually from a model) get one rehearsal pass: a held note (a dotted 8th
- * or longer) that clashes with the chord under it — outside the chord and its scale, or an
- * avoid note a half step above a chord tone held long — bends to the nearest chord tone
- * in the direction the line was moving. Passing tones and chromatic runs stay as written.
+ * or longer) that clashes with the chord under it — outside the chord and the colors this
+ * style can hold, like a major 7th over a dominant or the 4th held over a major chord —
+ * bends to the nearest chord tone in the direction the line was moving. Passing tones,
+ * chromatic runs and the blues #9 stay as written.
  */
 function rehearse(ctx: BarCtx, notes: NoteEvent[], issues: string[]): NoteEvent[] {
   if (ctx.inst.fn === "rhythm") return notes;
@@ -66,20 +69,14 @@ function rehearse(ctx: BarCtx, notes: NoteEvent[], issues: string[]): NoteEvent[
     const from = prev;
     prev = n.pitch;
     if (!held) return n;
-    const c = chordAt(ctx, n.start);
+    const h = harmAt(ctx, n.start);
     const pc = mod(n.pitch, 12);
-    const tones = chordPcs(c);
-    const tensions = c.tensions.map((t) => mod(c.root + t, 12));
-    // a held #9 over a dominant is the blues, not a mistake
-    const blue = c.quality === "dom" && pc === mod(c.root + 3, 12);
-    const inScale = scalePcs(c).includes(pc) || tensions.includes(pc) || blue;
-    const avoid = !tones.includes(pc) && !tensions.includes(pc) && tones.some((t) => mod(pc - t, 12) === 1) && n.dur >= 1.5;
-    if (tones.includes(pc) || (inScale && !avoid)) return n;
-    const dir = from === null ? -1 : Math.sign(n.pitch - from) || -1;
-    let q = n.pitch;
-    for (let i = 0; i < 3 && !tones.includes(mod(q, 12)); i++) q += dir;
-    const fixed = tones.includes(mod(q, 12)) ? q : snapToPcs(n.pitch, tones);
-    issues.push(`held ${pitchName(n.pitch, flats)} clashed with ${c.symbol}; played ${pitchName(fixed, flats)}`);
+    // a short-ish scale tone that isn't an avoid note is fine; anything held long must be holdable
+    const inScale = h.scale.includes(pc) && !h.avoid.includes(pc);
+    if (holdable(h, pc, ctx.style.id) || (inScale && n.dur < 1.5)) return n;
+    const dir = (from === null ? -1 : Math.sign(n.pitch - from) || -1) as 1 | -1;
+    const fixed = nearestIn(n.pitch, h.tones, dir);
+    issues.push(`held ${pitchName(n.pitch, flats)} clashed with ${h.chord.symbol}; played ${pitchName(fixed, flats)}`);
     prev = fixed;
     return { ...n, pitch: fixed };
   });
@@ -161,6 +158,19 @@ function realizeRaw(ctx: BarCtx, text: string): DirectiveResult {
   }
 
   switch (name) {
+    case "head": {
+      // the tune comes back: replay the leader's notes from that bar
+      const src = parseInt(args[0] ?? "", 10) - 1;
+      const played = Number.isFinite(src) && src >= 0 && src < ctx.bar ? ctx.playedIn(src) : null;
+      if (played?.length) {
+        const notes = played.map((n) => ({ ...n }));
+        ctx.mem.lastPitch = notes[notes.length - 1].pitch;
+        ctx.mem.phrase = null;
+        return done(notes);
+      }
+      issues.push(`@head ${args[0] ?? ""}: nothing to replay; stating the motif`);
+      return done(realizeMotifBar(c, []));
+    }
     case "motif": {
       const bar2 = args.find((a) => /^bar\d$/i.test(a));
       const offset = bar2 ? parseInt(bar2.slice(3), 10) - 1 : 0;

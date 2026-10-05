@@ -1,11 +1,11 @@
-import { chordAt, type BarCtx } from "./context";
+import { harmAt, type BarCtx } from "./context";
+import { fitOctave, holdable, nearestIn } from "./harmony";
 import { notesToText, parseNotes, splitBars } from "./notation";
 import type { Rng } from "./rng";
 import type { StyleDef } from "./styles";
 import {
   chordPcs,
   diatonicIndex,
-  fold,
   fromDiatonicIndex,
   keyPrefersFlats,
   keyScale,
@@ -13,7 +13,6 @@ import {
   nearestPc,
   parseChord,
   pcOf,
-  scalePcs,
   snapToPcs,
 } from "./theory";
 import type { KeySig, Motif, MotifTransform, NoteEvent } from "./types";
@@ -248,50 +247,65 @@ export function transformMotif(motif: Motif, ops: MotifOp[], key: KeySig, rng: R
 
 /**
  * Realize a motif statement into one bar. `barOffset` selects which bar of a
- * multi-bar statement this is (0 = first bar). Strong-beat notes are nudged onto
- * the current chord so transforms stay consonant with the changes.
+ * multi-bar statement this is (0 = first bar). Every note is fitted to the harmony in
+ * context: anything held, on the downbeat, or ending the statement lands on a chord tone
+ * (or a color the style can hold); shorter notes stay in the chord's scale, moving in the
+ * direction the motif was moving so the contour survives.
  */
 export function realizeMotifBar(ctx: BarCtx, ops: MotifOp[], barOffset = 0): NoteEvent[] {
   const raw = transformMotif(ctx.motif, ops, ctx.key, ctx.rng, ctx.style);
   const lo = barOffset * ctx.beats;
   const hi = lo + ctx.beats;
   const shift = motifOctave(ctx, raw);
+  const inBar = raw.filter((n) => n.start >= lo - 1e-6 && n.start < hi - 1e-6);
   const out: NoteEvent[] = [];
-  const keyPcs = keyScale(ctx.key);
   let prevRaw: number | null = null;
   let prevOut: number | null = null;
-  for (const n of raw) {
-    if (n.start < lo - 1e-6 || n.start >= hi - 1e-6) continue;
+  inBar.forEach((n, i) => {
     const start = n.start - lo;
     let p = n.pitch + shift;
-    const chord = chordAt(ctx, start);
-    const cpcs = chordPcs(chord);
-    const spcs = scalePcs(chord);
+    const h = harmAt(ctx, start);
     const pc = mod(p, 12);
-    const downbeat = Math.abs(start - Math.round(start)) < 1e-6 && (ctx.beats === 3 || Math.round(start) % 2 === 0);
-    const tension = chord.tensions.some((t) => mod(chord.root + t, 12) === pc);
-    // an "avoid" note sits a half step above a chord tone
-    const avoid = !cpcs.includes(pc) && !tension && cpcs.some((t) => mod(pc - t, 12) === 1);
-    if (!spcs.includes(pc) && !keyPcs.includes(pc)) {
-      p = snapToPcs(p, spcs);
-    } else if ((downbeat && !spcs.includes(pc)) || (downbeat && avoid)) {
-      // resolve toward the motion of the original line so the contour survives
-      const dir = prevRaw === null ? -1 : Math.sign(n.pitch - prevRaw) || -1;
-      let q = p;
-      for (let i = 0; i < 4 && !cpcs.includes(mod(q, 12)); i++) q += dir;
-      p = cpcs.includes(mod(q, 12)) ? q : snapToPcs(p, cpcs);
+    const dir = (prevRaw === null ? 0 : Math.sign(n.pitch - prevRaw)) as 1 | -1 | 0;
+    const onBeat = Math.abs(start - Math.round(start)) < 1e-6;
+    const structural = n.dur >= 0.7 || Math.abs(start) < 1e-6 || (onBeat && n.dur >= 0.45) || i === inBar.length - 1;
+    if (structural && !holdable(h, pc, ctx.style.id)) {
+      p = nearestIn(p, h.stable, dir || -1);
+    } else if (!h.scale.includes(pc) && !h.blue.includes(pc)) {
+      // chromatic notes survive only as passing tones between two notes a whole step apart
+      const next = inBar[i + 1];
+      const passing = prevOut !== null && next && Math.abs(next.pitch + shift - prevOut) === 2 && Math.abs(p - prevOut) === 1 && n.dur <= 0.5;
+      if (!passing) p = nearestIn(p, h.scale, dir);
+    } else if (h.avoid.includes(pc) && n.dur >= 0.45) {
+      p = nearestIn(p, h.stable, dir || -1);
     }
     // keep repeated pitches only where the motif repeats
     if (prevOut !== null && p === prevOut && prevRaw !== null && n.pitch !== prevRaw) {
-      p = scaleStepAway(p, n.pitch - prevRaw, spcs);
+      p = scaleStepAway(p, n.pitch - prevRaw, structural ? h.stable : h.scale);
     }
-    p = fold(p, ctx.inst.range[0], ctx.inst.range[1]);
     out.push({ ...n, start, dur: Math.min(n.dur, ctx.beats - start), pitch: p });
     prevRaw = n.pitch;
     prevOut = p;
+  });
+  // a note or two just past the instrument's edge bends back onto the chord; a whole statement
+  // out of range moves by octaves (into the solo register for a featured player)
+  const [rlo, rhi] = ctx.inst.range;
+  const over = out.reduce((s, n) => s + Math.max(0, rlo - n.pitch) + Math.max(0, n.pitch - rhi), 0);
+  let fitted = out;
+  if (over > 0 && over <= 3) {
+    fitted = out.map((n) => {
+      if (n.pitch >= rlo && n.pitch <= rhi) return n;
+      const h = harmAt(ctx, n.start);
+      const edge = n.pitch < rlo ? rlo : rhi;
+      return { ...n, pitch: nearestIn(edge, h.stable, n.pitch < rlo ? 1 : -1, 4) };
+    });
+  } else if (over > 0) {
+    const featured = ctx.role === "solo" || ctx.role === "lead";
+    const [lo2, hi2] = featured ? (ctx.inst.solo ?? ctx.inst.sweet) : ctx.inst.range;
+    fitted = fitOctave(out, Math.max(rlo, lo2 - 3), Math.min(rhi, hi2 + 3), featured ? (lo2 + hi2) / 2 : ctx.mem.lastPitch);
   }
-  if (out.length) ctx.mem.lastPitch = out[out.length - 1].pitch;
-  return out;
+  if (fitted.length) ctx.mem.lastPitch = fitted[fitted.length - 1].pitch;
+  return fitted;
 }
 
 function scaleStepAway(p: number, interval: number, pcs: number[]): number {

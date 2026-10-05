@@ -1,199 +1,18 @@
-import { chordAt, chordSpans, velFor, type BarCtx } from "../context";
-import { parseCell, realizeMotifBar } from "../motif";
-import {
-  chordPcs,
-  diatonicIndex,
-  fold,
-  fromDiatonicIndex,
-  guideTonePcs,
-  mod,
-  nearestPc,
-  pcOf,
-  scalePcs,
-  SCALES,
-  scaleStep,
-  snapToPcs,
-  type Chord,
-} from "../theory";
+import { chordSpans, harmAt, velFor, type BarCtx } from "../context";
+import { fitOctave, holdable, nearestIn, stepIn, type Harm } from "../harmony";
+import { realizeMotifBar } from "../motif";
+import { fold, mod, nearestPc, parseChord } from "../theory";
 import type { NoteEvent } from "../types";
-
-function lineScale(ctx: BarCtx, c: Chord): number[] {
-  const root = c.root;
-  const at = (ints: readonly number[], r = root) => ints.map((i) => mod(r + i, 12));
-  switch (ctx.style.line.flavor) {
-    case "bebop":
-      if (c.quality === "dom") return at(SCALES.bebopDominant);
-      return scalePcs(c);
-    case "pentatonic": {
-      const minorish = c.quality === "min7" || c.quality === "min" || c.quality === "dom";
-      return minorish ? at(SCALES.minorPentatonic) : at(SCALES.majorPentatonic);
-    }
-    case "blues": {
-      const tonic = pcOf(ctx.key.tonic);
-      return ctx.key.mode === "minor" || ctx.rng.chance(0.5)
-        ? at(SCALES.blues, tonic)
-        : [...new Set([...at(SCALES.majorPentatonic, tonic), mod(tonic + 3, 12)])];
-    }
-    case "arpeggio":
-      return chordPcs(c);
-    case "lydian":
-      return c.quality === "maj7" || c.quality === "maj" || c.quality === "6" ? at(SCALES.lydian) : scalePcs(c);
-    case "diatonic":
-    default:
-      return scalePcs(c);
-  }
-}
-
-/** Assemble a rhythm for one bar from the style's cells, honouring breath and density. */
-function lineRhythm(ctx: BarCtx, density: number): { start: number; dur: number }[] {
-  const prior = ctx.style.line;
-  const out: { start: number; dur: number }[] = [];
-  let t = 0;
-  // phrase starts often sit off the beat
-  if (ctx.mem.sinceRest === 0 && ctx.rng.chance(prior.offbeatStarts)) t = ctx.style.line.density > 2.5 ? 0.25 : 0.5;
-  let guard = 0;
-  while (t < ctx.beats - 1e-6 && guard++ < 64) {
-    // breathe
-    const maxPhrase = ctx.rng.int(prior.phrase[0], prior.phrase[1]);
-    const breath = ctx.inst.breath ?? 99;
-    if (ctx.mem.sinceRest >= Math.min(maxPhrase, breath)) {
-      const rest = Math.min(ctx.beats - t, ctx.rng.pick([1, 1.5, 2]));
-      t += rest;
-      ctx.mem.sinceRest = 0;
-      continue;
-    }
-    const cell = parseCell(ctx.rng.pick(prior.cells));
-    // thin out at low density: turn some notes into rests
-    for (const c of cell) {
-      if (t >= ctx.beats - 1e-6) break;
-      const dur = Math.min(c.dur, ctx.beats - t);
-      const thin = density < prior.density && ctx.rng.chance(1 - density / prior.density);
-      if (!c.rest && !thin) out.push({ start: t, dur });
-      t += dur;
-      ctx.mem.sinceRest = c.rest ? 0 : ctx.mem.sinceRest + dur;
-    }
-  }
-  return out;
-}
-
-/** A short phrase that lands on a long note — for phrase and section endings. */
-function cadenceRhythm(ctx: BarCtx): { start: number; dur: number }[] {
-  const options =
-    ctx.beats === 3
-      ? [[1, 2], [0.5, 0.5, 2]]
-      : ctx.style.line.density > 2
-        ? [[0.5, 0.5, 1, 2], [0.5, 0.5, 0.5, 0.5, 2], [1.5, 0.5, 2]]
-        : [[1, 1, 2], [1.5, 0.5, 2], [2, 2]];
-  const durs = ctx.rng.pick(options);
-  const out: { start: number; dur: number }[] = [];
-  let t = 0;
-  for (const d of durs) {
-    out.push({ start: t, dur: d });
-    t += d;
-  }
-  ctx.mem.sinceRest = 0;
-  return out;
-}
+import { cadenceLine, phraseLine, runLine, type LineOpts } from "./phrase";
 
 /**
- * Improvised line: chord tones on strong beats, scale steps and chromatic
- * approaches between, momentum-driven contour, phrase breathing.
- * Args: dense | sparse | run | long | blues
+ * Improvised line. Args: dense | sparse | run | long.
+ * "long" is a cadence (lands on a held chord tone mid-bar); "run" is a scalar flourish.
  */
-export function line(ctx: BarCtx): NoteEvent[] {
-  const prior = ctx.style.line;
-  let density = prior.density * (0.6 + ctx.energy * 0.6);
-  if (ctx.args.includes("dense") || ctx.args.includes("run")) density *= 1.4;
-  if (ctx.args.includes("sparse") || ctx.args.includes("long")) density *= 0.55;
-  if (ctx.texture === "sparse") density *= 0.7;
-  if (ctx.texture === "peak") density *= 1.2;
-
-  const featured = ctx.role === "solo" || ctx.role === "lead";
-  let rhythm = ctx.args.includes("long") ? cadenceRhythm(ctx) : lineRhythm(ctx, density);
-  // "leave space" means a short answer, not a silent bar in the middle of a solo
-  if (featured && rhythm.length === 0) {
-    const cell = ctx.beats === 3 ? [{ start: 1, dur: 0.5 }, { start: 1.5, dur: 1.5 }] : [{ start: 1.5, dur: 0.5 }, { start: 2, dur: 0.5 }, { start: 2.5, dur: 1.5 }];
-    rhythm = cell;
-    ctx.mem.sinceRest = 0;
-  }
-  const [lo, hi] = featured ? (ctx.inst.solo ?? ctx.inst.sweet) : ctx.inst.sweet;
-  const out: NoteEvent[] = [];
-  let p = ctx.mem.lastPitch ?? Math.round((lo + hi) / 2);
-  // stepping into the spotlight from an accompaniment register: start where solos live
-  if (featured && (p < lo || p > hi)) p = Math.round(lo + (hi - lo) * 0.4);
-  const vel = velFor(ctx, 0.8);
-  // solos climb over their section
-  const arc = ctx.section.length > 1 ? ctx.barInSection / (ctx.section.length - 1) : 0.5;
-  const targetCenter = lo + (hi - lo) * (0.35 + 0.35 * arc);
-
-  for (let i = 0; i < rhythm.length; i++) {
-    const { start, dur } = rhythm[i];
-    const c = chordAt(ctx, start);
-    const pcs = lineScale(ctx, c);
-    const strong = Math.abs(start - Math.round(start)) < 1e-6 && (ctx.beats === 3 || Math.round(start) % 2 === 0 || prior.density < 2.5);
-    // momentum, re-aimed now and then toward the arc's center (which climbs through a solo)
-    const bias = Math.max(-0.45, Math.min(0.45, (targetCenter - p) / 10));
-    if (p > hi - 3) ctx.mem.direction = -1;
-    else if (p < lo + 3) ctx.mem.direction = 1;
-    else if (ctx.rng.chance(0.3)) ctx.mem.direction = ctx.rng.chance(0.5 + bias) ? 1 : -1;
-    const dir = ctx.mem.direction;
-
-    let next: number;
-    if (strong) {
-      const tones = chordPcs(c);
-      const favored = ctx.style.line.flavor === "bebop" ? guideTonePcs(c) : tones;
-      const pool = ctx.rng.chance(0.65) ? favored : tones;
-      next = nearestPc(ctx.rng.pick(pool), p + dir * 2);
-    } else if (ctx.rng.chance(prior.leap)) {
-      const steps = dir * ctx.rng.int(2, ctx.style.line.flavor === "arpeggio" ? 2 : 4);
-      next = fromDiatonicIndex(diatonicIndex(p, pcs) + steps, pcs);
-    } else {
-      next = fromDiatonicIndex(diatonicIndex(p, pcs) + dir, pcs);
-    }
-
-    // chromatic approach into the next strong-beat target
-    const nextNote = rhythm[i + 1];
-    if (nextNote && prior.chromatic > 0 && dur <= 0.5 && ctx.rng.chance(prior.chromatic)) {
-      const nextChord = chordAt(ctx, nextNote.start);
-      const target = nearestPc(ctx.rng.pick(guideTonePcs(nextChord)), next);
-      next = target + (ctx.rng.chance(0.5) ? 1 : -1);
-    }
-    if (next === p && ctx.style.id !== "funk" && ctx.style.id !== "minimal") next = fromDiatonicIndex(diatonicIndex(p, pcs) + dir, pcs);
-    // bounce off the edges of the register instead of sinking or squeaking — and land the
-    // bounced note back on the harmony (a mirrored interval can fall between the cracks)
-    if (next < lo || next > hi) {
-      next = next < lo ? p + (p - next) : p - (next - p);
-      next = snapToPcs(next, strong ? chordPcs(c) : pcs);
-    }
-    next = fold(next, Math.max(ctx.inst.range[0], lo - 2), Math.min(ctx.inst.range[1], hi + 2));
-
-    const lastOfPhrase = !nextNote || nextNote.start - (start + dur) > 0.4;
-    if (lastOfPhrase) next = snapToPcs(next, chordPcs(c)); // end phrases on chord tones
-    const staccato = ctx.rng.chance(prior.staccato);
-    out.push({
-      pitch: next,
-      start,
-      dur,
-      vel: vel * (start % 1 === 0.5 && ctx.style.swing > 0.55 ? 1.06 : 1) * (0.92 + ctx.rng.next() * 0.12),
-      art: staccato ? "staccato" : undefined,
-    });
-    p = next;
-  }
-  // Consonance guard: passing colours (bebop passing tones, blue notes) are for short,
-  // weak-beat notes. Anything held or on a strong beat sits in the chord or its scale.
-  for (let i = 0; i < out.length; i++) {
-    const n = out[i];
-    const strongBeat = Math.abs(n.start - Math.round(n.start)) < 1e-6;
-    if (!strongBeat && n.dur < 0.75) continue;
-    const c = chordAt(ctx, n.start);
-    const ok = new Set([...chordPcs(c), ...scalePcs(c), ...c.tensions.map((t) => mod(c.root + t, 12))]);
-    if (c.quality === "dom") ok.delete(mod(c.root + 11, 12)); // the bebop major 7th is only ever passing
-    if (ok.has(mod(n.pitch, 12))) continue;
-    out[i] = { ...n, pitch: snapToPcs(n.pitch, chordPcs(c)) };
-  }
-  if (out.length) p = out[out.length - 1].pitch;
-  ctx.mem.lastPitch = p;
-  return out;
+export function line(ctx: BarCtx, opts: LineOpts = {}): NoteEvent[] {
+  if (ctx.args.includes("long")) return cadenceLine(ctx, opts);
+  if (ctx.args.includes("run")) return runLine(ctx, opts);
+  return phraseLine(ctx, opts);
 }
 
 /** Solo bar: opens with a motif transform, then improvises. */
@@ -201,21 +20,37 @@ export function soloBar(ctx: BarCtx): NoteEvent[] {
   return line(ctx);
 }
 
+/**
+ * Pick the held tone for this player: the first takes the nearest guide tone, the others
+ * the other guide tone, then the 5th, a color, the root — so a section of pads spells the
+ * chord instead of doubling one note.
+ */
+function guideFor(ctx: BarCtx, h: Harm, prev: number): number {
+  if (ctx.peerCount <= 1 || ctx.peerIndex === 0) {
+    const opts = h.guides.map((pc) => nearestPc(pc, prev));
+    opts.sort((a, b) => Math.abs(a - prev) - Math.abs(b - prev));
+    return opts[0];
+  }
+  const fifth = h.tones.find((pc) => mod(pc - h.chord.root, 12) === 7 || mod(pc - h.chord.root, 12) === 6);
+  const ranked = [...new Set([...h.guides, ...(fifth !== undefined ? [fifth] : []), ...h.colors, h.chord.root])];
+  const first = h.guides.map((pc) => nearestPc(pc, prev)).sort((a, b) => Math.abs(a - prev) - Math.abs(b - prev))[0];
+  const pick = ranked.filter((pc) => pc !== mod(first, 12))[(ctx.peerIndex - 1) % Math.max(1, ranked.length - 1)];
+  return nearestPc(pick ?? h.guides[1] ?? h.chord.root, prev);
+}
+
 /** Guide-tone line: 3rds and 7ths, voice-led, one per chord. */
 export function guide(ctx: BarCtx): NoteEvent[] {
   const out: NoteEvent[] = [];
   const [lo, hi] = ctx.inst.sweet;
-  const center = lo + (hi - lo) * 0.4;
+  const center = lo + (hi - lo) * (0.4 - 0.12 * ctx.peerIndex);
   const vel = velFor(ctx, 0.55);
   for (const s of chordSpans(ctx)) {
+    const h = harmAt(ctx, s.start);
     const prev = ctx.mem.lastGuide ?? Math.round(center);
-    const options = guideTonePcs(s.chord).map((pc) => nearestPc(pc, prev));
-    let p = options.reduce((a, b) => (Math.abs(b - prev) < Math.abs(a - prev) ? b : a));
-    p = fold(p, lo, hi);
+    const p = fold(guideFor(ctx, h, prev), lo, hi);
     out.push({ pitch: p, start: s.start, dur: (s.end - s.start) * 0.95, vel, art: "legato" });
     ctx.mem.lastGuide = p;
   }
-  // stay out of the lead's way: if the lead is busy in this register, drop an octave
   return avoidLead(ctx, out);
 }
 
@@ -225,44 +60,71 @@ export function melodicPad(ctx: BarCtx): NoteEvent[] {
   return out.map((n) => ({ ...n, dur: Math.max(n.dur, 0.5), vel: n.vel * 0.85 }));
 }
 
+/** Supporting notes step out of the lead's register (an octave down) when they'd sit on top of it. */
 function avoidLead(ctx: BarCtx, notes: NoteEvent[]): NoteEvent[] {
   if (!ctx.featured.length) return notes;
+  const leadLow = Math.min(...ctx.featured.map((n) => n.pitch));
   const leadAvg = ctx.featured.reduce((s, n) => s + n.pitch, 0) / ctx.featured.length;
   return notes.map((n) => {
-    if (Math.abs(n.pitch - leadAvg) < 4 && n.pitch - 12 >= ctx.inst.range[0]) return { ...n, pitch: n.pitch - 12 };
+    if ((Math.abs(n.pitch - leadAvg) < 4 || n.pitch > leadLow) && n.pitch - 12 >= ctx.inst.range[0]) return { ...n, pitch: n.pitch - 12 };
     return n;
   });
 }
 
-/** Parallel 3rds/6ths under the featured line (a cello sits a 10th below). Falls back to guide tones. */
+/**
+ * Harmony under the featured line: each note gets a partner a 3rd below (a second voice a
+ * 6th below; a cello a 10th below), chosen from the chord in context so held notes sound,
+ * and the voice moves when the melody moves instead of sticking on one note.
+ */
 export function harmony(ctx: BarCtx): NoteEvent[] {
   if (!ctx.featured.length) return ctx.inst.id === "cello" ? celloCounter(ctx) : guide(ctx);
-  const out: NoteEvent[] = [];
   const vel = velFor(ctx, 0.6);
   const cello = ctx.inst.id === "cello";
+  const want = ctx.peerIndex % 2 === 1 ? 8.5 : 3.5; // semitones below: a 3rd, or a 6th
+  const raw: NoteEvent[] = [];
+  let prev: number | null = null;
+  let prevLead: number | null = null;
   for (const n of ctx.featured) {
-    const c = chordAt(ctx, n.start);
-    const pcs = scalePcs(c);
-    let p = fromDiatonicIndex(diatonicIndex(n.pitch, pcs) - 2, pcs); // a third below
-    if (p < ctx.inst.range[0] + 2) p = fromDiatonicIndex(diatonicIndex(n.pitch, pcs) + 5, pcs) - 12; // sixth below
-    if (cello) while (p > 64 && p - 12 >= 45) p -= 12; // tenor register: a tenth under the lead
-    p = fold(p, ctx.inst.range[0], ctx.inst.range[1]);
-    out.push({ ...n, pitch: p, vel, art: n.dur >= 1 ? "legato" : undefined });
+    const h = harmAt(ctx, n.start);
+    const held = n.dur >= 0.75 || Math.abs(n.start - Math.round(n.start)) < 1e-6;
+    let best = n.pitch - Math.round(want);
+    let bestCost = Infinity;
+    for (let d = 3; d <= 9; d++) {
+      const p = n.pitch - d;
+      const pc = mod(p, 12);
+      if (!h.scale.includes(pc)) continue;
+      if (held && !holdable(h, pc, ctx.style.id)) continue;
+      let cost = Math.abs(d - want);
+      if (d === 6) cost += 3; // no tritones against the tune
+      if (prev !== null && prevLead !== null) {
+        const leadMove = Math.sign(n.pitch - prevLead);
+        const move = Math.sign(p - prev);
+        if (leadMove !== 0 && move === 0) cost += 4; // stuck while the tune moves
+        if (leadMove !== 0 && move === -leadMove) cost += 1.5;
+      }
+      if (cost < bestCost) {
+        bestCost = cost;
+        best = p;
+      }
+    }
+    raw.push({ ...n, pitch: best, vel, art: n.dur >= 1 ? ("legato" as const) : undefined });
+    prev = best;
+    prevLead = n.pitch;
   }
-  return out;
+  // one octave choice for the whole bar keeps the line a line
+  const [lo, hi] = cello ? [45, 66] : [ctx.inst.range[0], Math.min(ctx.inst.range[1], Math.min(...ctx.featured.map((n) => n.pitch)) - 1)];
+  return fitOctave(raw, lo, Math.max(lo + 14, hi), ctx.mem.lastPitch);
 }
 
 /**
  * Cello countermelody: voice-led guide tones held while the lead is busy, moving
- * stepwise toward the next chord (or answering with a motif fragment) in the lead's gaps.
+ * stepwise toward the next chord in the lead's gaps.
  */
 export function celloCounter(ctx: BarCtx): NoteEvent[] {
   const out: NoteEvent[] = [];
-  // the countermelody is the cello's voice in the band: under the lead, but heard
   const vel = velFor(ctx, 0.74);
   const lo = 45;
   const hi = 66;
-  // beats where the lead is moving (onsets within the beat)
   const busy = new Set<number>();
   for (const n of ctx.featured) {
     for (let b = Math.floor(n.start); b < Math.min(ctx.beats, n.start + n.dur); b++) busy.add(b);
@@ -270,33 +132,30 @@ export function celloCounter(ctx: BarCtx): NoteEvent[] {
   const spans = chordSpans(ctx);
   for (let si = 0; si < spans.length; si++) {
     const s = spans[si];
+    const h = harmAt(ctx, s.start);
     const prev = ctx.mem.lastGuide ?? 55;
-    const opts = guideTonePcs(s.chord).map((pc) => fold(nearestPc(pc, prev), lo, hi));
-    const target = opts.reduce((a, b) => (Math.abs(b - prev) < Math.abs(a - prev) ? b : a));
+    const target = fold(guideFor(ctx, h, prev), lo, hi);
     const len = s.end - s.start;
-    const nextChord = spans[si + 1]?.chord ?? ctx.next;
-    const nextTarget = fold(nearestPc(guideTonePcs(nextChord)[0], target), lo, hi);
+    const nh = spans[si + 1] ? harmAt(ctx, spans[si + 1].start) : ctx.harmony.at(ctx.start + ctx.beats);
+    const nextTarget = fold(nearestPc(nh.guides[0], target), lo, hi);
     const gapStart = [...Array(Math.floor(len)).keys()].map((i) => s.start + i).find((b) => b >= s.start + 1 && !busy.has(b));
     if (len >= 2 && gapStart !== undefined && nextTarget !== target) {
       // hold, then walk toward the next chord's guide tone in the gap
-      const hold = gapStart - s.start;
-      out.push({ pitch: target, start: s.start, dur: hold, vel, art: "legato" });
-      const pcs = scalePcs(s.chord);
+      out.push({ pitch: target, start: s.start, dur: gapStart - s.start, vel, art: "legato" });
       const dir = Math.sign(nextTarget - target);
       let p = target;
       for (let t = gapStart; t < s.end - 1e-6; t += 1) {
-        p = fromDiatonicIndex(diatonicIndex(p, pcs) + dir, pcs);
+        p = stepIn(p, dir, h.scale);
         if ((dir > 0 && p >= nextTarget) || (dir < 0 && p <= nextTarget)) p = nextTarget + (dir > 0 ? -1 : 1);
         out.push({ pitch: fold(p, lo, hi), start: t, dur: Math.min(1, s.end - t), vel: vel * 0.92 });
       }
       ctx.mem.lastGuide = p;
     } else if (len >= 4) {
-      // lead never pauses: move in half notes, guide tone then the other guide tone (or a step)
-      const other = opts.find((o) => o !== target) ?? scaleStep(target, target > 55 ? -1 : 1, scalePcs(s.chord));
-      const second = Math.abs(other - target) <= 4 ? other : scaleStep(target, other > target ? 1 : -1, scalePcs(s.chord));
+      // the lead never pauses: move in half notes, one guide tone to the other
+      const other = h.guides.map((pc) => nearestPc(pc, target)).find((p) => p !== target && Math.abs(p - target) <= 5) ?? stepIn(target, target > 55 ? -1 : 1, h.stable);
       out.push({ pitch: target, start: s.start, dur: len / 2, vel, art: "legato" });
-      out.push({ pitch: fold(second, lo, hi), start: s.start + len / 2, dur: len / 2, vel: vel * 0.94, art: "legato" });
-      ctx.mem.lastGuide = second;
+      out.push({ pitch: fold(other, lo, hi), start: s.start + len / 2, dur: len / 2, vel: vel * 0.94, art: "legato" });
+      ctx.mem.lastGuide = other;
     } else {
       out.push({ pitch: target, start: s.start, dur: len, vel, art: "legato" });
       ctx.mem.lastGuide = target;
@@ -318,100 +177,119 @@ export function celloPad(ctx: BarCtx): NoteEvent[] {
   return out;
 }
 
-/** Canon: imitate the featured line two beats later, a 4th or octave lower. */
+/** Canon: imitate the featured line two beats later, a 4th (or an octave) lower. */
 export function canon(ctx: BarCtx): NoteEvent[] {
   const delay = ctx.beats === 3 ? 3 : 2;
   const src = [...ctx.featuredPrev, ...ctx.featured]
     .map((n) => ({ ...n, start: n.start + delay }))
     .filter((n) => n.start >= 0 && n.start < ctx.beats);
   if (!src.length) return guide(ctx);
-  const pcs = ctx.keyPcs;
-  const [lo, hi] = ctx.inst.range;
   const vel = velFor(ctx, 0.62);
-  return src.map((n) => {
-    let p = fromDiatonicIndex(diatonicIndex(n.pitch, pcs) - 3, pcs); // a 4th below
-    // strict imitation can land on a clash under the new harmony: held or strong-beat
-    // notes bend to the chord, passing notes stay as written
+  const down = ctx.peerIndex % 2 === 1 ? 7 : 3; // a second imitating voice answers an octave below
+  const raw = src.map((n) => {
+    const h = harmAt(ctx, n.start);
+    let p = stepIn(n.pitch, -down, ctx.keyPcs);
+    // strict imitation can land on a clash under the new harmony: held or strong-beat notes
+    // bend to the chord, passing notes stay as written
     const strongBeat = Math.abs(n.start - Math.round(n.start)) < 1e-6;
-    if (strongBeat || n.dur >= 0.75) {
-      const c = chordAt(ctx, n.start);
-      const ok = [...chordPcs(c), ...scalePcs(c)];
-      if (!ok.includes(mod(p, 12)) || (strongBeat && n.dur >= 0.5 && !chordPcs(c).includes(mod(p, 12)))) p = snapToPcs(p, chordPcs(c));
-    }
-    p = fold(p, lo, hi);
+    if ((strongBeat || n.dur >= 0.75) && !holdable(h, mod(p, 12), ctx.style.id)) p = nearestIn(p, h.stable, -1);
+    else if (!h.scale.includes(mod(p, 12))) p = nearestIn(p, h.scale);
     return { ...n, pitch: p, vel, dur: Math.min(n.dur, ctx.beats - n.start) };
   });
+  return fitOctave(raw, ctx.inst.range[0], ctx.inst.range[1], ctx.mem.lastPitch);
 }
 
-/** Riff: a short fragment of the motif repeated as a backing figure, fitted to the chord. */
+/** Riff: a short fragment of the motif as a backing figure, moved to each chord as a whole. */
 export function riff(ctx: BarCtx): NoteEvent[] {
   if (!ctx.mem.riff) {
     const m = ctx.motif.notes;
     const frag = m.slice(0, Math.min(4, m.length));
     const t0 = frag[0]?.start ?? 0;
-    // place the riff in the back half of the bar (call-and-response with the lead)
+    // the riff answers in the back half of the bar (call-and-response with the lead)
     const offset = ctx.beats === 3 ? 1 : 2;
     ctx.mem.riff = frag
       .map((n) => ({ ...n, start: n.start - t0 + offset }))
       .filter((n) => n.start < ctx.beats)
       .map((n) => ({ ...n, dur: Math.min(n.dur, ctx.beats - n.start) }));
   }
+  const riffNotes = ctx.mem.riff;
+  if (!riffNotes.length) return [];
   const [lo, hi] = ctx.inst.sweet;
   const vel = velFor(ctx, 0.66);
-  const out: NoteEvent[] = [];
-  let shift = 0;
-  const first = ctx.mem.riff[0];
-  if (first) {
-    const c = chordAt(ctx, first.start);
-    const target = nearestPc(c.root, first.pitch);
-    shift = target - nearestPc(pcOf(ctx.motif.chord), first.pitch);
-    if (Math.abs(shift) > 6) shift -= Math.sign(shift) * 12;
-  }
-  const lowRegister = (lo + hi) / 2 - 5;
-  for (const n of ctx.mem.riff) {
-    const c = chordAt(ctx, n.start);
+  // move the figure to the chord: root motion from the motif's chord to this one
+  const h0 = harmAt(ctx, riffNotes[0].start);
+  const from = parseChord(ctx.motif.chord || h0.chord.symbol).root;
+  let shift = mod(h0.chord.root - from, 12);
+  if (shift > 6) shift -= 12;
+  const raw: NoteEvent[] = [];
+  let prev: number | null = null;
+  for (const n of riffNotes) {
+    const h = harmAt(ctx, n.start);
     let p = n.pitch + shift;
-    p = snapToPcs(p, lineScale(ctx, c));
-    while (p > lowRegister + 12) p -= 12;
-    p = fold(p, lo, hi);
-    out.push({ ...n, pitch: p, vel, art: ctx.style.id === "funk" ? "staccato" : n.art });
+    const strong = n.dur >= 0.75 || Math.abs(n.start - Math.round(n.start)) < 1e-6;
+    const dir = (prev === null ? 0 : Math.sign(p - prev)) as 1 | -1 | 0;
+    if (strong && !holdable(h, mod(p, 12), ctx.style.id)) p = nearestIn(p, h.stable, dir);
+    else if (!h.scale.includes(mod(p, 12)) && !h.blue.includes(mod(p, 12))) p = nearestIn(p, h.scale, dir);
+    // a second horn harmonizes the riff a 3rd below rather than doubling it
+    if (ctx.peerIndex % 2 === 1) {
+      p = stepIn(p, -2, h.scale);
+      if (strong && !holdable(h, mod(p, 12), ctx.style.id)) p = nearestIn(p, h.stable, -1);
+    }
+    raw.push({ ...n, pitch: p, vel, art: ctx.style.id === "funk" ? "staccato" : n.art });
+    prev = p;
   }
-  return out;
+  // backing figures sit in the lower half of the player's register, under the lead
+  const leadLow = ctx.featured.length ? Math.min(...ctx.featured.map((n) => n.pitch)) : hi;
+  const top = Math.max(lo + 14, Math.min(hi, leadLow - 1, Math.round((lo + hi) / 2) + 5));
+  return fitOctave(raw, lo, top, ctx.mem.lastPitch ?? Math.round((lo + top) / 2));
 }
 
-/** Collective counter-line (New Orleans): busy above (clarinet/flute/violin) or smeary below. */
+/** Collective counter-line (New Orleans): busy above (clarinet/flute/violin), riffs or smears below. */
 export function counter(ctx: BarCtx): NoteEvent[] {
   const high = ["clarinet", "flute", "violin"].includes(ctx.inst.id);
+  const leadOnsets = ctx.featured.map((n) => ctx.start + n.start);
   if (high) {
-    const notes = line({ ...ctx, energy: ctx.energy * 0.8 });
-    return notes.map((n) => ({ ...n, vel: n.vel * 0.7 }));
+    // an obligato above the lead, quieter, holding where the lead moves
+    const leadTop = ctx.featured.length ? Math.max(...ctx.featured.map((n) => n.pitch)) : ctx.inst.sweet[0] + 7;
+    const lo = Math.max(ctx.inst.sweet[0], Math.min(leadTop + 1, ctx.inst.sweet[1] - 12));
+    return line(ctx, { lo, hi: ctx.inst.sweet[1], density: 0.8, vel: 0.72, avoid: leadOnsets });
   }
-  if (ctx.inst.fn === "melodic" && ctx.rng.chance(0.5)) return riff(ctx);
-  return guide(ctx);
+  if (ctx.inst.fn === "melodic" && ctx.peerIndex % 2 === 0 && ctx.rng.chance(0.5)) return riff(ctx);
+  // trombone-style: long tones and slides under the lead
+  const lo = ctx.inst.sweet[0];
+  const leadLow = ctx.featured.length ? Math.min(...ctx.featured.map((n) => n.pitch)) : ctx.inst.sweet[1];
+  const hi = Math.max(lo + 12, Math.min(ctx.inst.sweet[1], leadLow - 3));
+  return line(ctx, { lo, hi, density: 0.55, vel: 0.7, avoid: leadOnsets });
 }
 
 /** A short pickup run into the next bar. */
 export function melodicFill(ctx: BarCtx): NoteEvent[] {
   const out: NoteEvent[] = [];
-  const target = nearestPc(ctx.next.root, ctx.mem.lastPitch ?? (ctx.inst.sweet[0] + ctx.inst.sweet[1]) / 2);
-  const pcs = scalePcs(ctx.next);
+  const nh = ctx.harmony.at(ctx.start + ctx.beats);
+  const target = nearestIn(ctx.mem.lastPitch ?? (ctx.inst.sweet[0] + ctx.inst.sweet[1]) / 2, nh.tones);
   const n = ctx.style.line.density > 2 ? 4 : 2;
   const step = ctx.style.line.density > 2 ? 0.25 : 0.5;
-  let p = fromDiatonicIndex(diatonicIndex(target, pcs) - n, pcs);
+  const h = harmAt(ctx, ctx.beats - n * step);
+  let p = stepIn(target, -n, h.scale);
   const vel = velFor(ctx, 0.75);
   for (let i = 0; i < n; i++) {
     out.push({ pitch: fold(p, ctx.inst.range[0], ctx.inst.range[1]), start: ctx.beats - (n - i) * step, dur: step * 0.9, vel });
-    p = fromDiatonicIndex(diatonicIndex(p, pcs) + 1, pcs);
+    p = stepIn(p, 1, h.scale);
   }
   ctx.mem.lastPitch = p;
   return out;
 }
 
-/** Melodic final note: a chord tone held through the last bar. */
+/** Melodic final note: the lead takes the root; everyone else a different chord tone. */
 export function endNote(ctx: BarCtx): NoteEvent[] {
-  const c = chordAt(ctx, 0);
-  const near = ctx.mem.lastPitch ?? (ctx.inst.sweet[0] + ctx.inst.sweet[1]) / 2;
-  const pc = ctx.role === "lead" ? c.root : ctx.rng.pick(chordPcs(c));
+  const h = harmAt(ctx, 0);
+  const mid = (ctx.inst.sweet[0] + ctx.inst.sweet[1]) / 2;
+  const last = ctx.mem.lastPitch ?? mid;
+  const others = [h.tones[1], h.tones[2], h.tones[3] ?? h.tones[0]].filter((x) => x !== undefined);
+  const lead = ctx.role === "lead";
+  const pc = lead ? h.chord.root : others[ctx.peerIndex % others.length];
+  // the tune ends on top: the leader resolves up to the tonic rather than dropping under the band
+  const near = lead ? Math.max(last + 2, mid - 2) : last;
   const p = fold(nearestPc(pc, near), ctx.inst.range[0], ctx.inst.range[1]);
   return [{ pitch: p, start: 0, dur: ctx.beats, vel: velFor(ctx, 0.75), art: "legato" }];
 }

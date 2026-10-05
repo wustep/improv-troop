@@ -8,6 +8,8 @@ Live: https://jamming-wustep.vercel.app
 
 - **Locked frame.** Code decides the length, form, chord changes, and who leads or solos, before any model is involved. Planners only fill in what happens inside that frame.
 - **Shared motif.** The leader states a short cell. Solos are transforms of it (inverted, sequenced, displaced, fragmented), and everyone else comps in the style's texture.
+- **The tune comes back.** A repeated A section and the out head replay what the leader played the first time, over the same changes, whether the engine or a model wrote it.
+- **Phrases, and a band that listens.** Lines are planned a phrase at a time: a pickup, a direction, a landing on a chord tone, a breath. Harmony is read in context (the key, and where each chord is going). After the notes are written, the band checks itself: held notes belong to the chord they ring over, comping sits under the melody, and pads spell the chord instead of doubling it.
 - **Seven styles** are defined by texture priors (what each instrument actually does), not by name: swing, bossa nova, funk, New Orleans, minimalist, baroque, and ambient.
 - **Two modes**, using your own [Vercel AI Gateway](https://vercel.com/ai-gateway) key:
   - **Improviser:** the leader counts off with a motif and a plan. Bandmates reply, then trade phrases. In each round the featured player goes first and the band answers what it heard. Playback starts after the first phrase.

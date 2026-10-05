@@ -1,8 +1,9 @@
 import { DIRECTIVE_HELP } from "@/music/directives";
 import { ANIMALS, INSTRUMENTS } from "@/music/instruments";
 import { drumsToGrid, notesToText } from "@/music/notation";
+import { harmonyOf } from "@/music/realize";
 import { STYLES } from "@/music/styles";
-import { keyPrefersFlats, pitchName } from "@/music/theory";
+import { keyPrefersFlats, pcName, pitchName } from "@/music/theory";
 import type { BarPlan, ChatMessage, Frame, Member, Motif, NoteEvent } from "@/music/types";
 
 export function styleBlock(frame: Frame): string {
@@ -44,6 +45,29 @@ export function chartBlock(frame: Frame, members: Member[], from = 0, to = frame
   for (let i = 0; i < cells.length; i += 4) rows.push(cells.slice(i, i + 4).join(" | "));
   lines.push("Changes (bar:chords; two chords split the bar):", ...rows.map((r) => "  " + r));
   return lines.join("\n");
+}
+
+/**
+ * What each chord in these bars is, in context: its tones, the scale that fits it here, the
+ * colors that can be held, and the notes that only pass. Models misalign pitch and harmony
+ * more than anything else; spelling it out per bar fixes most of it at the source.
+ */
+export function harmonyBlock(frame: Frame, plan: BarPlan[], bars: number[]): string {
+  const h = harmonyOf(frame, plan);
+  const flats = keyPrefersFlats(frame.key);
+  const names = (pcs: number[]) => pcs.map((pc) => pcName(pc, flats)).join(" ");
+  const beats = frame.meter.beats;
+  const lines = bars.map((b) => {
+    const spans = h.spans.filter((s) => s.start >= b * beats - 1e-6 && s.start < (b + 1) * beats - 1e-6);
+    const at = spans.length ? spans : [h.at(b * beats)];
+    return `  bar ${b + 1}: ${at
+      .map((s) => {
+        const pass = s.scale.filter((pc) => !s.stable.includes(pc));
+        return `${s.chord.symbol} = chord ${names(s.tones)}${s.colors.length ? `, colors ${names(s.colors)}` : ""}${pass.length ? `; ${names(pass)} only in passing` : ""}`;
+      })
+      .join(" | ")}`;
+  });
+  return `HARMONY (land and hold on chord tones or colors; scale notes between them; never hold an "only in passing" note):\n${lines.join("\n")}`;
 }
 
 export function motifBlock(m: Motif): string {

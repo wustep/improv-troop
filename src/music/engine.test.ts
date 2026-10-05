@@ -5,7 +5,10 @@ import { defaultSettings, generateLocal } from "./local";
 import { parseDrumGrid, parseNotes } from "./notation";
 import { STANDARDS } from "./standards";
 import { STYLE_LIST } from "./styles";
-import { chordPcs, mod, parseChord, parsePitch, scalePcs } from "./theory";
+import { homeOf } from "./ensemble";
+import { holdable } from "./harmony";
+import { harmonyOf, topLine } from "./realize";
+import { chordPcs, mod, parseChord, parsePitch } from "./theory";
 import type { Member } from "./types";
 
 const band: Member[] = [
@@ -180,21 +183,23 @@ describe("melodic hygiene", () => {
     }
   });
   it("keeps held and strong-beat notes of improvised lines on the harmony", () => {
+    // judged against the chord each note is heard over, in context (key, where the chord is going)
     let bad = 0;
     for (const style of STYLE_LIST) {
       for (let seed = 1; seed <= 12; seed++) {
         const { score } = generateLocal({ ...defaultSettings(band), style, seed, soloists: ["sheep", "bear"] }, band);
+        const H = harmonyOf(score.frame, score.plan);
         for (const id of ["fox", "sheep"]) {
           for (const n of score.parts[id]) {
             const bar = Math.floor(n.start / 4);
             const bp = score.plan[bar];
             if (!bp || !/^@line/.test(bp.directives?.[id] ?? "")) continue;
-            if (n.dur < 0.75 && Math.abs(n.start - Math.round(n.start)) > 1e-6) continue;
-            let sym = bp.chords[0].symbol;
-            for (const c of bp.chords) if (c.beat <= n.start - bar * 4 + 1e-6) sym = c.symbol;
-            const ch = parseChord(sym);
-            const ok = new Set([...chordPcs(ch), ...scalePcs(ch), ...ch.tensions.map((t) => mod(ch.root + t, 12))]);
-            if (!ok.has(mod(n.pitch, 12))) bad++;
+            const onBeat = Math.abs(n.start - Math.round(n.start)) < 1e-6;
+            if (n.dur < 0.75 && !onBeat) continue;
+            const h = homeOf(H, n);
+            const pc = mod(n.pitch, 12);
+            const ok = holdable(h, pc, style) || (n.dur < 0.75 && (h.scale.includes(pc) || h.blue.includes(pc)));
+            if (!ok) bad++;
           }
         }
       }
@@ -221,22 +226,18 @@ describe("standards form", () => {
 });
 
 describe("voicings", () => {
-  it("keeps sustained pads and end chords on the chord (no b6/b9/b5 from blind 4ths)", () => {
+  it("keeps sustained pads and end chords on the chord they're heard over", () => {
     const band: Member[] = [...defaultMembers(), { id: "penguin", animal: "penguin", name: "Pip", instrument: "vibes" }];
     let bad = 0;
     for (const mode of ["major", "minor"] as const) {
       for (let seed = 1; seed <= 10; seed++) {
         const { score } = generateLocal({ ...defaultSettings(band), style: "ambient", key: { tonic: "D", mode }, seed }, band);
+        const H = harmonyOf(score.frame, score.plan);
         for (const id of ["bear", "penguin"]) {
           for (const n of score.parts[id]) {
-            if (n.dur < 1) continue;
-            const bar = Math.floor(n.start / 4);
-            const bp = score.plan[bar];
-            let sym = bp.chords[0].symbol;
-            for (const c of bp.chords) if (c.beat <= n.start - bar * 4 + 1e-6) sym = c.symbol;
-            const ch = parseChord(sym);
-            const ok = new Set([...chordPcs(ch), ...scalePcs(ch), ...ch.tensions.map((t) => mod(ch.root + t, 12))]);
-            if (!ok.has(mod(n.pitch, 12))) bad++;
+            // held: a pad, an end chord, a bell left ringing (a weak-beat bell can pass through a scale tone)
+            if (n.dur < 1.5) continue;
+            if (!holdable(homeOf(H, n), mod(n.pitch, 12), "ambient")) bad++;
           }
         }
       }
@@ -266,5 +267,124 @@ describe("rehearsing written notes", () => {
     expect(mod(notes[2].pitch, 12)).toBe(mod(ch.root + 3, 12)); // blue #9 kept
     expect(chordPcs(ch)).toContain(mod(notes[3].pitch, 12)); // held major 7th bent onto the chord
     expect(res.issues.filter((i) => i.detail.includes("clashed")).length).toBe(1);
+  });
+});
+
+describe("playing like a band", () => {
+  const band: Member[] = [
+    ...defaultMembers(),
+    { id: "cat", animal: "cat", name: "Mochi", instrument: "sax" },
+    { id: "sheep", animal: "sheep", name: "Olive", instrument: "cello" },
+    { id: "penguin", animal: "penguin", name: "Pip", instrument: "vibes" },
+  ];
+  const takes = () =>
+    STYLE_LIST.flatMap((style) =>
+      [1, 2, 3].map((seed) => generateLocal({ ...defaultSettings(band), style, seed, soloists: ["cat", "bear", "penguin"] }, band).score),
+    );
+  const inBar = <T extends { start: number }>(notes: T[], bar: number, beats = 4): T[] => notes.filter((n) => Math.floor(n.start / beats + 1e-9) === bar);
+
+  it("never holds a note over a chord it doesn't belong to, in any part", () => {
+    let bad = 0;
+    for (const score of takes()) {
+      const H = harmonyOf(score.frame, score.plan);
+      for (const m of band) {
+        if (m.instrument === "drums") continue;
+        for (const n of score.parts[m.id]) if (n.dur >= 1.5 && !holdable(homeOf(H, n), mod(n.pitch, 12), score.frame.style)) bad++;
+      }
+    }
+    expect(bad).toBe(0);
+  });
+
+  it("comes back to the melody: the out head replays the head", () => {
+    for (const score of takes()) {
+      const replays = score.plan.filter((bp) => bp.directives?.fox?.startsWith("@head"));
+      expect(replays.length).toBeGreaterThan(0);
+      for (const bp of replays) {
+        const src = parseInt(bp.directives!.fox!.split(" ")[1], 10) - 1;
+        const here = inBar(score.parts.fox, bp.index).map((n) => n.start - bp.index * 4);
+        const there = inBar(score.parts.fox, src).map((n) => n.start - src * 4);
+        // same rhythm everywhere; same notes too unless the cadence bends a held note into a new chord
+        expect(here).toEqual(there);
+        if (bp.chords.length === score.plan[src].chords.length) {
+          expect(inBar(score.parts.fox, bp.index).map((n) => n.pitch)).toEqual(inBar(score.parts.fox, src).map((n) => n.pitch));
+        }
+      }
+    }
+  });
+
+  it("brings a standard's tune back in its repeated sections and out chorus", () => {
+    const std = STANDARDS.find((s) => s.id === "rhythm-changes")!;
+    const s = { ...defaultSettings(band), standard: std.id, key: std.key, style: std.style, bars: 32, soloists: ["cat"] };
+    const { score } = generateLocal(s, band);
+    const d = (b: number) => score.plan[b].directives?.fox;
+    // A A B A: the second A replays the first wherever the changes match (bars 1-6)...
+    for (let b = 8; b < 14; b++) expect(d(b)).toBe(`@head ${b - 7}`);
+    // ...but its 7th bar has different changes (Cm7 F7, not Dm7 G7), so it's its own
+    expect(d(14)).not.toMatch(/^@head/);
+    // the out (last A) comes back to the tune, taking that 7th bar from the A it matches
+    for (let b = 24; b < 30; b++) expect(d(b)).toBe(`@head ${b - 23}`);
+    expect(d(30)).toBe("@head 15");
+  });
+
+  it("keeps comping under the melody and off its notes when there's room", () => {
+    let bad = 0;
+    for (const score of takes()) {
+      for (let b = 0; b < score.frame.bars; b++) {
+        const bp = score.plan[b];
+        const lead = score.members.find((m) => ["lead", "solo"].includes(bp.roles[m.id] ?? "") && m.instrument !== "drums");
+        if (!lead) continue;
+        const tune = topLine(inBar(score.parts[lead.id], b)).filter((n) => n.dur >= 0.4 && n.pitch >= 55);
+        for (const m of score.members) {
+          if (m.id === lead.id || !INSTRUMENTS[m.instrument].poly || m.instrument === "drums" || !["comp", "pad"].includes(bp.roles[m.id] ?? "")) continue;
+          for (const n of inBar(score.parts[m.id], b)) {
+            for (const l of tune) {
+              if (l.pitch - 1 < INSTRUMENTS[m.instrument].range[0] + 7) continue;
+              if (Math.min(n.start + n.dur, l.start + l.dur) - Math.max(n.start, l.start) >= 0.3 && n.pitch >= l.pitch) bad++;
+            }
+          }
+        }
+      }
+    }
+    expect(bad).toBe(0);
+  });
+
+  it("phrases improvised lines on the style's grid, without leaping around inside a phrase", () => {
+    for (const score of takes()) {
+      const style = score.frame.style;
+      for (let b = 0; b < score.frame.bars; b++) {
+        const bp = score.plan[b];
+        for (const id of ["cat", "fox"]) {
+          if (!/^@line/.test(bp.directives?.[id] ?? "")) continue;
+          const ns = inBar(score.parts[id], b);
+          for (const n of ns) {
+            const f = mod(n.start, 1);
+            const grid = style === "funk" || style === "baroque" ? [0, 0.25, 0.5, 0.75] : [0, 0.5, 1 / 3, 2 / 3];
+            expect(grid.some((g) => Math.abs(f - g) < 1e-3)).toBe(true);
+          }
+          for (let i = 1; i < ns.length; i++) {
+            if (ns[i].start - (ns[i - 1].start + ns[i - 1].dur) < 0.3) expect(Math.abs(ns[i].pitch - ns[i - 1].pitch)).toBeLessThanOrEqual(12);
+          }
+        }
+      }
+    }
+  });
+
+  it("reads harmony in the key: a D minor baroque bass never plays B natural over D minor", () => {
+    for (const seed of [1, 2, 3, 4, 5]) {
+      const { score } = generateLocal({ ...defaultSettings(band), style: "baroque", key: { tonic: "D", mode: "minor" }, seed }, band);
+      const H = harmonyOf(score.frame, score.plan);
+      for (const n of score.parts.frog) {
+        const h = H.at(n.start);
+        if (h.chord.symbol === "Dm") expect(mod(n.pitch, 12)).not.toBe(11);
+      }
+    }
+  });
+
+  it("interlocks minimalist ostinati instead of doubling them", () => {
+    const { score } = generateLocal({ ...defaultSettings(band), style: "minimal", seed: 4, soloists: ["cat"] }, band);
+    const bar = score.plan.findIndex((bp) => bp.directives?.bear === "@arp" && bp.directives?.penguin === "@arp");
+    expect(bar).toBeGreaterThanOrEqual(0);
+    const sig = (id: string) => inBar(score.parts[id], bar).map((n) => `${n.start - bar * 4}`).join();
+    expect(sig("bear")).not.toBe(sig("penguin"));
   });
 });

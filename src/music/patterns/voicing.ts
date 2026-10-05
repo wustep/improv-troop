@@ -1,3 +1,4 @@
+import type { Harm } from "../harmony";
 import { mod, type Chord } from "../theory";
 
 export type VoicingFamily = "rootless" | "triad" | "open" | "quartal" | "shell";
@@ -142,6 +143,22 @@ function candidates(c: Chord, fam: VoicingFamily): number[][] {
 }
 
 /**
+ * A voicing's tensions follow the harmony in context: a V7 headed for a minor chord
+ * takes its b9 and b13, a iii chord drops the b9 it can't hold.
+ */
+function fitTensions(form: number[], c: Chord, harm?: Harm): number[] {
+  if (!harm) return form;
+  const ok = (iv: number) => harm.stable.includes(mod(c.root + iv, 12));
+  const isTone = (iv: number) => c.tones.includes(mod(iv, 12));
+  return form.map((iv) => {
+    if (ok(iv)) return iv;
+    for (const d of [-1, 1]) if (ok(iv + d) && !isTone(iv + d)) return iv + d;
+    for (let d = 1; d <= 3; d++) if (isTone(iv - d)) return iv - d;
+    return iv;
+  });
+}
+
+/**
  * Pick a voicing for a chord inside [lo, hi] that moves least from `prev`.
  * Returns ascending MIDI pitches.
  */
@@ -151,34 +168,44 @@ export function voiceChord(
   lo: number,
   hi: number,
   prev: number[] | null,
+  harm?: Harm,
 ): number[] {
   const center = prev?.length ? prev.reduce((s, p) => s + p, 0) / prev.length : (lo + hi) / 2;
   let best: number[] | null = null;
   let bestScore = Infinity;
-  for (const form of candidates(c, fam)) {
-    for (let oct = 1; oct <= 7; oct++) {
-      const base = oct * 12 + c.root;
-      const v = form.map((i) => base + i).sort((a, b) => a - b);
-      if (v[0] < lo || v[v.length - 1] > hi) continue;
-      let score = 0;
-      if (prev?.length) {
-        const n = Math.min(v.length, prev.length);
-        for (let i = 0; i < n; i++) score += Math.abs(v[i] - prev[i]);
-        score += Math.abs(v.length - prev.length) * 2;
-      }
-      const mid = v.reduce((s, p) => s + p, 0) / v.length;
-      score += Math.abs(mid - center) * 0.5 + Math.abs(mid - (lo + hi) / 2) * 0.25;
-      if (score < bestScore) {
-        bestScore = score;
-        best = v;
+  // the asked-for shape first; if it can't fit the room (a comp squeezed under the tune),
+  // a closer shape of the same chord rather than a bare triad
+  const order: VoicingFamily[] = [fam, ...(["rootless", "shell", "triad"] as VoicingFamily[]).filter((f) => f !== fam)];
+  for (const f of order) {
+    const forms = candidates(c, f).map((x) => [...new Set(fitTensions(x, c, harm))]);
+    for (const form of forms) {
+      for (let oct = 1; oct <= 7; oct++) {
+        const base = oct * 12 + c.root;
+        const v = form.map((i) => base + i).sort((a, b) => a - b);
+        if (v[0] < lo || v[v.length - 1] > hi) continue;
+        let score = 0;
+        if (prev?.length) {
+          const n = Math.min(v.length, prev.length);
+          for (let i = 0; i < n; i++) score += Math.abs(v[i] - prev[i]);
+          score += Math.abs(v.length - prev.length) * 2;
+        }
+        const mid = v.reduce((s, p) => s + p, 0) / v.length;
+        score += Math.abs(mid - center) * 0.5 + Math.abs(mid - (lo + hi) / 2) * 0.25;
+        // a fuller voicing wins when it fits (a bare 3rd-and-7th is the fallback, not the sound)
+        score += Math.max(0, 3 - v.length) * 3;
+        if (score < bestScore) {
+          bestScore = score;
+          best = v;
+        }
       }
     }
+    if (best) return best;
   }
-  if (best) return best;
-  // fallback: close triad near the middle
-  const mid = Math.round((lo + hi) / 2);
-  const root = mid - mod(mid - c.root, 12);
-  return triadTones(c).map((i) => root + i);
+  // nothing fits: a close triad as high as the room allows
+  const t = triadTones(c);
+  let root = hi - mod(hi - c.root, 12);
+  while (root + t[t.length - 1] > hi && root - 12 >= lo - 12) root -= 12;
+  return t.map((i) => root + i);
 }
 
 /** Root (or slash bass) of the chord in a bass register near `near`. */

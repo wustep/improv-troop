@@ -151,6 +151,12 @@ export function mergePlan(
         if (opts.onlyMembers && !opts.onlyMembers.includes(m.id)) continue;
         const text = asString(v, 600);
         if (!text) continue;
+        // the out head (and a repeated A) comes back to the melody: those bars stay locked
+        const locked = base[i]?.directives?.[m.id];
+        if (locked?.startsWith("@head") && !text.trim().startsWith("@head")) {
+          repairs.push(`bar ${b1} ${m.name}: kept ${locked} (the tune comes back to the melody here)`);
+          continue;
+        }
         const clean = validateBarText(text, m, frame.meter.beats, repairs, `bar ${b1} ${m.name}`);
         if (clean) bp.directives[m.id] = clean;
       }

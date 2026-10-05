@@ -1,3 +1,4 @@
+import type { Harm, Harmony } from "./harmony";
 import type { InstrumentDef } from "./instruments";
 import type { Rng } from "./rng";
 import type { StyleDef } from "./styles";
@@ -15,6 +16,14 @@ export interface PlayerMemory {
   arpChangedAt: number;
   riff: NoteEvent[] | null;
   lastGuide: number | null;
+  /** The phrase being played (absolute starts) and the beat where it and its breath end. */
+  phrase: { notes: NoteEvent[]; until: number; bar: number } | null;
+  /** Rhythm of the last phrase (onsets relative to its start), for answering it. */
+  lastRhythm: { start: number; dur: number; pitch?: number }[] | null;
+  /** Contour of the last phrase, so the next one can answer in the other direction. */
+  lastShape: string | null;
+  /** Density tier of the last phrase (an answer matches the call's density). */
+  lastTier: number | null;
 }
 
 export function newMemory(): PlayerMemory {
@@ -27,6 +36,10 @@ export function newMemory(): PlayerMemory {
     arpChangedAt: -99,
     riff: null,
     lastGuide: null,
+    phrase: null,
+    lastRhythm: null,
+    lastShape: null,
+    lastTier: null,
   };
 }
 
@@ -67,6 +80,20 @@ export interface BarCtx {
   args: string[];
   /** Take-level seed (stable across bars). */
   seed: number;
+  /** The chart's harmony in context. */
+  harmony: Harmony;
+  /** Absolute beat where this player's current run of improvised-line bars ends (phrases stop there). */
+  runEnd: number;
+  /** Among players given the same directive this bar: which one this is, and how many (split voices, interlock). */
+  peerIndex: number;
+  peerCount: number;
+  /** What the featured player played in an earlier bar (relative to that bar), for replaying the head. */
+  playedIn(bar: number): NoteEvent[] | null;
+}
+
+/** Context harmony at a beat inside the bar. */
+export function harmAt(ctx: BarCtx, beat: number): Harm {
+  return ctx.harmony.at(ctx.start + beat);
 }
 
 export function chordAt(ctx: BarCtx, beat: number): Chord {
