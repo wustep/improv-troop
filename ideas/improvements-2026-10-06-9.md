@@ -12,6 +12,7 @@
 - **Proposal.** Give each phrase an AbortController joined to the run's signal. Abort it when autopilot plays the phrase. A call cut short that way is dropped quietly, while a cancelled run still throws.
 - **Risks / trade-offs.** A phrase abort must never be read as the run being cancelled.
 - **Files.** `src/ai/improviser.ts`, `src/ai/pipeline.test.ts`
+- **Outcome.** Shipped in 1897a62. The autopilot pipeline test (with an abortable fake fetch) fails on the old code: the calls for vamped bars ran to completion and were discarded.
 
 ### 2. A failed count-off ends the whole jam
 - **Impact:** 🔴 high · **Effort:** S · **Status:** ✅ accepted
@@ -19,6 +20,7 @@
 - **Proposal.** Rethrow only for a cancel or a bad key (401/403). Otherwise the leader counts off the engine's own motif and plan, a note says so, and the bandmates still reply.
 - **Risks / trade-offs.** The jam sounds less like the leader's idea, which the note says.
 - **Files.** `src/ai/improviser.ts`, `src/ai/pipeline.test.ts`
+- **Outcome.** Shipped in 80ffe4b. A failing count-off (400) now gives a full take noted "count-off call failed", while a 401 still stops the run. The first test fails on the old code.
 
 ### 3. After falling behind, the band rarely gets back in
 - **Impact:** 🔴 high · **Effort:** M · **Status:** ❌ rejected
@@ -49,6 +51,7 @@
 - **Proposal.** Accent in one place: the engine, which the drum sample choice also keys on. Drop the pre-boosts.
 - **Risks / trade-offs.** Stop-time and button hits get slightly softer before the engine's boost.
 - **Files.** `src/music/directives.ts`, `src/music/realize.ts`, `src/music/engine.test.ts`
+- **Outcome.** Shipped in d2033f5. The test fails on the old code: an accented note was 0.94 before the engine against 0.79 for its neighbours.
 
 ### 7. The out head replays a melody over cadence chords that changed
 - **Impact:** 🟡 med · **Effort:** S · **Status:** ✅ accepted
@@ -56,6 +59,7 @@
 - **Proposal.** Require the whole chord list (symbols and beats) to match. Otherwise the leader plays the motif-based cadence line the planner already has.
 - **Risks / trade-offs.** The last bars of an out head are a little less literal.
 - **Files.** `src/music/planner.ts`, `src/music/engine.test.ts`
+- **Outcome.** Shipped in 8948ea6. The test fails on the old code: swing seed 1, bar 15 replayed a "Dm7" bar over "Dm7 F7".
 
 ### 8. The free-chart cadence stacks two dominants on one root
 - **Impact:** 🟡 med · **Effort:** S · **Status:** ❌ rejected
@@ -100,6 +104,7 @@
 - **Proposal.** Compute progress over every load, counting ready or failed as complete. When something failed, show "✗ Rusty's trumpet didn't load" in ink with a "try again" action that re-prepares (the engine already retries failed entries), using the shipped error pattern.
 - **Risks / trade-offs.** Retrying repeatedly is fine because the engine gates on `failedAt`.
 - **Files.** `src/components/Transport.tsx`
+- **Outcome.** Shipped in 8c0195c. Live check with a simulated failed trumpet: "✗ Rusty's trumpet didn't load, so it plays silent. try again" appears under the status line.
 
 ### 14. Sheet text shrinks to about 7px on phones
 - **Impact:** 🔴 high · **Effort:** M · **Status:** ❌ rejected
