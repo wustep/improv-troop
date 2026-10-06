@@ -4,6 +4,8 @@
 
 import { ENDINGS } from "./ending";
 import { INSTRUMENTS } from "./instruments";
+import { bassChairOf } from "./planner";
+import { getStandard } from "./standards";
 import type { Rng } from "./rng";
 import type { BarPlan, ChatMessage, Frame, Member, Section } from "./types";
 
@@ -25,6 +27,8 @@ const HEAD = ["Here's the tune.", "This is how it goes.", "Listen to this one."]
 const OUT = ["Back to the tune.", "Taking it home.", "One more time through the tune."];
 const TAG = ["Again, the last bit!", "Once more…"];
 const VAMP = ["Vamp till ready.", "Just the groove for a bit."];
+const INTRO = ["I'll set it up. Four bars, then the tune.", "Intro first, then the head.", "We'll ease into it."];
+const ANSWER = (prev: string) => [`I'll pick up where ${prev} left off.`, `Answering ${prev}.`, `${prev}, I heard that. Here's mine.`];
 const STOPTIME = ["Everybody hit the one and lay out.", "Stop-time: hit and wait."];
 const BREAKDOWN = ["Just bass and drums for a bit.", "Breakdown: everyone else, sit out."];
 const ENDING_LINES: Record<string, string[]> = {
@@ -36,13 +40,16 @@ const ENDING_LINES: Record<string, string[]> = {
 
 const keyName = (f: Frame) => `${f.key.tonic} ${f.key.mode === "minor" ? "minor" : "major"}`;
 
-/** The first motif transform a soloist's plan reaches for in a section ("invert", "up", "frag"…). */
+/**
+ * How a soloist opens: the motif transform in their first bar ("invert", "up", "frag"…), or
+ * "answer" when they pick up the last soloist's phrase. Only the first bar counts: a fragment
+ * halfway through isn't how the solo starts.
+ */
 function openerOf(plan: BarPlan[], s: Section, id: string): string | null {
-  for (let b = s.start; b < Math.min(plan.length, s.start + s.length); b++) {
-    const m = /^@motif\s+([a-z]+)/.exec(plan[b]?.directives?.[id] ?? "");
-    if (m && OPENERS[m[1]]) return m[1];
-  }
-  return null;
+  const d = plan[s.start]?.directives?.[id] ?? "";
+  if (d.startsWith("@answer")) return "answer";
+  const m = /^@motif\s+([a-z]+)/.exec(d);
+  return m && OPENERS[m[1]] ? m[1] : null;
 }
 
 export function narrateLocal(frame: Frame, plan: BarPlan[], members: Member[], rng: Rng): ChatMessage[] {
@@ -57,7 +64,10 @@ export function narrateLocal(frame: Frame, plan: BarPlan[], members: Member[], r
   const nameOf = (id: string) => members.find((m) => m.id === id)?.name ?? id;
   const byFn = (fn: string) => members.find((m) => INSTRUMENTS[m.instrument].fn === fn)?.id;
   const drummer = members.find((m) => m.instrument === "drums")?.id;
-  const bassist = byFn("bass");
+  // whoever holds the bass chair (a cellist covers it when there's no bassist)
+  const bassist = byFn("bass") ?? bassChairOf(members) ?? undefined;
+  const firstHead = frame.sections.find((x) => x.kind === "head");
+  const std = getStandard(frame.standard);
 
   const tempo = `${frame.tempo} bpm`;
   say(leader, rng.pick([`Counting it off: ${tempo}, ${keyName(frame)}.`, `${keyName(frame)}, ${tempo}. One, two…`]), "count-off", undefined, "band");
@@ -66,12 +76,14 @@ export function narrateLocal(frame: Frame, plan: BarPlan[], members: Member[], r
     const who = s.featured?.find(has);
     switch (s.kind) {
       case "head":
-        if (s.start === 0) say(who ?? leader, rng.pick(HEAD), "jam", s.start);
+        if (s === firstHead) say(who ?? leader, std?.melody ? `Here's ${std.name}.` : rng.pick(HEAD), "jam", s.start);
         break;
       case "solo": {
         if (!who) break;
         const op = openerOf(plan, s, who);
-        say(who, op ? rng.pick(OPENERS[op]) : rng.pick(SOLO_PLAIN), "jam", s.start);
+        const prev = frame.sections.find((x) => x.start + x.length === s.start && (x.kind === "solo" || x.kind === "trade"))?.featured?.find(has);
+        if (op === "answer" && prev && prev !== who) say(who, rng.pick(ANSWER(nameOf(prev))), "jam", s.start, prev);
+        else say(who, op && op !== "answer" ? rng.pick(OPENERS[op]) : rng.pick(SOLO_PLAIN), "jam", s.start);
         break;
       }
       case "trade": {
@@ -88,7 +100,12 @@ export function narrateLocal(frame: Frame, plan: BarPlan[], members: Member[], r
       case "tag":
         say(who ?? leader, rng.pick(TAG), "jam", s.start);
         break;
-      case "intro":
+      case "intro": {
+        // the pianist (or whoever leads the rhythm section) sets it up
+        const v = byFn("chordal") ?? drummer ?? bassist ?? leader;
+        say(v, rng.pick(INTRO), "jam", s.start);
+        break;
+      }
       case "vamp": {
         const v = drummer ?? bassist ?? leader;
         say(v, rng.pick(VAMP), "jam", s.start);

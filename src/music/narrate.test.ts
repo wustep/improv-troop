@@ -47,3 +47,31 @@ describe("local band talk", () => {
     expect(take("swing", 5, std.bars.length, std.id).chat).toEqual(take("swing", 5, std.bars.length, std.id).chat);
   });
 });
+
+describe("band talk says what is actually played", () => {
+  it("a soloist who answers the last one says so, and nobody describes a mid-solo fragment as their opener", () => {
+    let answered = 0;
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      const score = generateLocal({ ...defaultSettings(band), style: "swing", seed, bars: 32, soloists: ["cat", "bear"] }, band).score;
+      for (const s of score.frame.sections.filter((x) => x.kind === "solo")) {
+        const who = s.featured![0];
+        const line = score.chat.find((c) => c.bar === s.start && c.from === who)!;
+        const first = score.plan[s.start].directives?.[who] ?? "";
+        if (first.startsWith("@answer")) {
+          answered++;
+          expect(line.text, `seed ${seed}`).toMatch(/left off|Answering|heard that/);
+        }
+        if (!first.startsWith("@motif frag")) expect(line.text).not.toMatch(/first few notes|chew on a piece/);
+      }
+    }
+    expect(answered).toBeGreaterThan(0);
+  });
+  it("names the tune when the leader plays its written melody, after the intro", () => {
+    const std = STANDARDS.find((s) => s.id === "saints")!;
+    const score = generateLocal({ ...defaultSettings(band), standard: std.id, style: std.style, key: std.key, bars: 48, seed: 1 }, band).score;
+    const head = score.frame.sections.find((s) => s.kind === "head")!;
+    expect(head.start).toBe(4);
+    expect(score.chat.some((c) => c.bar === head.start && c.text === "Here's When the Saints Go Marching In.")).toBe(true);
+    expect(score.chat.some((c) => c.bar === 0 && c.from === "bear")).toBe(true);
+  });
+});
