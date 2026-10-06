@@ -71,7 +71,7 @@ function textureFor(style: StyleDef, frame: Frame, bar: number, s: Section, isLa
     // a later solo in a long chart opens with an arrangement change: stop-time behind a swing
     // or New Orleans soloist, a bass-and-drums breakdown under a funk one
     const laterSolo = frame.sections.some((x) => x.kind === "solo" && x.start < s.start);
-    if (laterSolo && s.length >= 8 && inSec < 2) {
+    if (laterSolo && s.length >= 6 && inSec < 2) {
       if (style.id === "swing" || style.id === "neworleans") return "stoptime";
       if (style.id === "funk") return "breakdown";
     }

@@ -324,11 +324,13 @@ describe("standards in choruses", () => {
     // one time through, or a style that starts straight in, has no intro
     expect(frameFor("autumn", 32, ["cat"]).intro).toBe(0);
   });
-  it("a free chart keeps its length: the intro comes out of the solos", () => {
+  it("a free chart keeps its length (the intro comes out of the solos) and soloists get even turns", () => {
     for (const [bars, intro] of [[8, 0], [12, 0], [16, 2], [24, 4], [32, 4]] as const) {
-      const f = buildFrame({ ...defaultSettings(band5), style: "swing", bars, soloists: ["cat"] }, band5);
+      const f = buildFrame({ ...defaultSettings(band5), style: "swing", bars, soloists: ["cat", "bear"] }, band5);
       expect(f.bars, `${bars}`).toBe(bars);
       expect(f.intro ?? 0, `${bars}`).toBe(intro);
+      const solos = f.sections.filter((s) => s.kind === "solo").map((s) => s.length);
+      if (solos.length === 2) expect(Math.abs(solos[0] - solos[1]), `${bars}: ${solos}`).toBeLessThanOrEqual(0);
     }
     expect(buildFrame({ ...defaultSettings(band5), style: "ambient", bars: 32, soloists: ["cat"] }, band5).intro).toBe(0);
   });
@@ -693,8 +695,8 @@ describe("call and response", () => {
       const id = Object.keys(score.plan[bar].directives!).find((k) => score.plan[bar].directives![k] === "@answer")!;
       const notes = score.parts[id].filter((n) => Math.floor(n.start / 4 + 1e-9) === bar);
       expect(notes.length).toBeGreaterThanOrEqual(2);
-      // on the grid
-      for (const n of notes) expect(Math.abs(n.start * 4 - Math.round(n.start * 4))).toBeLessThan(1e-6);
+      // on the grid (16ths, or a swing line's triplets)
+      for (const n of notes) expect(Math.min(Math.abs(n.start * 4 - Math.round(n.start * 4)), Math.abs(n.start * 3 - Math.round(n.start * 3)))).toBeLessThan(1e-6);
     }
     expect(found).toBeGreaterThan(2);
   });

@@ -96,20 +96,17 @@ interface SoloPlan {
 
 function assignSolos(start: number, length: number, soloists: string[], unit: number): SoloPlan[] {
   if (!soloists.length || length <= 0) return [];
-  const k = soloists.length;
-  // biggest multiple of `unit` (4, else 2) that gives everyone a turn
-  let each = Math.floor(length / k / unit) * unit;
-  if (each < unit) each = unit === 4 && length / k >= 2 ? 2 : unit;
+  // everyone gets an even turn: whole units of 4 (or 2) bars when they divide evenly, otherwise
+  // as even a split as the bars allow (6 bars for two soloists is 3 and 3, not 4 and 2)
+  const k = Math.min(soloists.length, length);
+  const each = Math.floor(length / k / unit) * unit;
+  const lens = each * k === length && each > 0 ? Array(k).fill(each) : Array.from({ length: k }, (_, i) => Math.floor(length / k) + (i < length % k ? 1 : 0));
   const out: SoloPlan[] = [];
   let t = start;
-  for (let i = 0; i < k && t < start + length; i++) {
-    const remaining = start + length - t;
-    const isLast = i === k - 1 || t + each * 2 > start + length;
-    const len = isLast ? remaining : Math.min(each, remaining);
+  lens.forEach((len, i) => {
     out.push({ start: t, length: len, soloist: soloists[i] });
     t += len;
-    if (isLast) break;
-  }
+  });
   return out;
 }
 
