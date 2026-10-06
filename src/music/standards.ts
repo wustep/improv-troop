@@ -67,7 +67,7 @@ export const STANDARDS: Standard[] = [
       "Cm7", "F7", "Bbmaj7", "Ebmaj7", "Am7b5", "D7", "Gm6", "Gm6",
       "Cm7", "F7", "Bbmaj7", "Ebmaj7", "Am7b5", "D7", "Gm6", "Gm6",
       "Am7b5", "D7b9", "Gm6", "Gm6", "Cm7", "F7", "Bbmaj7", "Ebmaj7",
-      "Am7b5", "D7b9", "Gm7 C7", "Fm7 Bb7", "Am7b5", "D7b9", "Gm6", "Gm6",
+      "Am7b5", "D7b9", "Gm7 C7", "Fm7 Bb7", "Ebmaj7", "Am7b5 D7b9", "Gm6", "Gm6",
     ],
     form: [["A", 8], ["A", 8], ["B", 8], ["C", 8]],
     style: "swing",

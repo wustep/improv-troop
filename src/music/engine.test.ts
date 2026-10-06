@@ -498,6 +498,25 @@ describe("arrangement textures", () => {
   });
 });
 
+describe("standards", () => {
+  it("every chart fills its form, and every chord and head reads", () => {
+    for (const std of STANDARDS) {
+      expect(std.bars.length, std.id).toBe(std.form.reduce((n, [, len]) => n + len, 0));
+      for (const bar of std.bars)
+        for (const sym of bar.split(/\s+/)) {
+          const c = parseChord(sym);
+          expect(c.tones.length, `${std.id} ${sym}`).toBeGreaterThanOrEqual(3);
+          expect(mod(c.root, 12), `${std.id} ${sym}`).toBe(mod(parsePitch(`${sym.match(/^[A-G][#b]?/)![0]}4`) ?? -1, 12));
+        }
+      if (std.motif) for (const bar of std.motif.split("|")) expect(parseNotes(bar, std.meter).covered, `${std.id} motif`).toBeCloseTo(std.meter);
+    }
+  });
+  it("Autumn Leaves' chromatic ii–V lands on Ebmaj7, then the closing ii–V in one bar", () => {
+    const autumn = STANDARDS.find((s) => s.id === "autumn")!;
+    expect(autumn.bars.slice(26, 30)).toEqual(["Gm7 C7", "Fm7 Bb7", "Ebmaj7", "Am7b5 D7b9"]);
+  });
+});
+
 describe("baroque prelude", () => {
   // the piano's notes in the bars it plays @prelude, below the tenor
   const lowPreludeNotes = (members: Member[]) =>
