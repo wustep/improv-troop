@@ -66,7 +66,8 @@ describe("composer pipeline", () => {
     const calls = useDebug.getState().calls.filter((c) => c.runId === "t-comp");
     expect(calls.some((c) => c.repairs.some((r) => r.includes("outside the 16-bar frame")))).toBe(true);
     // the leader's head bars got written notes
-    expect(score.plan[1].directives?.fox).toMatch(/Bb4\/8/);
+    const head = score.frame.sections.find((s) => s.kind === "head")!;
+    expect(score.plan[head.start + 1].directives?.fox).toMatch(/Bb4\/8/);
     expect(score.parts.fox.length).toBeGreaterThan(10);
     expect(score.motif.text).toContain("F4");
   });

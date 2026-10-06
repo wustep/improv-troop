@@ -159,7 +159,7 @@ describe("cello", () => {
     const { score } = generateLocal(s, noBassist);
     const bassBars = score.plan.filter((bp) => bp.roles.sheep === "bass");
     expect(bassBars.length).toBeGreaterThan(8);
-    const b = bassBars[1].index;
+    const b = bassBars.filter((bp) => bp.directives?.sheep === "@walk")[1].index;
     const notes = score.parts.sheep.filter((n) => n.start >= b * 4 && n.start < b * 4 + 4);
     expect(notes.length).toBe(4); // walking quarters
     expect(notes.every((n) => n.art === "pizz" && n.pitch <= 52)).toBe(true);
@@ -323,6 +323,14 @@ describe("standards in choruses", () => {
     expect(blues.chords.slice(0, 4).map((b) => b.map((c) => c.symbol).join(" "))).toEqual(["Gm7", "C7", "F7 D7", "Gm7 C7"]);
     // one time through, or a style that starts straight in, has no intro
     expect(frameFor("autumn", 32, ["cat"]).intro).toBe(0);
+  });
+  it("a free chart keeps its length: the intro comes out of the solos", () => {
+    for (const [bars, intro] of [[8, 0], [12, 0], [16, 2], [24, 4], [32, 4]] as const) {
+      const f = buildFrame({ ...defaultSettings(band5), style: "swing", bars, soloists: ["cat"] }, band5);
+      expect(f.bars, `${bars}`).toBe(bars);
+      expect(f.intro ?? 0, `${bars}`).toBe(intro);
+    }
+    expect(buildFrame({ ...defaultSettings(band5), style: "ambient", bars: 32, soloists: ["cat"] }, band5).intro).toBe(0);
   });
   it("a 32-bar tune: head, a whole chorus solo, head out", () => {
     expect(layout(frameFor("autumn", 96, ["cat"]))).toEqual(["head:0+32:fox", "solo:32+32:cat", "out:64+32:fox"]);
@@ -557,7 +565,7 @@ describe("pop", () => {
     const chords = new Map<number, number[]>();
     for (const n of score.parts.bear.filter((n) => n.start < 15 * 4 && n.pitch >= 48)) chords.set(n.start, [...(chords.get(n.start) ?? []), n.pitch]);
     expect([...chords.values()].filter((v) => v.length === 3).length / chords.size).toBeGreaterThan(0.85);
-    expect(score.frame.sections.map((s) => s.name)).toEqual(["Chorus", "Break · Mochi", "Last chorus"]);
+    expect(score.frame.sections.map((s) => s.name)).toEqual(["Intro", "Chorus", "Break · Mochi", "Last chorus"]);
     // the tune stays in the key: hardly any chromatic notes
     const key = keyScaleOf(score.frame.key);
     const lead = score.parts[score.frame.leaderId];
@@ -644,15 +652,15 @@ describe("reharmonization", () => {
     return { f, bars: f.chords.map((c) => c.map((x) => x.symbol).join(" ")) };
   };
   it("gives takes their own changes, opens up the solos, and brings the tune back", () => {
-    const tunes = new Set([1, 2, 3, 4, 5, 6].map((s) => changes(s).bars.slice(0, 8).join("|")));
+    const tunes = new Set([1, 2, 3, 4, 5, 6].map((s) => changes(s).bars.slice(changes(s).f.intro ?? 0).slice(0, 8).join("|")));
     expect(tunes.size).toBeGreaterThan(3);
     for (const seed of [1, 2, 3]) {
       const { f, bars } = changes(seed);
       const head = f.sections.find((s) => s.kind === "head")!;
       const out = f.sections.find((s) => s.kind === "out")!;
-      expect(bars.slice(out.start, out.start + out.length - 2)).toEqual(bars.slice(0, out.length - 2));
-      const solos = bars.slice(head.length, out.start - 1);
-      expect(solos.some((b, i) => b !== bars[i % head.length])).toBe(true);
+      expect(bars.slice(out.start, out.start + out.length - 2)).toEqual(bars.slice(head.start, head.start + out.length - 2));
+      const solos = bars.slice(head.start + head.length, out.start - 1);
+      expect(solos.some((b, i) => b !== bars[head.start + (i % head.length)])).toBe(true);
       expect(bars[bars.length - 1]).toBe("Bb6");
     }
   });

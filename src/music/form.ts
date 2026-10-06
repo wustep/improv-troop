@@ -159,11 +159,17 @@ export function buildFrame(input: TroopSettings, members: Member[]): Frame {
   const style = STYLES[settings.style];
   const beats = std ? std.meter : settings.meter.beats;
   const rng = makeRng(settings.seed).fork("frame");
-  const total = std ? snapLength(std.id, settings.bars) : Math.max(4, Math.round(settings.bars));
+  const requested = std ? snapLength(std.id, settings.bars) : Math.max(4, Math.round(settings.bars));
+  // A real performance opens with a rhythm-section intro: a standard played two or more times
+  // through, or a free chart of 16 bars or more. A standard adds the intro to its choruses; a
+  // free chart keeps its length (the intro comes out of the solos).
+  const intro = !INTRO_STYLES.has(settings.style) ? 0 : std ? (requested >= 2 * std.bars.length ? (std.bars.length >= 8 ? 4 : 2) : 0) : requested >= 24 ? 4 : requested >= 16 ? 2 : 0;
+  const total = std ? requested : requested - intro;
   const flats = keyPrefersFlats(settings.key);
 
   // ── Harmony ──
   let barTexts: string[] = [];
+  let tuneTail: string[] = []; // a free chart's closing bars, for its intro
   if (std) {
     let semis = mod(pcOf(settings.key.tonic) - pcOf(std.key.tonic), 12);
     if (semis > 6) semis -= 12;
@@ -198,6 +204,7 @@ export function buildFrame(input: TroopSettings, members: Member[]): Frame {
     // take has its own changes (read with the top of the tune after it, where it turns around)
     const plain = prog.map(toText);
     const tune = reharmonize([...plain, plain[0]], 0, plain.length, () => 0.3, settings.key, settings.style, rng.fork("tune")).slice(0, plain.length);
+    tuneTail = tune.slice(-4);
     barTexts = Array.from({ length: total }, (_, i) => tune[i % tune.length]);
     const { head, out } = freeForm(total);
     const outStart = out > 0 ? total - out : total;
@@ -303,11 +310,10 @@ export function buildFrame(input: TroopSettings, members: Member[]): Frame {
     if (soloLen > 0) pushSolos(head, soloLen);
     if (out > 0) sections.push({ name: words.outHead, kind: "out", start: total - out, length: out, featured: [leaderId] });
   }
-  // A standard played as a real performance gets an intro: the rhythm section plays the
-  // tune's last bars, turned around into the top, before the head comes in.
-  const intro = std && total >= 2 * std.bars.length && INTRO_STYLES.has(settings.style) ? (std.bars.length >= 8 ? 4 : 2) : 0;
+  // The intro: the rhythm section plays the tune's last bars, turned around into the top,
+  // before the head comes in.
   if (intro) {
-    const introBars = barTexts.slice(std!.bars.length - intro, std!.bars.length);
+    const introBars = std ? barTexts.slice(std.bars.length - intro, std.bars.length) : tuneTail.slice(-intro);
     // the last intro bar leads into the head's first chord with its dominant
     const target = parseChord(barTexts[0].split(/\s+/)[0]);
     const lastBar = introBars[intro - 1].split(/\s+/);
