@@ -381,11 +381,17 @@ export function pad(ctx: BarCtx): NoteEvent[] {
   const out: NoteEvent[] = [];
   const vel = velFor(ctx, 0.45);
   for (const s of chordSpans(ctx)) {
+    // the chord carried over from last bar is still ringing: let it float rather than re-strike
+    if (s.start === 0 && ctx.mem.padHeldUntil > ctx.start + 1e-6 && s.chord.symbol === ctx.prev.symbol) continue;
+    // the harmony doesn't move at the barline: hold through into the next bar (one bar at most)
+    const holdOver = s.end >= ctx.beats - 1e-6 && !ctx.lastBar && ctx.next.symbol === s.chord.symbol && !(s.start === 0 && ctx.mem.padHeldUntil > ctx.start + 1e-6);
+    const dur = s.end - s.start + (holdOver ? ctx.beats : 0);
     // a second chordal pad thins to a shell instead of doubling the first player's voicing
     const fam = ctx.peerIndex >= 1 ? "shell" : ctx.style.voicing === "rootless" ? "open" : ctx.style.voicing;
     const v = voice(ctx, harmAt(ctx, s.start), fam, s.start);
-    out.push(...chordHit(v, s.start, s.end - s.start, vel * (ctx.peerIndex >= 1 ? 0.8 : 1), "legato"));
-    if (!ctx.hasBass && ctx.inst.id === "piano") out.push(...leftHand(ctx, s.start, s.end - s.start, vel));
+    out.push(...chordHit(v, s.start, dur, vel * (ctx.peerIndex >= 1 ? 0.8 : 1), "legato"));
+    if (!ctx.hasBass && ctx.inst.id === "piano") out.push(...leftHand(ctx, s.start, dur, vel));
+    ctx.mem.padHeldUntil = holdOver ? ctx.start + ctx.beats * 2 : -1;
   }
   return out;
 }
@@ -406,11 +412,17 @@ export function shimmer(ctx: BarCtx): NoteEvent[] {
   const count = ctx.rng.int(1, ctx.energy > 0.6 ? 4 : 2);
   const slots = [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5].filter((x) => x < ctx.beats);
   const used = new Set<number>();
-  for (let i = 0; i < count; i++) {
-    const pos = ctx.rng.pick(slots);
-    if (used.has(pos)) continue;
-    used.add(pos);
-    const p = ctx.rng.pick(pool);
+  for (let i = 0; i < count; i++) used.add(ctx.rng.pick(slots));
+  // the bells make a slow line: mostly 4ths and 5ths from the last one, rarely the same note again
+  const leapWeight = (p: number) => {
+    const last = ctx.mem.lastPitch;
+    if (last === null || last < blo - 12 || last > bhi + 12) return 1;
+    const iv = Math.abs(p - last);
+    return iv === 5 || iv === 7 ? 8 : iv === 0 ? 0.2 : iv <= 12 ? 1 : 0.3;
+  };
+  for (const pos of pool.length ? [...used].sort((a, b) => a - b) : []) {
+    const p = ctx.rng.weighted(pool, pool.map(leapWeight));
+    ctx.mem.lastPitch = p;
     out.push({ pitch: p, start: pos, dur: Math.max(1, ctx.beats - pos), vel: vel * (0.8 + ctx.rng.next() * 0.3) });
   }
   // a soft low pad underneath

@@ -26,6 +26,8 @@ export interface PlayerMemory {
   lastTier: number | null;
   /** The drummer's last fill shape, so the next one says something else. */
   lastFill: string | null;
+  /** Absolute beat a held pad chord rings until (it floats over the barline instead of re-striking). */
+  padHeldUntil: number;
 }
 
 export function newMemory(): PlayerMemory {
@@ -43,6 +45,7 @@ export function newMemory(): PlayerMemory {
     lastShape: null,
     lastTier: null,
     lastFill: null,
+    padHeldUntil: -1,
   };
 }
 

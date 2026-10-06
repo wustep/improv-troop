@@ -550,3 +550,39 @@ describe("swing in two", () => {
     expect(checked).toBeGreaterThan(5);
   });
 });
+
+describe("ambient", () => {
+  const takes = Array.from({ length: 10 }, (_, i) =>
+    generateLocal({ ...defaultSettings(defaultMembers()), style: "ambient", bars: 32, seed: i + 1, soloists: ["fox"] }, defaultMembers()).score,
+  );
+  it("pads float over the barline when the harmony doesn't move", () => {
+    let held = 0;
+    let restruck = 0;
+    for (const score of takes) {
+      const beats = score.frame.meter.beats;
+      for (let b = 1; b < score.plan.length - 1; b++) {
+        if (score.plan[b].directives?.bear !== "@pad" || score.plan[b - 1].directives?.bear !== "@pad") continue;
+        if (score.frame.chords[b - 1].at(-1)!.symbol !== score.frame.chords[b][0].symbol) continue;
+        if (score.parts.bear.some((n) => Math.abs(n.start - b * beats) < 1e-6)) restruck++;
+        else held++;
+      }
+    }
+    expect(held).toBeGreaterThan(20);
+    expect(held / (held + restruck)).toBeGreaterThan(0.9);
+  });
+  it("bells make a line of 4ths and 5ths", () => {
+    let leaps = 0;
+    let ivs = 0;
+    for (const score of takes) {
+      const beats = score.frame.meter.beats;
+      const bells = score.parts.bear.filter((n) => n.art !== "legato" && score.plan[Math.floor(n.start / beats)].directives?.bear === "@shimmer").sort((a, b) => a.start - b.start);
+      for (let i = 1; i < bells.length; i++) {
+        const iv = Math.abs(bells[i].pitch - bells[i - 1].pitch);
+        ivs++;
+        if (iv === 5 || iv === 7) leaps++;
+      }
+    }
+    expect(ivs).toBeGreaterThan(50);
+    expect(leaps / ivs).toBeGreaterThan(0.4);
+  });
+});
