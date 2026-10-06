@@ -121,7 +121,8 @@ function realizeRaw(ctx: BarCtx, text: string): DirectiveResult {
       ctx,
       r.notes.map((n) => ({
         ...n,
-        vel: n.art === "ghost" ? vel * 0.4 : n.art === "accent" ? Math.min(1, vel * 1.2) : vel,
+        // an accent is marked, not pre-boosted: the audio engine lifts every accent once
+        vel: n.art === "ghost" ? vel * 0.4 : vel,
       })),
       issues,
     );
@@ -268,7 +269,7 @@ function realizeRaw(ctx: BarCtx, text: string): DirectiveResult {
       const held = fn === "chordal" ? comp.endChord(c) : fn === "bass" ? bass.pedal({ ...c, style: { ...c.style, id: "ambient" } }) : lines.endNote(c);
       // a button ending: everyone hits the downbeat together, short and accented, and stops
       if (ENDINGS[c.style.id]?.kind === "button") {
-        return done(held.filter((n) => n.start < 1e-6).map((n) => ({ ...n, dur: Math.min(n.dur, 0.5), vel: Math.min(1, n.vel * 1.1), art: "accent" as const })));
+        return done(held.filter((n) => n.start < 1e-6).map((n) => ({ ...n, dur: Math.min(n.dur, 0.5), art: "accent" as const })));
       }
       return done(held);
     }

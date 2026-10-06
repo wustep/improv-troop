@@ -939,6 +939,7 @@ export class TroopAudio {
     }
 
     let vel = clamp(Number.isFinite(note.vel) ? note.vel : 0.7, 0, 1);
+    // the one place an accent is lifted (parts mark accents without pre-boosting them)
     if (note.art === "accent") vel = Math.min(1, vel * 1.12 + 0.08);
     if (note.art === "ghost") vel = ghostVel(vel);
     vel *= 1 + jitter(0.06, id, note.start, note.pitch, "v");

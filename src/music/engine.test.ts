@@ -498,6 +498,21 @@ describe("arrangement textures", () => {
   });
 });
 
+describe("accents", () => {
+  it("are marked, not pre-boosted: the audio engine lifts each accent once", async () => {
+    const { realize } = await import("./realize");
+    const { score } = generateLocal({ ...defaultSettings(band), bars: 16, seed: 5 }, band);
+    const leader = score.settings.leaderId;
+    const bar = score.plan.findIndex((b) => b.directives?.[leader]?.startsWith("@motif"));
+    const plan = score.plan.map((b) => ({ ...b, directives: { ...b.directives } }));
+    plan[bar].directives![leader] = "C5/4> D5/4 E5/4 G5/4";
+    const res = realize({ frame: score.frame, members: band, plan, motif: score.motif, seed: 5 });
+    const notes = res.parts[leader].filter((n) => Math.floor(n.start / 4 + 1e-9) === bar);
+    expect(notes[0].art).toBe("accent");
+    expect(notes[0].vel).toBeCloseTo(notes[1].vel, 5);
+  });
+});
+
 describe("@motif as a model writes it", () => {
   const play = async (directive: string, motifText: string) => {
     const { realize } = await import("./realize");

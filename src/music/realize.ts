@@ -102,7 +102,7 @@ function arrange(notes: NoteEvent[], ctx: BarCtx): NoteEvent[] {
   // the first thing this player struck, moved onto the one, short and together
   const first = notes.length ? Math.min(...notes.map((n) => n.start)) : null;
   if (first === null) return [];
-  return notes.filter((n) => Math.abs(n.start - first) < 1e-6).map((n) => ({ ...n, start: 0, dur: 0.5, vel: Math.min(1, n.vel * 1.15), art: "accent" as const }));
+  return notes.filter((n) => Math.abs(n.start - first) < 1e-6).map((n) => ({ ...n, start: 0, dur: 0.5, art: "accent" as const }));
 }
 
 export interface RealizeOptions {
