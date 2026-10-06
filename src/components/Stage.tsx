@@ -47,12 +47,12 @@ function bubbleFit(i: number, n: number, perRow: number, spriteW: number, width:
 
 function IntroNote({ onClose }: { onClose: () => void }) {
   return (
-    <div className="sticky-note relative z-30 mx-auto mt-s w-full max-w-[19rem] -rotate-[1deg] px-s py-xs text-m lg:absolute lg:left-1 lg:top-14 lg:mt-0 lg:w-[17.5rem] lg:-rotate-[2deg]" role="note">
+    <div className="sticky-note relative z-30 mx-auto mt-m w-full max-w-[19rem] -rotate-[1deg] px-s py-xs text-m lg:max-w-[46rem] lg:-rotate-[0.6deg]" role="note">
       <button type="button" onClick={onClose} className="absolute right-xs top-xxs text-l text-ink-soft transition-colors duration-(--motion-duration) hover:text-ink" aria-label="Dismiss">
         ×
       </button>
       <div className="type-label">How to jam</div>
-      <ol className="ml-m list-decimal">
+      <ol className="ml-m list-decimal lg:ml-0 lg:flex lg:list-inside lg:gap-l">
         <li>
           Pick the band and their instruments <span className="hidden lg:inline">→</span>
           <span className="lg:hidden">(just below)</span>
@@ -80,7 +80,7 @@ function SharedNote() {
   const names = take.score.members.map((m) => m.name);
   const band = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0];
   return (
-    <div className="sticky-note relative z-30 mx-auto mt-s w-full max-w-[19rem] -rotate-[1deg] px-s py-xs text-m lg:absolute lg:left-1 lg:top-14 lg:mt-0 lg:w-[17.5rem] lg:-rotate-[2deg]" role="note">
+    <div className="sticky-note relative z-30 mx-auto mt-m w-full max-w-[19rem] -rotate-[1deg] px-s py-xs text-m lg:max-w-[46rem] lg:-rotate-[0.6deg]" role="note">
       <button type="button" onClick={dismiss} className="absolute right-xs top-xxs text-l text-ink-soft transition-colors duration-(--motion-duration) hover:text-ink" aria-label="Dismiss">
         ×
       </button>
