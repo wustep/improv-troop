@@ -71,8 +71,45 @@ export function Transport() {
     };
   }, []);
 
+  // on a phone the stage fills the screen: once the transport scrolls away, a dock keeps it in reach
+  const [rowRef, setRowRef] = useState<HTMLDivElement | null>(null);
+  const [offscreen, setOffscreen] = useState(false);
+  useEffect(() => {
+    if (!rowRef) return;
+    const io = new IntersectionObserver(([e]) => setOffscreen(!e.isIntersecting), { threshold: 0 });
+    io.observe(rowRef);
+    return () => io.disconnect();
+  }, [rowRef]);
+
   return (
-    <div className="flex flex-wrap items-center gap-s">
+    <div ref={setRowRef} className="flex flex-wrap items-center gap-s">
+      {offscreen && (
+        <div className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-s bg-(--neutral-1) px-m py-xs shadow-[var(--border-shadow-m),var(--shadow-m)] lg:hidden" role="region" aria-label="Transport">
+          <RoughButton
+            seed="dock-play"
+            shape="ellipse"
+            tone="go"
+            className="h-11 w-11 shrink-0 text-l text-on-accent"
+            onClick={() => (playing ? stop() : void play())}
+            disabled={!current}
+            aria-label={playing ? "Stop" : "Play"}
+          >
+            {playing ? "■" : "▶"}
+          </RoughButton>
+          <span className="min-w-0 flex-1 truncate text-s text-ink-soft">
+            {gen.running ? gen.status : current ? current.title : ""}
+          </span>
+          {gen.running ? (
+            <RoughButton seed="dock-cancel" tone="quiet" className="shrink-0 px-s py-xxs font-brand text-l font-heavy" onClick={cancel}>
+              stop thinking
+            </RoughButton>
+          ) : (
+            <RoughButton seed="dock-go" tone="primary" className="shrink-0 px-s py-xxs font-brand text-l font-heavy text-on-accent" onClick={() => void generate()}>
+              {goLabel}
+            </RoughButton>
+          )}
+        </div>
+      )}
       <RoughButton
         seed="play"
         shape="ellipse"
