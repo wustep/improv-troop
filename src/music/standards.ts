@@ -286,7 +286,8 @@ export const STANDARDS: Standard[] = [
     name: "Frère Jacques",
     key: { tonic: "F", mode: "major" },
     meter: 4,
-    bars: ["F", "F", "F", "F", "F", "F", "F C7", "F C7"],
+    // "ding, dang, dong": F C F under F C F
+    bars: ["F", "F", "F", "F", "F", "F", "F C7 F F", "F C7 F F"],
     form: [["A", 8]],
     style: "baroque",
     tempo: 104,
