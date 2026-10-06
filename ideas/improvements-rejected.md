@@ -118,3 +118,15 @@
 - **RoughButton hover ignores disabled and touch** — no hover hatch when disabled or non-mouse pointer _(rejected 2026-10-06)_
 - **Name-tag hover hint doesn't reflow the stage** — drop or reserve " · tap to mute" _(rejected 2026-10-06)_
 - **Hide "judge ?/10"; hint for an empty Leader row** — judge segment only with a score _(rejected 2026-10-06)_
+- **Improviser rejoins after falling behind** — skip to a phrase that can still be ready, parallel catch-up rounds _(rejected 2026-10-06)_
+- **Varied best-of-4 drafts; drop hollow drafts** — per-draft angle line, coverage threshold _(rejected 2026-10-06)_
+- **Band talk in bar order** — insert jam lines by bar in onChat _(rejected 2026-10-06)_
+- **Free-chart cadence doesn't stack two dominants** — root comparison, per-style cadence chord _(rejected 2026-10-06)_
+- **Fade/cadence endings don't peak in the rit** — tutti/sparse and falling dynamic over rit bars _(rejected 2026-10-06)_
+- **Ensemble moves re-check release at the change** — releaseAtChange after passes 2–4 _(rejected 2026-10-06)_
+- **Write turnaround before reharm** — turnaround and cadence bars before reharmonize _(rejected 2026-10-06)_
+- **Even solo lengths** — spread remainder in unit steps _(rejected 2026-10-06)_
+- **Sheet text legible on phones** — zoom-aware text sizes in renderRow _(rejected 2026-10-06)_
+- **Sheet colours from tokens** — resolve --ink-soft/--color-2 via getComputedStyle, halo in sheet surface colour _(rejected 2026-10-06)_
+- **Roster feedback** — 32px remove target, disabled reason, "stage is full" line _(rejected 2026-10-06)_
+- **Share cap at 6 and model-take share note** — MAX_MEMBERS 6, explain no share for model takes _(rejected 2026-10-06)_
