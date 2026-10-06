@@ -109,7 +109,9 @@ export function ensemble(o: EnsembleInput): EnsembleFix[] {
         if (!ok) {
           const prev = mono ? notes[i - 1]?.pitch : undefined;
           const dir = (prev === undefined ? -1 : Math.sign(n.pitch - prev) || -1) as 1 | -1;
-          const fixed = nearestIn(n.pitch, home.tones, dir, 2);
+          // bent onto the chord, but never out of the instrument's range
+          let fixed = nearestIn(n.pitch, home.tones, dir, 2);
+          if (fixed > inst.range[1] || fixed < inst.range[0]) fixed = nearestIn(n.pitch, home.tones, fixed > inst.range[1] ? -1 : 1, 2);
           note(bar, m.id, `held ${pitchName(n.pitch, flats)} over ${home.chord.symbol} bent to ${pitchName(fixed, flats)}`);
           n.pitch = fixed;
         }
