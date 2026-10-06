@@ -95,3 +95,13 @@
 - **New Orleans riff refresh and tailgate trombone** — section-keyed riff, guide-tone smears _(rejected 2026-10-06)_
 - **Minimal additive process and phasing** — additive arp schedule, peer rotation, wrapping displace _(rejected 2026-10-06)_
 - **Motif transform fixes** — retrograde grid, empty rhythm cell guard, displaced accent _(rejected 2026-10-06)_
+- **Funk comp locks to the section, with grip voicings** — section-hashed cell, avoids bass 16ths, dominant-9 grip _(rejected 2026-10-06)_
+- **Featured drummer gets drum-grid grammar** — DRUM_GRID help with step count in the improviser's featured prompt _(rejected 2026-10-06)_
+- **Director's chart names who is featured per bar** — "Spotlight:" line from frame.slots in chartBlock _(rejected 2026-10-06)_
+- **extractJson tries every fenced block** — each fence, then raw text _(rejected 2026-10-06)_
+- **Count-in shows the beats** — "1 · 2 · 3 · 4" in the stage header plus the first chord _(rejected 2026-10-06)_
+- **Speech bubbles clamp when crowded** — line-clamp-3 with title on crowded bubbles _(rejected 2026-10-06)_
+- **Stage controls screen readers ignore** — sr-only leader star, role=img thinking dots, "Mute {name}" label, aria-expanded on fold _(rejected 2026-10-06)_
+- **FormMap bars hittable on phones** — coarse-pointer seek snaps to phrase start, legend _(rejected 2026-10-06)_
+- **Rough borders on first paint** — synchronous measure and token edge until measured _(rejected 2026-10-06)_
+- **Stable take numbers and dated times** — number by creation, "yesterday"/date for older takes _(rejected 2026-10-06)_
