@@ -186,6 +186,7 @@ export function makeBarCtx(
     peerIndex,
     peerCount: Math.max(1, peers.length),
     playedIn: (b: number) => played.get(b) ?? null,
+    energyIn: (b: number) => DYNAMIC_ENERGY[styleDynamic(frame.style, plan[b]?.dynamic ?? "mf", b === frame.bars - 1)],
     bassLine,
   };
 }

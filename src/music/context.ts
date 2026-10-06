@@ -95,6 +95,8 @@ export interface BarCtx {
   peerCount: number;
   /** What the featured player played in an earlier bar (relative to that bar), for replaying the head. */
   playedIn(bar: number): NoteEvent[] | null;
+  /** The energy of an earlier bar's dynamic (so a replayed head can be re-voiced at this bar's). */
+  energyIn(bar: number): number;
   /** The bass line in this bar (relative to bar start), once it's written: the drummer locks to it. */
   bassLine: NoteEvent[] | null;
 }
@@ -129,5 +131,14 @@ export const DYNAMIC_ENERGY: Record<Dynamic, number> = {
 };
 
 export function velFor(ctx: BarCtx, base = 0.75): number {
-  return Math.max(0.12, Math.min(1, base * (0.55 + ctx.energy * 0.6)));
+  return Math.max(0.12, Math.min(1, base * dynamicGain(ctx.energy)));
+}
+
+function dynamicGain(energy: number): number {
+  return 0.55 + energy * 0.6;
+}
+
+/** How much louder (or softer) a bar at `energy` plays than one at `from` (mf by default). */
+export function dynamicLift(energy: number, from = DYNAMIC_ENERGY.mf): number {
+  return dynamicGain(energy) / dynamicGain(from);
 }

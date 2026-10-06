@@ -1,4 +1,4 @@
-import { chordSpans, harmAt, velFor, type BarCtx } from "./context";
+import { chordSpans, dynamicLift, harmAt, velFor, type BarCtx } from "./context";
 import { holdable, nearestIn } from "./harmony";
 import { keyPrefersFlats, mod, pitchName } from "./theory";
 import { ENDINGS } from "./ending";
@@ -166,7 +166,9 @@ function realizeRaw(ctx: BarCtx, text: string): DirectiveResult {
       const src = parseInt(args[0] ?? "", 10) - 1;
       const played = Number.isFinite(src) && src >= 0 && src < ctx.bar ? ctx.playedIn(src) : null;
       if (played?.length) {
-        const notes = played.map((n) => ({ ...n }));
+        // the same notes, at this bar's dynamic (an out head can be louder or softer than the head)
+        const lift = dynamicLift(ctx.energy, ctx.energyIn(src));
+        const notes = played.map((n) => ({ ...n, vel: Math.min(1, n.vel * lift) }));
         ctx.mem.lastPitch = notes[notes.length - 1].pitch;
         ctx.mem.phrase = null;
         return done(notes);

@@ -498,6 +498,28 @@ describe("arrangement textures", () => {
   });
 });
 
+describe("the tune at the bar's dynamic", () => {
+  it("a stated motif and a replayed head play softer at pp than at ff", async () => {
+    const { realize } = await import("./realize");
+    const { score } = generateLocal({ ...defaultSettings(band), bars: 32, seed: 2 }, band);
+    const leader = score.settings.leaderId;
+    const motifBar = score.plan.findIndex((b) => b.directives?.[leader]?.startsWith("@motif"));
+    const headBar = score.plan.findIndex((b) => b.directives?.[leader]?.startsWith("@head"));
+    expect(motifBar).toBeGreaterThanOrEqual(0);
+    expect(headBar).toBeGreaterThan(motifBar);
+    const at = (dyn: "pp" | "ff", bar: number) => {
+      // the head stays where it was; only the bar being measured changes dynamic
+      const plan = score.plan.map((b) => ({ ...b, dynamic: b.index === bar ? dyn : "mf" as const }));
+      const notes = realize({ frame: score.frame, members: band, plan, motif: score.motif, seed: 2 }).parts[leader];
+      const mine = notes.filter((n) => Math.floor(n.start / score.frame.meter.beats + 1e-9) === bar);
+      expect(mine.length).toBeGreaterThan(0);
+      return mine.reduce((s, n) => s + n.vel, 0) / mine.length;
+    };
+    expect(at("pp", motifBar)).toBeLessThan(at("ff", motifBar) * 0.75);
+    expect(at("pp", headBar)).toBeLessThan(at("ff", headBar) * 0.75);
+  });
+});
+
 describe("standards", () => {
   it("every chart fills its form, and every chord and head reads", () => {
     for (const std of STANDARDS) {

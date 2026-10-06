@@ -1,4 +1,4 @@
-import { harmAt, type BarCtx } from "./context";
+import { dynamicLift, harmAt, type BarCtx } from "./context";
 import { fitOctave, holdable, nearestIn } from "./harmony";
 import { notesToText, parseNotes, splitBars } from "./notation";
 import type { Rng } from "./rng";
@@ -258,6 +258,8 @@ export function realizeMotifBar(ctx: BarCtx, ops: MotifOp[], barOffset = 0): Not
   const hi = lo + ctx.beats;
   const shift = motifOctave(ctx, raw);
   const inBar = raw.filter((n) => n.start >= lo - 1e-6 && n.start < hi - 1e-6);
+  // the motif keeps its own accents, at the bar's dynamic (as written, at mf)
+  const lift = dynamicLift(ctx.energy);
   const out: NoteEvent[] = [];
   let prevRaw: number | null = null;
   let prevOut: number | null = null;
@@ -283,7 +285,7 @@ export function realizeMotifBar(ctx: BarCtx, ops: MotifOp[], barOffset = 0): Not
     if (prevOut !== null && p === prevOut && prevRaw !== null && n.pitch !== prevRaw) {
       p = scaleStepAway(p, n.pitch - prevRaw, structural ? h.stable : h.scale);
     }
-    out.push({ ...n, start, dur: Math.min(n.dur, ctx.beats - start), pitch: p });
+    out.push({ ...n, start, dur: Math.min(n.dur, ctx.beats - start), pitch: p, vel: Math.min(1, n.vel * lift) });
     prevRaw = n.pitch;
     prevOut = p;
   });
