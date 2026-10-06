@@ -121,7 +121,41 @@ A critic agent generated 308 takes and measured them: chord-tone landings, doubl
 ### Titles (3d704c9)
 - A model-made take on a standard is named for the tune.
 
+## Round 3 (after c604561): the named weaknesses, more songs, a second critic
+
+### Sparse bars (c3f35e5)
+- **Problem.** A solo's "@line sparse" bars were busier than plain ones (swing: 1.39 vs 1.01 notes a beat).
+- **Shipped.** They now keep about one note a beat: the first note and the landing stay, middle offbeats go, and the notes before them ring on.
+- **Result.** Sparse swing bars average 1.04 notes a beat, and funk 0.90 (from 1.55).
+
+### More songs (b789810, 5628c80)
+- Jingle Bells, Twinkle (Ah vous dirai-je), Frère Jacques and Amazing Grace, with their written melodies.
+- The tune list is grouped: songs, jazz changes, pop progressions, grooves.
+
+### The model band knows the song (6adf2be)
+- The chart in every prompt names the song, shows its opening bars in the take's key, and marks the intro.
+
+### Idle stage (4916353)
+- When stopped, the stage header shows what's loaded, with its key and tempo.
+
+### Second measured critique
+The critic generated 204 takes (334k notes) and found eight weaknesses. All were fixed:
+- **Drum breaks (ff27cd9).** The band lays out for the drummer's 4s.
+- **Pickups (7c63fe8).** Songs come in on their pickup ("Oh when the…") from the intro or the last solo bar, and the leader sits out the intro.
+  - The tag sings the song's own cadence bar over each ii–V.
+  - Written notes are exempt from every ensemble fix.
+- **Frère Jacques (e1459a0).** I–V–I under "ding dang dong".
+- **Range (aba47bd).** A bend onto the chord never leaves the instrument's range.
+- **Whole choruses for every horn (e15f5ba).** This holds even when the drummer trades. Standards now run up to 160 bars.
+- **Softer under solos (607c334).** The band plays about 12% softer behind a soloist.
+- **Pop hooks (a5e142a).** Eight rhythms and seven contours.
+
+The critic confirmed these were already fine:
+- Written melodies played exactly in 1176/1176 bars.
+- Every intro's last bar leads into the head (138/138).
+- Every ending lands on the tonic (108/108).
+- No engine errors, mono overlaps, silent featured bars or clipped velocities.
+
 ## Not done, and why
 - **Real gateway tests.** No key was reachable: none in the test browser's storage, the environment, or a Vercel CLI. Reading the browser profile on disk was blocked as credential access. Every model-path change is covered only by the mock model and pipeline tests.
-- **Free-chart solos' "sparse" bar.** It still carries the opener's tail. Accepted; the bars that follow build properly.
 - **More written melodies.** Only tunes that could be transcribed with confidence were added: Saints, Greensleeves, Ode to Joy.
