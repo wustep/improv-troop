@@ -43,10 +43,22 @@ function useSize<T extends HTMLElement>() {
   return [ref, size] as const;
 }
 
+// Line-work tokens come from the theme (globals.css): stroke widths are the border tokens,
+// looseness is the Jamming --sketch-* extension.
+function themeNumber(name: string, fallback: number) {
+  if (typeof window === "undefined") return fallback;
+  const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
+  return Number.isFinite(v) ? v : fallback;
+}
+export type StrokeWeight = "s" | "m" | "l";
+
 export interface RoughStyle {
   stroke?: string;
-  strokeWidth?: number;
+  /** a border token */
+  weight?: StrokeWeight;
   fill?: string;
+  /** a solid wash laid under the line work, e.g. a highlighter or a coloured-in button */
+  wash?: string;
   fillStyle?: "hachure" | "solid" | "zigzag" | "cross-hatch" | "dots" | "dashed" | "zigzag-line";
   hachureGap?: number;
   hachureAngle?: number;
@@ -63,29 +75,32 @@ function RoughSvg({ w, h, seed, s }: { w: number; h: number; seed: string; s: Ro
     const opts = {
       seed: seedOf(seed),
       stroke: s.stroke ?? "var(--ink)",
-      strokeWidth: s.strokeWidth ?? 1.6,
-      roughness: s.roughness ?? 1.3,
-      bowing: s.bowing ?? 1.2,
+      strokeWidth: themeNumber(`--border-${s.weight ?? "m"}`, 1.5),
+      roughness: s.roughness ?? themeNumber("--sketch-roughness", 1.3),
+      bowing: s.bowing ?? themeNumber("--sketch-bowing", 1.2),
       fill: s.fill,
       fillStyle: s.fillStyle ?? "hachure",
-      hachureGap: s.hachureGap ?? 5,
+      hachureGap: s.hachureGap ?? themeNumber("--sketch-hachure-gap", 4.5),
       hachureAngle: s.hachureAngle ?? -41,
       fillWeight: s.fillWeight ?? 1.2,
       disableMultiStroke: false,
     };
-    let d;
-    if (s.shape === "ellipse") d = gen.ellipse(w / 2, h / 2, w - pad * 2, h - pad * 2, opts);
-    else if (s.shape === "pill") {
-      const r = Math.min(h / 2 - pad, 18);
-      const x0 = pad;
-      const y0 = pad;
-      const x1 = w - pad;
-      const y1 = h - pad;
-      const p = `M${x0 + r},${y0} L${x1 - r},${y0} Q${x1},${y0} ${x1},${y0 + r} L${x1},${y1 - r} Q${x1},${y1} ${x1 - r},${y1} L${x0 + r},${y1} Q${x0},${y1} ${x0},${y1 - r} L${x0},${y0 + r} Q${x0},${y0} ${x0 + r},${y0} Z`;
-      d = gen.path(p, opts);
-    } else d = gen.rectangle(pad, pad, w - pad * 2, h - pad * 2, opts);
-    return gen.toPaths(d);
-  }, [w, h, seed, s.stroke, s.strokeWidth, s.fill, s.fillStyle, s.hachureGap, s.hachureAngle, s.fillWeight, s.roughness, s.bowing, s.shape]);
+    const shape = (o: typeof opts) => {
+      if (s.shape === "ellipse") return gen.ellipse(w / 2, h / 2, w - pad * 2, h - pad * 2, o);
+      if (s.shape === "pill") {
+        const r = Math.min(h / 2 - pad, 18);
+        const x0 = pad;
+        const y0 = pad;
+        const x1 = w - pad;
+        const y1 = h - pad;
+        const p = `M${x0 + r},${y0} L${x1 - r},${y0} Q${x1},${y0} ${x1},${y0 + r} L${x1},${y1 - r} Q${x1},${y1} ${x1 - r},${y1} L${x0 + r},${y1} Q${x0},${y1} ${x0},${y1 - r} L${x0},${y0 + r} Q${x0},${y0} ${x0 + r},${y0} Z`;
+        return gen.path(p, o);
+      }
+      return gen.rectangle(pad, pad, w - pad * 2, h - pad * 2, o);
+    };
+    const wash = s.wash ? gen.toPaths(shape({ ...opts, seed: opts.seed + 1, stroke: "none", fill: s.wash, fillStyle: "solid" })) : [];
+    return [...wash, ...gen.toPaths(shape(opts))];
+  }, [w, h, seed, s.stroke, s.weight, s.fill, s.wash, s.fillStyle, s.hachureGap, s.hachureAngle, s.fillWeight, s.roughness, s.bowing, s.shape]);
   return (
     <svg className="pointer-events-none absolute inset-0 overflow-visible" width={w} height={h} aria-hidden>
       {paths.map((p, i) => (
@@ -129,11 +144,13 @@ export function RoughButton({
 } & ButtonHTMLAttributes<HTMLButtonElement>) {
   const [ref, { w, h }] = useSize<HTMLButtonElement>();
   const [hover, setHover] = useState(false);
-  const fills: Record<string, string | undefined> = {
-    plain: active ? "var(--pencil-yellow)" : hover ? "rgba(226,169,59,0.55)" : undefined,
-    primary: active || hover ? "var(--pencil-red)" : "rgba(200,70,60,0.8)",
-    go: active || hover ? "var(--pencil-green)" : "rgba(79,138,58,0.82)",
-    quiet: active ? "rgba(91,86,102,0.35)" : hover ? "rgba(91,86,102,0.18)" : undefined,
+  // Selected reads as a highlighter wash (no lines through the label); hover is a light hatch.
+  // The filled tones are coloured in solid, so their label keeps its contrast.
+  const looks: Record<string, Pick<RoughStyle, "wash" | "fill" | "weight">> = {
+    plain: { wash: active ? "var(--color-2-transparent)" : undefined, fill: hover && !active ? "var(--color-2-transparent)" : undefined, weight: active ? "l" : "m" },
+    primary: { wash: "var(--color-1)", fill: hover ? "var(--neutral-9-transparent)" : undefined, weight: "l" },
+    go: { wash: "var(--color-4)", fill: hover ? "var(--neutral-9-transparent)" : undefined, weight: "l" },
+    quiet: { wash: active ? "var(--neutral-9-transparent)" : undefined, fill: hover ? "var(--neutral-7-transparent)" : undefined, weight: "m" },
   };
   return (
     <button
@@ -141,22 +158,11 @@ export function RoughButton({
       type="button"
       onPointerEnter={() => setHover(true)}
       onPointerLeave={() => setHover(false)}
-      className={`relative cursor-pointer select-none transition-transform duration-100 active:translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-45 ${className}`}
+      className={`relative cursor-pointer select-none transition-transform duration-(--motion-duration) ease-small active:translate-y-(--motion-press-distance) disabled:cursor-not-allowed disabled:opacity-45 ${className}`}
       aria-pressed={tone === "plain" || tone === "quiet" ? active : undefined}
       {...rest}
     >
-      <RoughSvg
-        w={w}
-        h={h}
-        seed={seed}
-        s={{
-          fill: fills[tone],
-          fillStyle: "hachure",
-          hachureGap: tone === "primary" || tone === "go" ? 3.2 : 4.5,
-          strokeWidth: tone === "primary" || tone === "go" ? 2 : 1.4,
-          shape,
-        }}
-      />
+      <RoughSvg w={w} h={h} seed={seed} s={{ ...looks[tone], fillStyle: "hachure", shape }} />
       <span className="relative">{children}</span>
     </button>
   );

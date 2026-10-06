@@ -32,20 +32,20 @@ const TONICS = ["C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]
 
 function Label({ children, hint }: { children: React.ReactNode; hint?: string }) {
   return (
-    <div className="mb-1 flex items-baseline justify-between gap-2">
-      <span className="font-[family-name:var(--font-script)] text-xl font-bold">{children}</span>
-      {hint && <span className="text-sm text-ink-soft">{hint}</span>}
+    <div className="mb-xxs flex items-baseline justify-between gap-xs">
+      <span className="type-label">{children}</span>
+      {hint && <span className="text-s text-ink-soft">{hint}</span>}
     </div>
   );
 }
 
 function Field({ children }: { children: React.ReactNode }) {
-  return <div className="mb-4">{children}</div>;
+  return <div className="mb-m">{children}</div>;
 }
 
 function Chip({ seed, active, onClick, children, title, disabled }: { seed: string; active?: boolean; onClick?: () => void; children: React.ReactNode; title?: string; disabled?: boolean }) {
   return (
-    <RoughButton seed={seed} active={active} onClick={onClick} title={title} disabled={disabled} className="px-2.5 py-1 text-[15px]">
+    <RoughButton seed={seed} active={active} onClick={onClick} title={title} disabled={disabled} className="px-xs py-xxs text-m">
       {children}
     </RoughButton>
   );
@@ -54,20 +54,20 @@ function Chip({ seed, active, onClick, children, title, disabled }: { seed: stri
 function MemberRow({ m, members, onChange, onRemove }: { m: Member; members: Member[]; onChange: (m: Member) => void; onRemove: () => void }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="mb-1.5">
-      <div className="flex items-center gap-2">
+    <div className="mb-xs">
+      <div className="flex items-center gap-xs">
         <AnimalPortrait animal={m.animal} size={40} />
-        <div className="min-w-0 flex-1 leading-tight">
-          <div className="truncate font-[family-name:var(--font-script)] text-lg font-bold">{m.name}</div>
+        <div className="min-w-0 flex-1">
+          <div className="type-label truncate">{m.name}</div>
           <div className="text-xs text-ink-soft">{ANIMALS[m.animal].species}</div>
         </div>
-        <RoughButton seed={`inst-${m.id}`} className="flex items-center gap-1 px-2 py-0.5 text-sm" onClick={() => setOpen((o) => !o)} aria-expanded={open} title="Choose instrument">
+        <RoughButton seed={`inst-${m.id}`} className="flex items-center gap-xxs px-xs py-xxs text-s" onClick={() => setOpen((o) => !o)} aria-expanded={open} title="Choose instrument">
           <InstrumentIcon instrument={m.instrument} size={24} />
           <span>{INSTRUMENTS[m.instrument].name}</span>
         </RoughButton>
         <button
           type="button"
-          className="px-1 text-lg leading-none text-ink-soft hover:text-[var(--pencil-red)] disabled:opacity-30"
+          className="px-xxs text-l text-ink-soft transition-colors duration-(--motion-duration) hover:text-(--color-1) disabled:opacity-30"
           onClick={onRemove}
           disabled={members.length <= 1}
           aria-label={`Remove ${m.name}`}
@@ -77,7 +77,7 @@ function MemberRow({ m, members, onChange, onRemove }: { m: Member; members: Mem
         </button>
       </div>
       {open && (
-        <div className="mt-1.5 grid grid-cols-4 gap-1 pl-12">
+        <div className="mt-xs grid grid-cols-4 gap-xxs pl-xxl">
           {INSTRUMENT_LIST.map((id) => (
             <button
               key={id}
@@ -86,7 +86,9 @@ function MemberRow({ m, members, onChange, onRemove }: { m: Member; members: Mem
                 onChange({ ...m, instrument: id as InstrumentId });
                 setOpen(false);
               }}
-              className={`flex flex-col items-center rounded px-1 py-0.5 text-[11px] leading-tight hover:bg-[rgba(226,169,59,0.25)] ${id === m.instrument ? "bg-[rgba(226,169,59,0.4)]" : ""}`}
+              aria-pressed={id === m.instrument}
+              data-selected={id === m.instrument}
+              className="pick flex flex-col items-center px-xxs py-xxs text-xxs"
               title={INSTRUMENTS[id].name}
             >
               <InstrumentIcon instrument={id} size={30} />
@@ -122,17 +124,17 @@ export function ControlPanel() {
   };
 
   return (
-    <RoughBox seed="panel" rough={{ strokeWidth: 1.8 }} className="panel-paper w-full p-4" as="aside" aria-label="Band settings">
+    <RoughBox seed="panel" rough={{ weight: "l" }} className="panel-paper w-full p-m" as="aside" aria-label="Band settings">
       <Field>
         <Label>Mode</Label>
-        <div className="grid grid-cols-2 gap-2">
-          <RoughButton seed="mode-imp" active={s.mode === "improviser"} onClick={() => set({ mode: "improviser" })} className="px-2 py-1.5 text-left">
-            <div className="font-[family-name:var(--font-script)] text-lg font-bold leading-none">Improviser</div>
-            <div className="text-xs leading-tight text-ink-soft">the animals talk it out</div>
+        <div className="grid grid-cols-2 gap-xs">
+          <RoughButton seed="mode-imp" active={s.mode === "improviser"} onClick={() => set({ mode: "improviser" })} className="px-xs py-xs text-left">
+            <div className="type-label">Improviser</div>
+            <div className="text-xs text-ink-soft">the animals talk it out</div>
           </RoughButton>
-          <RoughButton seed="mode-comp" active={s.mode === "composer"} onClick={() => set({ mode: "composer" })} className="px-2 py-1.5 text-left">
-            <div className="font-[family-name:var(--font-script)] text-lg font-bold leading-none">Composer</div>
-            <div className="text-xs leading-tight text-ink-soft">a director writes the chart</div>
+          <RoughButton seed="mode-comp" active={s.mode === "composer"} onClick={() => set({ mode: "composer" })} className="px-xs py-xs text-left">
+            <div className="type-label">Composer</div>
+            <div className="text-xs text-ink-soft">a director writes the chart</div>
           </RoughButton>
         </div>
       </Field>
@@ -149,14 +151,14 @@ export function ControlPanel() {
           />
         ))}
         {members.length < 6 && free.length > 0 && (
-          <div className="mt-2 flex flex-wrap items-center gap-1">
-            <span className="mr-1 text-sm text-ink-soft">invite:</span>
+          <div className="mt-xs flex flex-wrap items-center gap-xxs">
+            <span className="mr-xxs text-s text-ink-soft">invite:</span>
             {free.map((a: AnimalId) => (
               <button
                 key={a}
                 type="button"
                 onClick={() => setMembers([...members, { id: a, animal: a, name: ANIMALS[a].name, instrument: ANIMALS[a].defaultInstrument }])}
-                className="rounded-full p-0.5 hover:bg-[rgba(226,169,59,0.3)]"
+                className="pick rounded-full p-xxs"
                 title={`Invite ${ANIMALS[a].name} the ${ANIMALS[a].species}`}
                 aria-label={`Invite ${ANIMALS[a].name}`}
               >
@@ -169,7 +171,7 @@ export function ControlPanel() {
 
       <Field>
         <Label hint={STYLES[s.style].blurb}>Style</Label>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-xs">
           {STYLE_LIST.map((id) => (
             <Chip key={id} seed={`style-${id}`} active={s.style === id} onClick={() => setStyle(id)}>
               {STYLES[id].name}
@@ -199,7 +201,7 @@ export function ControlPanel() {
 
       <Field>
         <Label hint={std ? `${std.bars.length}-bar choruses` : "locked — the band fills it"}>Length</Label>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-xs">
           {lengths.map((b) => (
             <Chip key={b} seed={`len-${b}`} active={s.bars === b} onClick={() => set({ bars: b })}>
               {b} bars
@@ -208,7 +210,7 @@ export function ControlPanel() {
         </div>
       </Field>
 
-      <div className="mb-4 grid grid-cols-2 gap-3">
+      <div className="mb-m grid grid-cols-2 gap-s">
         <div>
           <Label hint={`${s.tempo} bpm`}>Tempo</Label>
           <input
@@ -223,7 +225,7 @@ export function ControlPanel() {
         </div>
         <div>
           <Label>Key</Label>
-          <div className="flex gap-1">
+          <div className="flex gap-xxs">
             <select className="sketch-select min-w-0 flex-1" value={s.key.tonic} onChange={(e) => set({ key: { ...s.key, tonic: e.target.value } })} aria-label="Key">
               {TONICS.map((t) => (
                 <option key={t}>{t}</option>
@@ -244,7 +246,7 @@ export function ControlPanel() {
 
       <Field>
         <Label hint={std ? "set by the tune" : undefined}>Meter</Label>
-        <div className="flex gap-1.5">
+        <div className="flex gap-xs">
           {[4, 3].map((b) => (
             <Chip key={b} seed={`meter-${b}`} active={(std?.meter ?? s.meter.beats) === b} disabled={!!std} onClick={() => set({ meter: { beats: b } })}>
               {b}/4
@@ -255,7 +257,7 @@ export function ControlPanel() {
 
       <Field>
         <Label>Leader</Label>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-xs">
           {leaders.map((m) => (
             <Chip key={m.id} seed={`lead-${m.id}`} active={s.leaderId === m.id} onClick={() => set({ leaderId: m.id })}>
               {m.name}
@@ -266,12 +268,12 @@ export function ControlPanel() {
 
       <Field>
         <Label hint="tap in solo order">Solos</Label>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-xs">
           {members.map((m) => {
             const idx = s.soloists.indexOf(m.id);
             return (
               <Chip key={m.id} seed={`solo-${m.id}`} active={idx >= 0} onClick={() => toggleSoloist(m.id)}>
-                {idx >= 0 && <span className="mr-1 font-bold">{idx + 1}.</span>}
+                {idx >= 0 && <span className="mr-xxs font-heavy">{idx + 1}.</span>}
                 {m.name}
                 {m.instrument === "drums" && <span className="text-xs text-ink-soft"> (trades)</span>}
               </Chip>
@@ -283,7 +285,7 @@ export function ControlPanel() {
       {s.mode === "improviser" && (
         <Field>
           <Label hint="bars per round of talk">Phrase</Label>
-          <div className="flex gap-1.5">
+          <div className="flex gap-xs">
             {[2, 4, 8].map((p) => (
               <Chip key={p} seed={`phrase-${p}`} active={s.phraseBars === p} onClick={() => set({ phraseBars: p })}>
                 {p} bars
@@ -293,14 +295,14 @@ export function ControlPanel() {
         </Field>
       )}
 
-      <details className="group mb-1">
-        <summary className="cursor-pointer list-none font-[family-name:var(--font-script)] text-xl font-bold">
-          <span className="inline-block transition-transform group-open:rotate-90">▸</span> Brains &amp; sounds
+      <details className="group mb-xxs">
+        <summary className="type-label cursor-pointer list-none">
+          <span className="inline-block transition-transform duration-(--motion-duration) ease-small group-open:rotate-90">▸</span> Brains &amp; sounds
         </summary>
-        <div className="mt-2 space-y-3">
+        <div className="mt-xs space-y-s">
           <div>
             <Label hint="stays in this browser">AI Gateway key</Label>
-            <div className="flex gap-1">
+            <div className="flex gap-xxs">
               <input
                 type={showKey ? "text" : "password"}
                 className="sketch-input min-w-0 flex-1"
@@ -311,11 +313,11 @@ export function ControlPanel() {
                 spellCheck={false}
                 aria-label="Vercel AI Gateway key"
               />
-              <button type="button" className="px-1 text-sm text-ink-soft underline" onClick={() => setShowKey((v) => !v)}>
+              <button type="button" className="text-action px-xxs text-s" onClick={() => setShowKey((v) => !v)}>
                 {showKey ? "hide" : "show"}
               </button>
             </div>
-            <p className="mt-1 text-xs leading-snug text-ink-soft">
+            <p className="mt-xxs text-xs text-ink-soft">
               Without a key the band plays from its own sketchbook — no model calls. Models are only called when you press the big button.
             </p>
           </div>

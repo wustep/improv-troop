@@ -218,16 +218,16 @@ function ArtLab() {
   }, [parts, playing, featured, speed]);
 
   return (
-    <main className="min-h-screen p-6" style={{ background: "var(--paper)" }}>
+    <main className="min-h-screen p-6" style={{ background: "var(--cte-canvas)" }}>
       <DoodleDefs />
       <div className="mb-4 flex flex-wrap items-center gap-4">
-        <h1 className="text-4xl" style={{ fontFamily: "var(--font-script)" }}>
+        <h1 className="font-brand text-xxl font-heavy">
           Art lab
         </h1>
-        <button className="rounded border-2 border-[var(--ink)] px-3 py-1 text-lg" onClick={() => setPlaying((p) => !p)} data-testid="toggle">
+        <button className="rounded-xs px-s py-xxs text-l shadow-[inset_0_0_0_var(--border-l)_var(--border-default-color)]" onClick={() => setPlaying((p) => !p)} data-testid="toggle">
           {playing ? "Pause" : "Play"}
         </button>
-        <label className="text-lg">
+        <label className="text-l">
           speed{" "}
           <select value={speed} onChange={(e) => setSpeed(Number(e.target.value))}>
             {[0.1, 0.25, 0.5, 1, 1.5].map((s) => (
@@ -275,7 +275,7 @@ function ArtLab() {
                   </option>
                 ))}
               </select>
-              <label className="text-sm">
+              <label className="text-s">
                 <input type="radio" name="feat" checked={featured === i} onChange={() => setFeatured(i)} /> solo
               </label>
             </div>

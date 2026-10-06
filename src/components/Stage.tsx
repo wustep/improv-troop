@@ -26,12 +26,12 @@ function useWidth<T extends HTMLElement>() {
 
 function IntroNote({ onClose }: { onClose: () => void }) {
   return (
-    <div className="sticky-note relative z-30 mx-auto mt-3 w-full max-w-[19rem] -rotate-[1deg] px-3 py-2 text-[15px] leading-snug lg:absolute lg:left-1 lg:top-14 lg:mt-0 lg:w-[17.5rem] lg:-rotate-[2deg]" role="note">
-      <button type="button" onClick={onClose} className="absolute right-1.5 top-0.5 text-lg leading-none text-ink-soft hover:text-ink" aria-label="Dismiss">
+    <div className="sticky-note relative z-30 mx-auto mt-s w-full max-w-[19rem] -rotate-[1deg] px-s py-xs text-m lg:absolute lg:left-1 lg:top-14 lg:mt-0 lg:w-[17.5rem] lg:-rotate-[2deg]" role="note">
+      <button type="button" onClick={onClose} className="absolute right-xs top-xxs text-l text-ink-soft transition-colors duration-(--motion-duration) hover:text-ink" aria-label="Dismiss">
         ×
       </button>
-      <div className="font-[family-name:var(--font-script)] text-xl font-bold">How to jam</div>
-      <ol className="ml-4 list-decimal">
+      <div className="type-label">How to jam</div>
+      <ol className="ml-m list-decimal">
         <li>
           Pick the band and their instruments <span className="hidden lg:inline">→</span>
           <span className="lg:hidden">(just below)</span>
@@ -39,7 +39,7 @@ function IntroNote({ onClose }: { onClose: () => void }) {
         <li>Press ▶ to hear their sketch</li>
         <li>Add a gateway key, then <b>Let them jam!</b> to make them think it through</li>
       </ol>
-      <div className="mt-1 text-xs text-ink-soft">Tap a name to mute them. Tap the form strip to jump around.</div>
+      <div className="mt-xxs text-xs text-ink-soft">Tap a name to mute them. Tap the form strip to jump around.</div>
     </div>
   );
 }
@@ -153,17 +153,17 @@ export function Stage() {
   }, [chat, score, bar]);
 
   return (
-    <RoughBox seed="stage" rough={{ strokeWidth: 2 }} className="stage-paper w-full px-3 pb-3 pt-3">
+    <RoughBox seed="stage" rough={{ weight: "l" }} className="stage-paper w-full p-s">
       <div ref={wrapRef} className="relative">
         <Bunting />
-        <div className="flex min-h-7 items-baseline justify-between gap-3 px-2 pt-9 font-[family-name:var(--font-script)] text-ink-soft">
-          <div ref={labelRef} className="truncate text-xl" aria-live="off" />
-          <div ref={chordRef} className="text-2xl font-bold text-[var(--pencil-blue)]" aria-label="current chord" />
+        <div className="flex min-h-7 items-baseline justify-between gap-s px-xs pt-9 font-brand font-heavy text-ink-soft">
+          <div ref={labelRef} className="truncate text-l" aria-live="off" />
+          <div ref={chordRef} className="text-xl text-(--color-3)" aria-label="current chord" />
         </div>
 
         {(genMode === "composer" || score?.engine === "ai") && (directorNote || thinking.has("director") || thinking.has("critic")) && (
-          <div className="director-card absolute right-2 top-16 z-20 max-w-[16rem] rotate-[1.5deg] px-3 py-2 text-sm leading-snug">
-            <div className="font-[family-name:var(--font-script)] text-base font-bold">
+          <div className="director-card absolute right-xs top-16 z-20 max-w-[16rem] rotate-[1.5deg] px-s py-xs text-s">
+            <div className="type-label">
               {thinking.has("critic") ? "the judge is listening…" : thinking.has("director") ? "director is writing…" : "director's note"}
             </div>
             {directorNote && !thinking.has("director") && <div>{directorNote}</div>}
@@ -171,7 +171,7 @@ export function Stage() {
         )}
 
         <div
-          className="band-row relative flex flex-wrap items-end justify-center gap-x-2 gap-y-6 pt-10"
+          className="band-row relative flex flex-wrap items-end justify-center gap-x-xs gap-y-l pt-10"
           style={{ "--per": n, "--per-narrow": perRowNarrow } as React.CSSProperties}
         >
           {band.map((m, i) => {
@@ -190,13 +190,13 @@ export function Stage() {
                 />
                 {(bubble || isThinking) && (
                   <div
-                    className={`bubble absolute z-10 ${i >= n / 2 ? "bubble-right right-2" : "left-2"} max-w-[15rem] px-3 py-1.5 text-[15px] leading-snug`}
+                    className={`bubble absolute z-10 ${i >= n / 2 ? "bubble-right right-xs" : "left-xs"} max-w-[15rem] px-s py-xs text-m`}
                     style={{ bottom: spriteW * 1.04 }}
                   >
                     {bubble && !isThinking ? bubble : <span className="thinking-dots" aria-label={`${m.name} is thinking`}><i>.</i><i>.</i><i>.</i></span>}
                   </div>
                 )}
-                <div className={`transition-opacity duration-300 ${isMuted ? "opacity-40 grayscale-[0.6]" : ""}`}>
+                <div className={`transition-opacity duration-(--motion-large-duration) ease-small ${isMuted ? "opacity-40 grayscale-[0.6]" : ""}`}>
                   <AnimalSprite
                     ref={(h) => {
                       sprites.current.set(m.id, h);
@@ -212,15 +212,15 @@ export function Stage() {
                   onClick={() => toggleMute(m.id)}
                   aria-pressed={isMuted}
                   title={isMuted ? `Bring ${m.name} back in` : `Mute ${m.name}`}
-                  className="group -mt-1 rounded px-2 text-center leading-tight hover:bg-[rgba(226,169,59,0.2)]"
+                  className="pick group -mt-xxs px-xs text-center"
                 >
-                  <div className={`font-[family-name:var(--font-script)] text-xl font-bold ${isMuted ? "line-through decoration-2" : ""}`} style={{ color: ANIMALS[m.animal].ink }}>
+                  <div className={`type-label ${isMuted ? "line-through decoration-2" : ""}`} style={{ color: ANIMALS[m.animal].ink }}>
                     {m.name}
-                    {score?.frame.leaderId === m.id && <span className="ml-1 text-sm text-[var(--pencil-red)]" aria-label="leader">★</span>}
+                    {score?.frame.leaderId === m.id && <span className="ml-xxs text-s text-(--color-1)" aria-label="leader">★</span>}
                   </div>
-                  <div className="text-sm text-ink-soft">
+                  <div className="text-s text-ink-soft">
                     {isMuted ? "muted · tap to unmute" : inst.name}
-                    {!isMuted && <span className="ml-1 hidden text-xs group-hover:inline">· tap to mute</span>}
+                    {!isMuted && <span className="ml-xxs hidden text-xs group-hover:inline">· tap to mute</span>}
                   </div>
                 </button>
               </div>

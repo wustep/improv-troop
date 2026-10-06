@@ -1,56 +1,302 @@
 @import "tailwindcss";
 
+/*
+ * Jamming theme ("Sketchbook"). Literal values live only in this block; everything else
+ * consumes the named tokens. Vocabulary follows GUI.md / gui/foundations.md; actual values
+ * and the documented alternative configurations are in gui/themes/jamming.md.
+ * The app is light-only: the drawn artwork carries its own ink and fur colours.
+ */
 :root {
-  --paper: #f6f0e1;
-  --paper-2: #efe6d0;
-  --ink: #2c2a35;
-  --ink-soft: #5b5666;
-  --pencil-red: #c8463c;
-  --pencil-blue: #3b5bab;
-  --pencil-green: #4f8a3a;
-  --pencil-yellow: #e2a93b;
-  --pencil-purple: #5a4a9e;
+  --theme-name: Jamming;
+
+  /* neutrals: paper (1) → ink (10) */
+  --neutral-1: #fffdf6;
+  --neutral-2: #f6f0e1;
+  --neutral-3: #efe6d0;
+  --neutral-4: #e4d9be;
+  --neutral-5: #c9bea6;
+  --neutral-6: #9a94a0;
+  --neutral-7: #5b5666;
+  --neutral-8: #46424f;
+  --neutral-9: #2c2a35;
+  --neutral-10: #1d1b23;
+
+  /* palette: coloured pencils, plus the sticky-note yellow */
+  --color-1: #c8463c; /* red: the primary action, the leader, errors */
+  --color-2: #e2a93b; /* yellow: selection (highlighter), progress */
+  --color-3: #3b5bab; /* blue: focus, chord symbols */
+  --color-4: #4f8a3a; /* green: play */
+  --color-5: #5a4a9e; /* purple: trades */
+  --color-6: #fff3a8; /* sticky note */
+  --color-none: transparent;
+
+  --success: var(--color-4);
+  --warning: var(--color-2);
+  --error: var(--color-1);
+
+  /* -transparent: 20% by default; authored translucency on color-2 (40%: highlighter),
+     neutral-1 (60%: paper laid over the page) and neutral-9 (8%: a pencil wash) */
+  --translucency-default: 20%;
+  --color-1-transparent: color-mix(in srgb, var(--color-1) var(--translucency-default), transparent);
+  --color-2-transparent: color-mix(in srgb, var(--color-2) 40%, transparent);
+  --color-3-transparent: color-mix(in srgb, var(--color-3) var(--translucency-default), transparent);
+  --color-4-transparent: color-mix(in srgb, var(--color-4) var(--translucency-default), transparent);
+  --color-5-transparent: color-mix(in srgb, var(--color-5) var(--translucency-default), transparent);
+  --color-6-transparent: color-mix(in srgb, var(--color-6) var(--translucency-default), transparent);
+  --neutral-1-transparent: color-mix(in srgb, var(--neutral-1) 60%, transparent);
+  --neutral-2-transparent: color-mix(in srgb, var(--neutral-2) var(--translucency-default), transparent);
+  --neutral-6-transparent: color-mix(in srgb, var(--neutral-6) var(--translucency-default), transparent);
+  --neutral-7-transparent: color-mix(in srgb, var(--neutral-7) var(--translucency-default), transparent);
+  --neutral-9-transparent: color-mix(in srgb, var(--neutral-9) 8%, transparent);
+
+  /* convenience roles */
+  --cte-canvas: var(--neutral-2);
+  --cte-surface: var(--neutral-1-transparent);
+  --cte-text: var(--neutral-9);
+  --cte-text-muted: var(--neutral-7);
+  --cte-border: var(--neutral-9);
+  --cte-accent: var(--color-1);
+  --cte-accent-text: var(--neutral-1);
+  --cte-danger: var(--error);
+  --cte-focus: var(--color-3);
+
+  /* typography: the hand-lettered UI face and the script face are loaded in layout.tsx */
+  --font-ui: var(--font-hand), "Comic Sans MS", system-ui, sans-serif;
+  --font-brand: var(--font-script), "Comic Sans MS", cursive;
+  --font-editorial: var(--font-ui);
+  --font-data: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --weight-ui-regular: 400;
+  --weight-ui-medium: 400;
+  --weight-ui-heavy: 700;
+  --weight-brand-regular: 500;
+  --weight-brand-medium: 500;
+  --weight-brand-heavy: 700;
+  --weight-data-regular: 400;
+  --weight-data-medium: 500;
+  --weight-data-heavy: 700;
+
+  --size-xxs: 11px;
+  --line-xxs: 14px;
+  --letter-spacing-xxs: 0em;
+  --size-xs: 12px;
+  --line-xs: 16px;
+  --letter-spacing-xs: 0em;
+  --size-s: 14px;
+  --line-s: 20px;
+  --letter-spacing-s: 0em;
+  --size-m: 15px;
+  --line-m: 22px;
+  --letter-spacing-m: 0em;
+  --size-l: 20px;
+  --line-l: 24px;
+  --letter-spacing-l: 0em;
+  --size-xl: 26px;
+  --line-xl: 30px;
+  --letter-spacing-xl: 0em;
+  --size-xxl: clamp(48px, 4vw + 32px, 60px);
+  --line-xxl: 1;
+  --letter-spacing-xxl: 0em;
+
+  /* spacing */
+  --space-zero: 0px;
+  --space-xxs: 4px;
+  --space-xs: 8px;
+  --space-s: 12px;
+  --space-m: 16px;
+  --space-l: 20px;
+  --space-xl: 32px;
+  --space-xxl: 48px;
+
+  /* corners: small and slightly uneven, like cut paper */
+  --radius-zero: 0px;
+  --radius-xs: 3px;
+  --radius-s: 6px;
+  --radius-m: 9px;
+  --radius-l: 14px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+
+  /* edges: pencil strokes. The same widths drive the rough.js outlines (see ui/rough.tsx). */
+  --border-none: 0px;
+  --border-s: 1px;
+  --border-m: 1.5px;
+  --border-l: 2px;
+  --border-default-color: var(--neutral-9);
+  --border-shadow-none: 0 0 0 0 transparent;
+  --border-shadow-s: 0 0 0 var(--border-s) var(--border-default-color);
+  --border-shadow-m: 0 0 0 var(--border-m) var(--border-default-color);
+  --border-shadow-l: 0 0 0 var(--border-l) var(--border-default-color);
+
+  /* elevation: hard offset "box" shadows, as if the paper were lifted off the page */
+  --shadow-none: none;
+  --shadow-s: 2px 2px 0 0 color-mix(in srgb, var(--neutral-9) 12%, transparent);
+  --shadow-m: 3px 3px 0 0 color-mix(in srgb, var(--neutral-9) 14%, transparent);
+  --shadow-l: 4px 5px 0 0 color-mix(in srgb, var(--neutral-9) 16%, transparent);
+
+  /* motion: small for controls, large (a little overshoot) for things that pop onto the stage */
+  --motion-duration: 140ms;
+  --motion-easing: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --motion-large-duration: 260ms;
+  --motion-large-easing: cubic-bezier(0.2, 0.9, 0.3, 1.3);
+  --motion-popup-scale: 0.96;
+  --motion-press-distance: 1px;
+
+  --focus-ring-outline: 2px dashed var(--cte-focus);
+
+  /* Jamming extension: how loose the rough.js line work is (read by ui/rough.tsx) */
+  --sketch-roughness: 1.3;
+  --sketch-bowing: 1.2;
+  --sketch-hachure-gap: 4.5;
+
+  /* artwork aliases: SVG drawings and VexFlow use these names */
+  --paper: var(--neutral-2);
+  --ink: var(--neutral-9);
+  --ink-soft: var(--neutral-7);
+  --pencil-red: var(--color-1);
+  --pencil-yellow: var(--color-2);
+  --pencil-blue: var(--color-3);
+  --pencil-green: var(--color-4);
+  --pencil-purple: var(--color-5);
 }
 
+/* Tailwind utilities resolve to the theme tokens; the default palette, type scale and radii
+   are removed so a one-off value can't sneak in through a utility. */
 @theme inline {
-  --color-paper: var(--paper);
-  --color-ink: var(--ink);
-  --font-hand: var(--font-hand);
-  --font-script: var(--font-script);
+  --color-*: initial;
+  --color-ink: var(--cte-text);
+  --color-ink-soft: var(--cte-text-muted);
+  --color-on-accent: var(--cte-accent-text);
+
+  --font-*: initial;
+  --font-ui: var(--font-ui);
+  --font-brand: var(--font-brand);
+  --font-data: var(--font-data);
+  --font-weight-*: initial;
+  --font-weight-regular: var(--weight-ui-regular);
+  --font-weight-heavy: var(--weight-ui-heavy);
+
+  --text-*: initial;
+  --text-xxs: var(--size-xxs);
+  --text-xxs--line-height: var(--line-xxs);
+  --text-xxs--letter-spacing: var(--letter-spacing-xxs);
+  --text-xs: var(--size-xs);
+  --text-xs--line-height: var(--line-xs);
+  --text-xs--letter-spacing: var(--letter-spacing-xs);
+  --text-s: var(--size-s);
+  --text-s--line-height: var(--line-s);
+  --text-s--letter-spacing: var(--letter-spacing-s);
+  --text-m: var(--size-m);
+  --text-m--line-height: var(--line-m);
+  --text-m--letter-spacing: var(--letter-spacing-m);
+  --text-l: var(--size-l);
+  --text-l--line-height: var(--line-l);
+  --text-l--letter-spacing: var(--letter-spacing-l);
+  --text-xl: var(--size-xl);
+  --text-xl--line-height: var(--line-xl);
+  --text-xl--letter-spacing: var(--letter-spacing-xl);
+  --text-xxl: var(--size-xxl);
+  --text-xxl--line-height: var(--line-xxl);
+  --text-xxl--letter-spacing: var(--letter-spacing-xxl);
+
+  --spacing-zero: var(--space-zero);
+  --spacing-xxs: var(--space-xxs);
+  --spacing-xs: var(--space-xs);
+  --spacing-s: var(--space-s);
+  --spacing-m: var(--space-m);
+  --spacing-l: var(--space-l);
+  --spacing-xl: var(--space-xl);
+  --spacing-xxl: var(--space-xxl);
+
+  --radius-*: initial;
+  --radius-xs: var(--radius-xs);
+  --radius-s: var(--radius-s);
+  --radius-m: var(--radius-m);
+  --radius-l: var(--radius-l);
+  --radius-xl: var(--radius-xl);
+  --radius-full: var(--radius-full);
+
+  --shadow-*: initial;
+  --shadow-s: var(--shadow-s);
+  --shadow-m: var(--shadow-m);
+  --shadow-l: var(--shadow-l);
+
+  --ease-*: initial;
+  --ease-small: var(--motion-easing);
+  --ease-large: var(--motion-large-easing);
 }
 
 html,
 body {
-  background: var(--paper);
-  color: var(--ink);
-  font-family: var(--font-hand), "Comic Sans MS", system-ui, sans-serif;
-}
-
-@theme inline {
-  --color-ink-soft: var(--ink-soft);
+  background: var(--cte-canvas);
+  color: var(--cte-text);
+  font-family: var(--font-ui);
+  font-weight: var(--weight-ui-regular);
 }
 
 body {
-  background-color: var(--paper);
+  background-color: var(--cte-canvas);
   background-image:
-    radial-gradient(rgba(150, 128, 90, 0.07) 1px, transparent 1px),
-    radial-gradient(rgba(150, 128, 90, 0.05) 1px, transparent 1px);
+    radial-gradient(color-mix(in srgb, var(--neutral-5) 35%, transparent) 1px, transparent 1px),
+    radial-gradient(color-mix(in srgb, var(--neutral-5) 25%, transparent) 1px, transparent 1px);
   background-size: 23px 23px, 37px 37px;
   background-position: 0 0, 11px 17px;
 }
 
+@layer components {
+  /* type roles: the script face for headings and field labels */
+  .type-section {
+    font-family: var(--font-brand);
+    font-weight: var(--weight-brand-heavy);
+    font-size: var(--size-xl);
+    line-height: var(--line-xl);
+    letter-spacing: var(--letter-spacing-xl);
+  }
+  .type-label {
+    font-family: var(--font-brand);
+    font-weight: var(--weight-brand-heavy);
+    font-size: var(--size-l);
+    line-height: var(--line-l);
+    letter-spacing: var(--letter-spacing-l);
+  }
+
+  /* quiet text actions ("peek under the hood", "fold it up") */
+  .text-action {
+    color: var(--cte-text-muted);
+    text-decoration: underline dotted;
+    text-underline-offset: 4px;
+    transition: color var(--motion-duration) var(--motion-easing);
+  }
+  .text-action:hover {
+    color: var(--cte-text);
+  }
+
+  /* list rows and small toggles: an ink wash on hover, the highlighter when selected */
+  .pick {
+    border-radius: var(--radius-xs);
+    transition: background-color var(--motion-duration) var(--motion-easing);
+  }
+  .pick:hover {
+    background-color: var(--neutral-9-transparent);
+  }
+  .pick[data-selected="true"] {
+    background-color: var(--color-2-transparent);
+  }
+
+  /* hairline dividers: one-sided inset shadows */
+  .rule-top {
+    box-shadow: inset 0 var(--border-s) 0 0 var(--neutral-9-transparent);
+  }
+}
+
 .stage-paper {
   background:
-    radial-gradient(ellipse 70% 55% at 50% 100%, rgba(226, 169, 59, 0.12), transparent 70%),
-    repeating-linear-gradient(-38deg, transparent 0 7px, rgba(79, 138, 58, 0.045) 7px 8px);
+    radial-gradient(ellipse 70% 55% at 50% 100%, color-mix(in srgb, var(--color-2) 12%, transparent), transparent 70%),
+    repeating-linear-gradient(-38deg, transparent 0 7px, color-mix(in srgb, var(--color-4) 4.5%, transparent) 7px 8px);
 }
 
-.panel-paper {
-  background: rgba(255, 252, 243, 0.55);
-}
-
+.panel-paper,
 .sheet-paper {
-  background: rgba(255, 252, 243, 0.6);
+  background: var(--cte-surface);
 }
 
 /* stage slots: n across, or up to three across in a narrow stage (see Stage.tsx) */
@@ -67,34 +313,41 @@ body {
 }
 
 .spotlight {
-  background: radial-gradient(ellipse 50% 50% at 50% 60%, rgba(255, 214, 102, 0.55), rgba(255, 214, 102, 0) 70%);
-  transition: opacity 260ms ease;
-  border-radius: 50%;
+  background: radial-gradient(
+    ellipse 50% 50% at 50% 60%,
+    color-mix(in srgb, var(--color-2) 55%, transparent),
+    transparent 70%
+  );
+  transition: opacity var(--motion-large-duration) var(--motion-easing);
+  border-radius: var(--radius-full);
 }
 
 .bubble {
-  background: #fffdf6;
-  border: 1.6px solid var(--ink);
-  border-radius: 14px 16px 15px 12px / 12px 14px 16px 15px;
-  box-shadow: 2px 2px 0 rgba(44, 42, 53, 0.12);
-  animation: bubble-in 220ms cubic-bezier(0.2, 0.9, 0.3, 1.3);
+  background: var(--neutral-1);
+  border: 0;
+  border-radius: var(--radius-l) var(--radius-xl) var(--radius-l) var(--radius-m) / var(--radius-m) var(--radius-l) var(--radius-xl) var(--radius-l);
+  box-shadow: var(--border-shadow-m), var(--shadow-s);
+  animation: bubble-in var(--motion-large-duration) var(--motion-large-easing);
 }
 .bubble::after {
   content: "";
   position: absolute;
-  bottom: -8px;
+  bottom: -7px;
   left: 30%;
   width: 12px;
   height: 12px;
-  background: #fffdf6;
-  border-right: 1.6px solid var(--ink);
-  border-bottom: 1.6px solid var(--ink);
+  background: var(--neutral-1);
+  box-shadow: inset calc(-1 * var(--border-m)) calc(-1 * var(--border-m)) 0 0 var(--border-default-color);
   transform: rotate(40deg) skewX(10deg);
+}
+.bubble-right::after {
+  left: auto;
+  right: 30%;
 }
 @keyframes bubble-in {
   from {
     opacity: 0;
-    transform: translateY(4px) scale(0.96);
+    transform: translateY(var(--space-xxs)) scale(var(--motion-popup-scale));
   }
 }
 
@@ -119,37 +372,61 @@ body {
     opacity: 0.4;
   }
   40% {
-    transform: translateY(-4px);
+    transform: translateY(calc(-1 * var(--space-xxs)));
     opacity: 1;
   }
 }
 
+/* notes pinned to the stage: the director's card and the how-to sticky */
 .director-card {
-  background: #fffbe6;
-  border: 1.5px solid var(--ink);
-  border-radius: 3px 6px 4px 5px;
-  box-shadow: 3px 3px 0 rgba(44, 42, 53, 0.13);
+  background: var(--neutral-1);
+  border: 0;
+  border-radius: var(--radius-xs) var(--radius-s) var(--radius-xs) var(--radius-s);
+  box-shadow: var(--border-shadow-m), var(--shadow-m);
 }
 
+.sticky-note {
+  background: var(--color-6);
+  border: 0;
+  box-shadow: 0 0 0 var(--border-s) color-mix(in srgb, var(--neutral-9) 25%, transparent), var(--shadow-m);
+}
+.sticky-note::before {
+  content: "";
+  position: absolute;
+  top: -9px;
+  left: 50%;
+  width: 54px;
+  height: 16px;
+  transform: translateX(-50%) rotate(-3deg);
+  background: color-mix(in srgb, var(--neutral-4) 70%, transparent);
+  box-shadow: 0 0 0 var(--border-s) color-mix(in srgb, var(--neutral-9) 12%, transparent);
+}
+
+/* form controls: a pencil underline */
 .sketch-select,
 .sketch-input {
   font: inherit;
-  font-size: 15px;
+  font-size: var(--size-m);
+  line-height: var(--line-m);
+  letter-spacing: var(--letter-spacing-m);
   background: transparent;
   border: 0;
-  border-bottom: 1.6px solid var(--ink);
-  border-radius: 0;
-  padding: 2px 4px;
-  color: var(--ink);
+  border-radius: var(--radius-zero);
+  box-shadow: inset 0 calc(-1 * var(--border-m)) 0 0 var(--border-default-color);
+  padding: 2px var(--space-xxs);
+  color: var(--cte-text);
   outline: none;
+  transition:
+    box-shadow var(--motion-duration) var(--motion-easing),
+    background-color var(--motion-duration) var(--motion-easing);
 }
 .sketch-select:focus-visible,
 .sketch-input:focus-visible {
-  border-bottom-color: var(--pencil-blue);
-  background: rgba(59, 91, 171, 0.06);
+  box-shadow: inset 0 calc(-1 * var(--border-l)) 0 0 var(--cte-focus);
+  background: color-mix(in srgb, var(--color-3) 6%, transparent);
 }
 .sketch-select option {
-  background: var(--paper);
+  background: var(--cte-canvas);
 }
 
 .sketch-range {
@@ -160,46 +437,49 @@ body {
 }
 .sketch-range::-webkit-slider-runnable-track {
   height: 3px;
-  background: var(--ink);
-  border-radius: 2px;
+  background: var(--neutral-9);
+  border-radius: var(--radius-full);
 }
 .sketch-range::-moz-range-track {
   height: 3px;
-  background: var(--ink);
-  border-radius: 2px;
+  background: var(--neutral-9);
+  border-radius: var(--radius-full);
 }
 .sketch-range::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 18px;
   height: 18px;
-  margin-top: -8px;
+  margin-top: -7.5px;
+  border: 0;
   border-radius: 50% 46% 52% 48%;
-  border: 2px solid var(--ink);
-  background: var(--pencil-yellow);
+  box-shadow: inset 0 0 0 var(--border-l) var(--neutral-9);
+  background: var(--color-2);
   cursor: grab;
 }
 .sketch-range::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
+  border: 0;
   border-radius: 50% 46% 52% 48%;
-  border: 2px solid var(--ink);
-  background: var(--pencil-yellow);
+  box-shadow: inset 0 0 0 var(--border-l) var(--neutral-9);
+  background: var(--color-2);
   cursor: grab;
 }
 
 .sketch-check {
-  accent-color: var(--pencil-red);
+  accent-color: var(--color-1);
   width: 16px;
   height: 16px;
 }
 
 .debug-panel {
-  background: rgba(255, 252, 243, 0.85);
-  border: 1.5px dashed rgba(44, 42, 53, 0.45);
+  background: var(--cte-surface);
+  border: var(--border-m) dashed var(--neutral-6);
+  border-radius: var(--radius-s);
 }
 
 :focus-visible {
-  outline: 2px dashed var(--pencil-blue);
+  outline: var(--focus-ring-outline);
   outline-offset: 2px;
 }
 
@@ -210,30 +490,8 @@ body {
   }
 }
 
-.sticky-note {
-  background: #fff3a8;
-  box-shadow: 2px 3px 0 rgba(44, 42, 53, 0.15);
-  border: 1px solid rgba(44, 42, 53, 0.25);
-}
-.sticky-note::before {
-  content: "";
-  position: absolute;
-  top: -9px;
-  left: 50%;
-  width: 54px;
-  height: 16px;
-  transform: translateX(-50%) rotate(-3deg);
-  background: rgba(220, 210, 180, 0.7);
-  border: 1px solid rgba(44, 42, 53, 0.12);
-}
-
-.bubble-right::after {
-  left: auto;
-  right: 30%;
-}
-
 /* bars the band hasn't played yet: washed out and pencil-hatched, like an unfinished sketch */
 .form-pending {
-  background-color: rgba(246, 240, 225, 0.72);
-  background-image: repeating-linear-gradient(-45deg, rgba(44, 42, 53, 0.3) 0 1.2px, transparent 1.2px 5px);
+  background-color: color-mix(in srgb, var(--neutral-2) 72%, transparent);
+  background-image: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--neutral-9) 30%, transparent) 0 1.2px, transparent 1.2px 5px);
 }

@@ -5,18 +5,18 @@ import { AnimalPortrait } from "@/art/AnimalPortrait";
 import { troopAudio } from "@/audio/engine";
 import type { Score } from "@/music/types";
 
-const hatch = (rgb: string, a = 0.32) =>
-  `repeating-linear-gradient(-38deg, rgba(${rgb},${a}) 0 1.6px, transparent 1.6px 6px), rgba(${rgb},0.08)`;
+const hatch = (color: string, strength = 32) =>
+  `repeating-linear-gradient(-38deg, color-mix(in srgb, var(${color}) ${strength}%, transparent) 0 1.6px, transparent 1.6px 6px), color-mix(in srgb, var(${color}) 8%, transparent)`;
 
-/** Crayon hatching per section kind. */
+/** Crayon hatching per section kind (a stable encoding: head yellow, solo blue, trade purple…). */
 const KIND_FILL: Record<string, string> = {
-  head: hatch("226,169,59"),
-  out: hatch("226,169,59"),
-  solo: hatch("59,91,171", 0.24),
-  trade: hatch("90,74,158", 0.26),
-  intro: hatch("79,138,58", 0.24),
-  vamp: hatch("79,138,58", 0.24),
-  tag: hatch("200,70,60", 0.24),
+  head: hatch("--color-2"),
+  out: hatch("--color-2"),
+  solo: hatch("--color-3", 24),
+  trade: hatch("--color-5", 26),
+  intro: hatch("--color-4", 24),
+  vamp: hatch("--color-4", 24),
+  tag: hatch("--color-1", 24),
 };
 
 /**
@@ -61,21 +61,21 @@ export function FormMap({
   const auto = new Set(autopilotBars);
 
   return (
-    <div className="relative mt-2 select-none" aria-label="Form of the tune">
-      <div className="flex h-12 w-full overflow-hidden rounded-[6px_9px_7px_10px] border-[1.6px] border-[var(--ink)]">
+    <div className="relative mt-xs select-none" aria-label="Form of the tune">
+      <div className="relative flex h-12 w-full overflow-hidden rounded-[var(--radius-s)_var(--radius-m)_var(--radius-s)_var(--radius-m)]">
         {score.frame.sections.map((s, si) => {
           const who = s.featured?.map(nameOf).filter(Boolean) ?? [];
           return (
             <div
               key={s.start}
-              className={`relative flex min-w-0 flex-col ${si > 0 ? "border-l-[1.6px] border-[var(--ink)]" : ""}`}
+              className={`relative flex min-w-0 flex-col ${si > 0 ? "shadow-[inset_var(--border-m)_0_0_0_var(--border-default-color)]" : ""}`}
               style={{ width: `${(s.length / total) * 100}%`, background: KIND_FILL[s.kind] ?? "transparent" }}
             >
-              <div className="pointer-events-none flex items-center gap-1 overflow-hidden whitespace-nowrap px-1.5 text-[13px] leading-normal">
+              <div className="pointer-events-none flex items-center gap-xxs overflow-hidden whitespace-nowrap px-xs text-s">
                 {who.slice(0, 2).map((m) => (
                   <AnimalPortrait key={m!.id} animal={m!.animal} size={16} />
                 ))}
-                <span className="truncate pr-1.5 font-[family-name:var(--font-script)] text-[15px] font-bold">{s.name.replace(/^Solo · /, "")}</span>
+                <span className="truncate pr-xs font-brand text-m font-heavy">{s.name.replace(/^Solo · /, "")}</span>
               </div>
               <div className="flex flex-1">
                 {Array.from({ length: s.length }, (_, i) => {
@@ -89,9 +89,9 @@ export function FormMap({
                       onClick={() => onSeek(bar)}
                       title={pending ? `bar ${bar + 1}: the band is still thinking` : `play from bar ${bar + 1}${auto.has(bar) ? " (they vamped this on autopilot)" : ""}`}
                       aria-label={`Play from bar ${bar + 1}`}
-                      className={`relative flex-1 hover:bg-[rgba(44,42,53,0.08)] disabled:cursor-wait ${i > 0 ? "border-l border-dotted border-[rgba(44,42,53,0.25)]" : ""} ${pending ? "form-pending" : ""}`}
+                      className={`relative flex-1 transition-colors duration-(--motion-duration) hover:bg-(--neutral-9-transparent) disabled:cursor-wait ${i > 0 ? "border-l border-dotted border-(--neutral-5)" : ""} ${pending ? "form-pending" : ""}`}
                     >
-                      {auto.has(bar) && <span className="absolute inset-x-0 bottom-0 text-center text-[10px] leading-none text-ink-soft">~</span>}
+                      {auto.has(bar) && <span className="absolute inset-x-0 bottom-0 text-center text-xxs text-ink-soft">~</span>}
                     </button>
                   );
                 })}
@@ -99,8 +99,10 @@ export function FormMap({
             </div>
           );
         })}
+        {/* the outline sits over the section fills */}
+        <div className="pointer-events-none absolute inset-0 rounded-[var(--radius-s)_var(--radius-m)_var(--radius-s)_var(--radius-m)] shadow-[inset_0_0_0_var(--border-m)_var(--border-default-color)]" />
       </div>
-      <div ref={headRef} className="pointer-events-none absolute -top-1 bottom-[-4px] w-[3px] -translate-x-1/2 rounded bg-[var(--pencil-red)] opacity-0" />
+      <div ref={headRef} className="pointer-events-none absolute -top-xxs -bottom-xxs w-[3px] -translate-x-1/2 rounded-full bg-(--color-1) opacity-0" />
     </div>
   );
 }

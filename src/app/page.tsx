@@ -40,18 +40,18 @@ export default function Home() {
   const getBeat = useCallback(() => troopAudio.getBeat(), []);
 
   return (
-    <div className="mx-auto w-full max-w-[1400px] px-4 pb-10 pt-4 sm:px-6">
+    <div className="mx-auto w-full max-w-[1400px] px-m pb-xxl pt-m sm:px-l">
       <DoodleDefs />
-      <header className="mb-3 flex flex-wrap items-end justify-between gap-2">
+      <header className="mb-s flex flex-wrap items-end justify-between gap-xs">
         <div>
-          <h1 className="font-[family-name:var(--font-script)] text-5xl font-bold leading-none sm:text-6xl">Jamming</h1>
+          <h1 className="font-brand text-xxl font-heavy">Jamming</h1>
           <Squiggle width={250} seed="title" color="var(--pencil-red)" />
-          <p className="text-[15px] text-ink-soft">Pick the band, hand them instruments, and let them make something up.</p>
+          <p className="text-m text-ink-soft">Pick the band, hand them instruments, and let them make something up.</p>
         </div>
         <button
           type="button"
           onClick={() => setDebugOpen(!debugOpen)}
-          className="text-[15px] text-ink-soft underline decoration-dotted underline-offset-4 hover:text-ink"
+          className="text-action text-m"
           aria-expanded={debugOpen}
         >
           {debugOpen ? "hide" : "peek"} under the hood
@@ -60,29 +60,29 @@ export default function Home() {
 
       {/* Below lg the page is one column, and main's pieces join the grid so the band settings sit
           right under the stage instead of below the whole chart. */}
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid gap-l lg:grid-cols-[minmax(0,1fr)_360px]">
         <main className="contents min-w-0 lg:block">
           <div className="order-1 min-w-0 lg:order-none">
             <Stage />
-            <div className="mt-3">
+            <div className="mt-s">
               <Transport />
             </div>
             {debugOpen && <DebugPanel sheetStats={sheetStats} />}
           </div>
-          <div className="order-3 grid min-w-0 gap-4 md:grid-cols-[minmax(0,1fr)_260px] lg:order-none lg:mt-4">
+          <div className="order-3 grid min-w-0 gap-m md:grid-cols-[minmax(0,1fr)_260px] lg:order-none lg:mt-l">
             <BandTalk />
             <Takes />
           </div>
-          <section className="order-4 min-w-0 lg:order-none lg:mt-5" aria-label="Sheet music">
-            <div className="mb-1 flex items-baseline gap-3">
-              <h2 className="font-[family-name:var(--font-script)] text-3xl font-bold">The chart</h2>
-              <button type="button" className="text-sm text-ink-soft underline decoration-dotted underline-offset-4" onClick={() => setShowSheet((v) => !v)}>
+          <section className="order-4 min-w-0 lg:order-none lg:mt-l" aria-label="Sheet music">
+            <div className="mb-xs flex items-baseline gap-s">
+              <h2 className="type-section">The chart</h2>
+              <button type="button" className="text-action text-s" onClick={() => setShowSheet((v) => !v)}>
                 {showSheet ? "fold it up" : "unfold"}
               </button>
-              {score && <span className="text-sm text-ink-soft">click a bar to play from there</span>}
+              {score && <span className="text-s text-ink-soft">click a bar to play from there</span>}
             </div>
             {showSheet && score && (
-              <RoughBox seed="sheet" rough={{ strokeWidth: 1.4 }} className="sheet-paper p-2">
+              <RoughBox seed="sheet" rough={{ weight: "m" }} className="sheet-paper p-xs">
                 <SheetMusic
                   score={score}
                   getBeat={getBeat}
@@ -96,11 +96,11 @@ export default function Home() {
             )}
           </section>
         </main>
-        <div className="order-2 min-w-0 lg:sticky lg:top-4 lg:order-none lg:max-h-[calc(100vh-2rem)] lg:self-start lg:overflow-y-auto">
+        <div className="order-2 min-w-0 lg:sticky lg:top-m lg:order-none lg:max-h-[calc(100vh-2*var(--space-m))] lg:self-start lg:overflow-y-auto">
           <ControlPanel />
         </div>
       </div>
-      <footer className="mt-8 text-center text-sm text-ink-soft">
+      <footer className="mt-xl text-center text-s text-ink-soft">
         Samples: Salamander Grand Piano, Splendid Grand, Smolken double bass, LinnDrum (LM-2), VCSL, MusyngKite soundfonts — via smplr. Notation by VexFlow.
       </footer>
     </div>
