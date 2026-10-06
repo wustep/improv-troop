@@ -272,7 +272,7 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
               asks[m.id] ? `${leader.name} to you: "${asks[m.id]}"` : "",
               "",
               `Your usual accompaniment directive right now: ${usualDirective(plan, m.id) ?? "@rest"}`,
-              "Directives you can use when accompanying: @walk @two @bossa @funk @baroque @pedal (bass) · @comp [sparse|busy] @stride @arp @prelude @continuo @pad @shimmer (chords) · @guide @harmony @canon @riff @counter (horns/strings) · @pizz [sparse|busy] @arco (cello) · @groove [light|peak] (drums).",
+              "Directives you can use when accompanying: @walk @two @bossa @funk @baroque @pedal @pump (bass) · @comp [sparse|busy] @pulse [sparse|busy] @stride @arp @prelude @continuo @pad @shimmer (chords) · @guide @harmony @canon @riff @counter (horns/strings) · @pizz [sparse|busy] @arco (cello) · @groove [light|peak] (drums).",
               `Reply JSON: {"say": "<= 1 short sentence back to ${leader.name} or the band", "default": "your go-to directive when you're accompanying"}`,
             ]
               .filter(Boolean)

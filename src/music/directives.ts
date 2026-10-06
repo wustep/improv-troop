@@ -24,8 +24,8 @@ export const DIRECTIVE_HELP = `Each bar of each player's part is ONE of:
   @tune N  — play bar N of the standard's written melody, as written (the tune itself; only on standards that have one)
   @line [dense|sparse|run|long]  — improvise a line over the changes
   @answer  — open a solo by answering the previous soloist's last phrase (its rhythm, your register), then carry on
-  @walk @two @bossa @funk @baroque @pedal  — bass patterns
-  @comp [sparse|busy] @stride @arp @prelude @continuo @pad @shimmer @hits  — chordal patterns
+  @walk @two @bossa @funk @baroque @pedal @pump  — bass patterns (@pump: pop root 8ths)
+  @comp [sparse|busy] @pulse [sparse|busy] @stride @arp @prelude @continuo @pad @shimmer @hits  — chordal patterns (@pulse: pop block triads)
   @pizz [sparse|busy] @arco  — bowed strings: plucked double-stop comping / sustained bowed tones
   @guide @harmony @canon @riff @counter @fill  — supporting lines (guide tones, 3rds under the lead, imitation, backing riff)
   @groove [light|peak] @solo @fill  — drums
@@ -235,6 +235,11 @@ function realizeRaw(ctx: BarCtx, text: string): DirectiveResult {
       return done(fn === "chordal" ? comp.comp(c) : bass.funk(c));
     case "baroque":
       return done(bass.baroque(c));
+    case "pump":
+      return done(fn === "chordal" ? comp.pulse(c) : bass.pump(c));
+    case "pulse":
+      if (fn === "bass") return done(bass.pump(c));
+      return done(fn === "melodic" ? lines.guide(c) : comp.pulse(c));
     case "pedal":
       return done(bass.pedal(c));
     case "groove":

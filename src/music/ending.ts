@@ -26,6 +26,7 @@ export const ENDINGS: Record<StyleId, Ending> = {
   swing: { kind: "ring", slow: 1.12, ritBars: 1 },
   neworleans: { kind: "ring", slow: 1.1, ritBars: 1 },
   funk: { kind: "button", slow: 1, ritBars: 0 },
+  pop: { kind: "ring", slow: 1.08, ritBars: 1 },
   bossa: { kind: "fade", slow: 1.18, ritBars: 2 },
   minimal: { kind: "button", slow: 1, ritBars: 0 },
   baroque: { kind: "cadence", slow: 1.35, ritBars: 2 },

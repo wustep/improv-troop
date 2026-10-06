@@ -113,6 +113,30 @@ const PHRASE: Record<StyleId, PhraseStyle> = {
     guide: false,
     pentatonic: true,
   },
+  pop: {
+    // a singable line: short cells, mostly steps, the same rhythm answered (a hook)
+    units: [
+      ["4", "2", "4", "r/8 8"],
+      ["8 8", "4", "r/8 8", "4. 8", "4"],
+      ["8 8", "8 8", "4", "r/8 8"],
+    ],
+    pickupUnit: "r/8 8",
+    length: [3, 7],
+    landing: [1, 2],
+    breath: [1, 2],
+    pickup: 0.45,
+    anticipate: 0.5,
+    echo: 0.6,
+    pitchEcho: 0.5,
+    sequence: [0, -1, 1],
+    shapes: ["arch", "fall", "wave", "arch"],
+    span: [5, 9],
+    chromatic: 0.03,
+    arpeggio: 0.3,
+    staccato: 0.05,
+    guide: false,
+    pentatonic: true,
+  },
   neworleans: {
     units: [
       ["4", "4", "8 8", "r/8 8"],

@@ -30,6 +30,7 @@ export type AnimalId =
   | "sheep";
 
 export type StyleId =
+  | "pop"
   | "swing"
   | "bossa"
   | "funk"

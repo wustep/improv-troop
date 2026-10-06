@@ -8,7 +8,7 @@ import { STYLES, STYLE_LIST } from "./styles";
 import { homeOf } from "./ensemble";
 import { holdable } from "./harmony";
 import { harmonyOf, topLine } from "./realize";
-import { chordPcs, mod, parseChord, parsePitch } from "./theory";
+import { chordPcs, keyScale as keyScaleOf, mod, parseChord, parsePitch } from "./theory";
 import type { Member, StyleId } from "./types";
 
 const band: Member[] = [
@@ -523,6 +523,28 @@ describe("playing like a band", () => {
     expect(bar).toBeGreaterThanOrEqual(0);
     const sig = (id: string) => inBar(score.parts[id], bar).map((n) => `${n.start - bar * 4}`).join();
     expect(sig("bear")).not.toBe(sig("penguin"));
+  });
+});
+
+describe("pop", () => {
+  it("backbeat on 2 and 4, pumping root 8ths, block triads, a diatonic tune", () => {
+    const cat: Member = { id: "cat", animal: "cat", name: "Mochi", instrument: "sax" };
+    const band5 = [...defaultMembers(), cat];
+    const { score } = generateLocal({ ...defaultSettings(band5), style: "pop", seed: 4, bars: 16, soloists: ["cat"] }, band5);
+    const inBar = <T extends { start: number }>(notes: T[], b: number) => notes.filter((n) => Math.floor(n.start / 4 + 1e-9) === b);
+    const groove = score.plan.findIndex((bp) => bp.directives?.owl === "@groove");
+    const snares = inBar(score.parts.owl, groove).filter((n) => n.pitch === DRUM.snare).map((n) => n.start - groove * 4);
+    expect(snares).toEqual([1, 3]);
+    const pumpBar = score.plan.findIndex((bp) => bp.directives?.frog === "@pump");
+    expect(inBar(score.parts.frog, pumpBar).length).toBe(8);
+    const chords = new Map<number, number[]>();
+    for (const n of score.parts.bear.filter((n) => n.start < 15 * 4 && n.pitch >= 48)) chords.set(n.start, [...(chords.get(n.start) ?? []), n.pitch]);
+    expect([...chords.values()].filter((v) => v.length === 3).length / chords.size).toBeGreaterThan(0.85);
+    expect(score.frame.sections.map((s) => s.name)).toEqual(["Chorus", "Break · Mochi", "Last chorus"]);
+    // the tune stays in the key: hardly any chromatic notes
+    const key = keyScaleOf(score.frame.key);
+    const lead = score.parts[score.frame.leaderId];
+    expect(lead.filter((n) => !key.includes(mod(n.pitch, 12))).length / lead.length).toBeLessThan(0.08);
   });
 });
 

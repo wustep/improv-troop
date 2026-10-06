@@ -296,6 +296,32 @@ export function pedal(ctx: BarCtx): NoteEvent[] {
   }));
 }
 
+/**
+ * Pop: pumping root 8ths, an octave jump or the fifth at the end of the bar to move, and the
+ * new root wherever the chord changes. "light" (or a sparse texture) plays quarters instead.
+ */
+export function pump(ctx: BarCtx): NoteEvent[] {
+  const out: NoteEvent[] = [];
+  const [lo, hi] = range(ctx);
+  const vel = velFor(ctx, 0.78);
+  const light = ctx.args.includes("light") || ctx.texture === "sparse";
+  const step = light ? 1 : 0.5;
+  let prev = ctx.mem.lastPitch ?? lo + 8;
+  for (let t = 0; t < ctx.beats - 1e-6; t += step) {
+    const c = chordAt(ctx, t);
+    const r = fold(root(ctx, c, prev), lo, hi);
+    let p = r;
+    const lastTwo = t >= ctx.beats - 1 - 1e-6 && !light;
+    // the last two 8ths move: up the octave, or the fifth, into the next bar
+    if (lastTwo && ctx.rng.chance(0.55)) p = t % 1 ? fold(above(r, fifthPc(c), hi + 7), lo, hi + 7) : r + 12 <= hi + 12 ? r + 12 : r;
+    const downbeat = t % 1 === 0;
+    out.push({ pitch: p, start: t, dur: step * 0.9, vel: vel * (t === 0 ? 1.05 : downbeat ? 0.95 : 0.82) });
+    prev = r;
+  }
+  ctx.mem.lastPitch = prev;
+  return out;
+}
+
 /** Stride left hand used when a pianist covers the bass. */
 export function strideBass(ctx: BarCtx): NoteEvent[] {
   const out: NoteEvent[] = [];

@@ -203,6 +203,58 @@ export const STYLES: Record<StyleId, StyleDef> = {
     voicing: "shell",
     feelLabel: "Funk (straight 16ths)",
   },
+  pop: {
+    id: "pop",
+    name: "Pop",
+    blurb: "Backbeat, pumping 8ths, a hook you can sing",
+    texture:
+      "Straight 8ths with a backbeat. Drums: closed hi-hat 8ths, kick on 1 and the and of 2 (and 3), snare cracks on 2 and 4, a crash at the top of sections. Bass: pumping root 8ths, an octave or the fifth to move, locked with the kick. Keys/guitar: block triads in the middle of the keyboard, pulsing 8ths or on the beats, simple and diatonic. Melody: a singable hook: short repeated rhythmic cells, mostly stepwise, pentatonic and diatonic, landing on chord tones, phrases that answer each other (call and response), no bebop chromaticism. Supporting horns or strings play a 3rd under the lead or a sustained pad, like backing vocals.",
+    swing: 0.5,
+    tempo: { min: 70, max: 140, default: 100 },
+    key: { tonic: "C", mode: "major" },
+    progressions: {
+      major: [
+        ["I", "V", "vi", "IV", "I", "V", "vi", "IV"],
+        ["vi", "IV", "I", "V", "vi", "IV", "I", "V"],
+        ["I", "vi", "IV", "V", "I", "vi", "IV", "V"],
+        ["I", "IV", "vi", "V", "I", "IV", "V", "I"],
+      ],
+      minor: [
+        ["i", "VI", "III", "VII", "i", "VI", "III", "VII"],
+        ["i", "iv", "VI", "V", "i", "iv", "VI", "V"],
+      ],
+    },
+    section: {
+      intro: { bass: "@pump", chordal: "@pulse sparse", rhythm: "@groove light", melodic: "@rest" },
+      head: { bass: "@pump", chordal: "@pulse", rhythm: "@groove", melodic: "@pad", "melodic-support": "@harmony" },
+      solo: { bass: "@pump", chordal: "@pulse", rhythm: "@groove", melodic: "@rest", "melodic-support": "@rest" },
+      trade: { bass: "@pump", chordal: "@pulse", rhythm: "@groove", melodic: "@rest" },
+      vamp: { bass: "@pump", chordal: "@pulse", rhythm: "@groove", melodic: "@pad" },
+      out: { bass: "@pump", chordal: "@pulse busy", rhythm: "@groove peak", melodic: "@pad", "melodic-support": "@harmony" },
+      tag: { bass: "@end", chordal: "@end", rhythm: "@end", melodic: "@end" },
+    },
+    line: {
+      density: 1.3,
+      cells: ["8 8 4 4 4", "4 8 8 2", "r/8 8 8 8 4 4", "4. 8 4 4", "8 8 8 8 2", "r/4 8 8 4 4"],
+      chromatic: 0.03,
+      leap: 0.2,
+      phrase: [4, 8],
+      flavor: "pentatonic",
+      offbeatStarts: 0.35,
+      staccato: 0.06,
+    },
+    motifCells: ["8 8 4 8 8 4 r/4 4 2", "4 8 8 4 4 r/2 4 4", "r/8 8 8 8 4 4 2 r/2", "4. 8 4 4 2 r/2"],
+    contours: [
+      [0, 0, 1, 2, 1, 0],
+      [2, 2, 1, 0, 1, 0],
+      [0, 1, 2, 2, 1, -1],
+      [0, 0, 0, 2, 1, 0],
+    ],
+    collective: false,
+    fills: 0.3,
+    voicing: "triad",
+    feelLabel: "Pop (straight 8ths)",
+  },
   neworleans: {
     id: "neworleans",
     name: "New Orleans",
@@ -403,7 +455,7 @@ export const STYLES: Record<StyleId, StyleDef> = {
   },
 };
 
-export const STYLE_LIST: StyleId[] = ["swing", "bossa", "funk", "neworleans", "minimal", "baroque", "ambient"];
+export const STYLE_LIST: StyleId[] = ["swing", "bossa", "funk", "pop", "neworleans", "minimal", "baroque", "ambient"];
 
 /**
  * What a cellist does in each style when someone else holds the bass chair: tenor
@@ -414,6 +466,7 @@ export const CELLO_TEXTURE: Record<StyleId, Partial<Record<SectionKind, string>>
   swing: { intro: "@rest", head: "@counter", solo: "@pizz sparse", trade: "@pizz sparse", vamp: "@pizz", out: "@harmony", tag: "@end" },
   bossa: { intro: "@pad", head: "@pad", solo: "@pizz", trade: "@pizz", vamp: "@pad", out: "@harmony", tag: "@end" },
   funk: { intro: "@rest", head: "@riff", solo: "@pizz busy", trade: "@pizz", vamp: "@riff", out: "@riff", tag: "@end" },
+  pop: { intro: "@rest", head: "@pad", solo: "@pizz", trade: "@pizz", vamp: "@pad", out: "@harmony", tag: "@end" },
   neworleans: { intro: "@riff", head: "@counter", solo: "@riff", trade: "@riff", vamp: "@riff", out: "@counter", tag: "@end" },
   minimal: { intro: "@arp", head: "@arp", solo: "@arp", trade: "@arp", vamp: "@arp", out: "@arp", tag: "@end" },
   baroque: { intro: "@rest", head: "@canon", solo: "@counter", trade: "@canon", vamp: "@counter", out: "@canon", tag: "@end" },

@@ -304,6 +304,34 @@ export function pizz(ctx: BarCtx): NoteEvent[] {
   return out;
 }
 
+/**
+ * Pop keys and guitar: block triads in the middle of the keyboard, on the beats (sparse),
+ * pulsing 8ths (busy), or quarters with a push on the "and" of 4 into the next chord.
+ */
+export function pulse(ctx: BarCtx): NoteEvent[] {
+  const sparse = ctx.args.includes("sparse") || ctx.texture === "sparse";
+  const busy = ctx.args.includes("busy") || ctx.texture === "peak";
+  const hits: Hit[] = [];
+  if (sparse) for (let b = 0; b < ctx.beats; b += 2) hits.push({ pos: b, dur: 1.9 });
+  else if (busy) for (let t = 0; t < ctx.beats; t += 0.5) hits.push({ pos: t, dur: 0.45 });
+  else {
+    for (let b = 0; b < ctx.beats; b++) hits.push({ pos: b, dur: 0.9 });
+    if (ctx.beats === 4 && !ctx.lastBar) hits.push({ pos: 3.5, dur: 0.5, next: true });
+  }
+  // the second comper (a guitar with keys) answers on the offbeats
+  const mine = ctx.peerIndex >= 1 && !busy ? hits.filter((h) => h.pos % 1 === 0).map((h) => ({ ...h, pos: h.pos + 0.5, dur: 0.4 })).filter((h) => h.pos < ctx.beats) : hits;
+  const out: NoteEvent[] = [];
+  const vel = velFor(ctx, 0.55);
+  for (const h of mine) {
+    // block triads under the tune (or in the middle of the keyboard when nobody's on top)
+    const v = voice(ctx, harmOf(ctx, h.pos, h.next), "triad", h.pos);
+    const accent = ctx.beats === 4 && (h.pos === 1 || h.pos === 3) ? 1.06 : 1;
+    out.push(...chordHit(v, h.pos, Math.min(h.dur, ctx.beats - h.pos), vel * accent * (h.pos % 1 ? 0.85 : 1)));
+    if (h.pos % 2 === 0) out.push(...leftHand(ctx, h.pos, Math.min(2, ctx.beats - h.pos), vel));
+  }
+  return out;
+}
+
 /** Stride / oom-pah: low root on 1 and 3, chord on 2 and 4. */
 export function stride(ctx: BarCtx): NoteEvent[] {
   const out: NoteEvent[] = [];

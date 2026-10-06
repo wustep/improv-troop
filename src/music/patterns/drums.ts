@@ -35,6 +35,14 @@ export const GROOVES: Record<string, Record<number, Grid>> = {
     },
     3: { base: "hh:x.x.x.x.x.x. sd:....X....... bd:x.....x.x..." },
   },
+  pop: {
+    4: {
+      base: "hh:x.x.x.x.x.x.x.x. sd:....X.......X... bd:x.....x.x.......",
+      light: "hh:x...x...x...x... sd:....x.......x... bd:x.......x.......",
+      peak: "hh:x.x.x.x.x.x.x.x. sd:....X.......X... bd:x.....x.x.x..... cr:x...............",
+    },
+    3: { base: "hh:x.x.x.x.x.x. sd:....x...x... bd:x..........." },
+  },
   neworleans: {
     4: {
       base: "sd:X.gx.gx.g.X.x.g. ph:....x.......x... bd:x.....x.x.......",
@@ -221,6 +229,7 @@ const FILL_VOCAB: Record<string, { small: string[]; big: string[] }> = {
   neworleans: { small: ["run", "press", "drag"], big: ["press", "toms", "run"] },
   funk: { small: ["ghosts", "hats", "run"], big: ["ghosts", "toms", "run"] },
   bossa: { small: ["rim", "run"], big: ["rim", "run"] },
+  pop: { small: ["setup", "run"], big: ["toms", "run"] },
 };
 
 /** Pick a fill shape for this style and length, never the same one twice in a row. */
@@ -243,7 +252,7 @@ export function groove(ctx: BarCtx): NoteEvent[] {
       : "base";
   let notes = parseDrumGrid(gridFor(ctx, which), ctx.beats).notes;
   if (ctx.style.id === "swing") notes.push(...swingComping(ctx));
-  if ((ctx.style.id === "funk" || ctx.style.id === "bossa") && ctx.bassLine?.length) notes = lockKickToBass(notes, ctx.bassLine, ctx.beats);
+  if ((ctx.style.id === "funk" || ctx.style.id === "bossa" || ctx.style.id === "pop") && ctx.bassLine?.length) notes = lockKickToBass(notes, ctx.bassLine, ctx.beats);
 
   // section downbeat crash
   if (ctx.sectionStart && !ctx.firstBar && ctx.style.id !== "baroque") {

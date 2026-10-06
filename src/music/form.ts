@@ -226,6 +226,8 @@ export function buildFrame(input: TroopSettings, members: Member[]): Frame {
   const soloists = settings.soloists.filter((id) => memberIds.has(id));
   const drummer = members.find((m) => m.instrument === "drums")?.id;
   const sections: Section[] = [];
+  // a pop band plays a chorus, takes a break, and comes back for the last chorus
+  const words = settings.style === "pop" ? { head: "Chorus", out: "Last chorus", outHead: "Last chorus", solo: "Break" } : { head: "Head", out: "Out", outHead: "Out Head", solo: "Solo" };
   const nameOf = (id: string) => members.find((m) => m.id === id)?.name ?? id;
 
   const pushSolos = (start: number, length: number) => {
@@ -245,7 +247,7 @@ export function buildFrame(input: TroopSettings, members: Member[]): Frame {
     if (soloLen > 0) {
       const who = melodicSoloists.length ? melodicSoloists : [leaderId];
       const plans = (std && assignChorusSolos(start, soloLen, who, formLen, std.form)) || assignSolos(start, soloLen, who, soloLen >= 8 ? 4 : 2);
-      for (const p of plans) sections.push({ name: `Solo · ${nameOf(p.soloist)}`, kind: "solo", start: p.start, length: p.length, featured: [p.soloist] });
+      for (const p of plans) sections.push({ name: `${words.solo} · ${nameOf(p.soloist)}`, kind: "solo", start: p.start, length: p.length, featured: [p.soloist] });
     }
     if (tradeLen > 0) {
       const tStart = start + length - tradeLen;
@@ -277,24 +279,24 @@ export function buildFrame(input: TroopSettings, members: Member[]): Frame {
         const sectioned = std.form.length > 2;
         const out = sectioned ? lastSection : Math.max(4, Math.floor(formLen / 4));
         const head = sectioned ? formLen - out - std.form[std.form.length - 2][1] : Math.floor(formLen / 2);
-        sections.push({ name: "Head", kind: "head", start: 0, length: head, featured: [leaderId] });
+        sections.push({ name: words.head, kind: "head", start: 0, length: head, featured: [leaderId] });
         pushSolos(head, formLen - head - out);
-        sections.push({ name: "Out", kind: "out", start: formLen - out, length: out, featured: [leaderId] });
+        sections.push({ name: words.out, kind: "out", start: formLen - out, length: out, featured: [leaderId] });
       } else {
-        sections.push({ name: "Head", kind: "head", start: 0, length: total, featured: [leaderId] });
+        sections.push({ name: words.head, kind: "head", start: 0, length: total, featured: [leaderId] });
       }
     } else {
-      sections.push({ name: "Head", kind: "head", start: 0, length: formLen, featured: [leaderId] });
+      sections.push({ name: words.head, kind: "head", start: 0, length: formLen, featured: [leaderId] });
       const out = choruses >= 3 ? formLen : lastSection;
       pushSolos(formLen, total - formLen - out);
-      sections.push({ name: choruses >= 3 ? "Out Head" : "Out", kind: "out", start: total - out, length: out, featured: [leaderId] });
+      sections.push({ name: choruses >= 3 ? words.outHead : words.out, kind: "out", start: total - out, length: out, featured: [leaderId] });
     }
   } else {
     const { head, out } = freeForm(total);
     const soloLen = total - head - out;
-    sections.push({ name: "Head", kind: "head", start: 0, length: head, featured: [leaderId] });
+    sections.push({ name: words.head, kind: "head", start: 0, length: head, featured: [leaderId] });
     if (soloLen > 0) pushSolos(head, soloLen);
-    if (out > 0) sections.push({ name: "Out Head", kind: "out", start: total - out, length: out, featured: [leaderId] });
+    if (out > 0) sections.push({ name: words.outHead, kind: "out", start: total - out, length: out, featured: [leaderId] });
   }
   sections.sort((a, b) => a.start - b.start);
 
