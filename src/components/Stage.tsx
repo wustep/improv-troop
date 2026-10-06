@@ -25,6 +25,26 @@ function useWidth<T extends HTMLElement>() {
   return [ref, w] as const;
 }
 
+/**
+ * Which way a player's speech bubble opens, and how wide it may grow. Alone in their row a
+ * player gets room to say it on a line or two (staying on stage); when a neighbour is talking
+ * too, bubbles keep to their own slot so they don't cover each other. Rows wrap on phones, so
+ * this goes by the player's place in their own (centred) row.
+ */
+function bubbleFit(i: number, n: number, perRow: number, spriteW: number, width: number, crowded: boolean) {
+  const GAP = 8; // gap-x-xs, and the bubble's inset from the slot edge
+  const row = Math.floor(i / perRow);
+  const cols = Math.min(perRow, n - row * perRow);
+  const rowW = cols * spriteW + (cols - 1) * GAP;
+  const left = (width - rowW) / 2 + (i % perRow) * (spriteW + GAP);
+  // a left-anchored bubble grows rightward from the slot's left edge, and vice versa
+  const roomRight = width - left - 2 * GAP;
+  const roomLeft = left + spriteW - 2 * GAP;
+  const right = roomLeft > roomRight;
+  if (crowded) return { right, maxWidth: spriteW - GAP };
+  return { right, maxWidth: Math.max(spriteW - GAP, Math.min(240, right ? roomLeft : roomRight)) };
+}
+
 function IntroNote({ onClose }: { onClose: () => void }) {
   return (
     <div className="sticky-note relative z-30 mx-auto mt-s w-full max-w-[19rem] -rotate-[1deg] px-s py-xs text-m lg:absolute lg:left-1 lg:top-14 lg:mt-0 lg:w-[17.5rem] lg:-rotate-[2deg]" role="note">
@@ -216,6 +236,9 @@ export function Stage() {
             const bubble = bubbles[m.id];
             const isThinking = thinking.has(m.id);
             const isMuted = muted.includes(m.id);
+            const row = Math.floor(i / perRow);
+            const crowded = band.some((o, j) => j !== i && Math.floor(j / perRow) === row && (bubbles[o.id] || thinking.has(o.id)));
+            const fit = bubbleFit(i, n, perRow, spriteW, width, crowded);
             return (
               <div key={`${m.id}:${m.instrument}`} className="band-slot relative flex flex-col items-center">
                 <div
@@ -227,8 +250,8 @@ export function Stage() {
                 />
                 {(bubble || isThinking) && (
                   <div
-                    className={`bubble absolute z-10 ${i >= n / 2 ? "bubble-right right-xs" : "left-xs"} max-w-[15rem] px-s py-xs text-m`}
-                    style={{ bottom: spriteW * 1.04 }}
+                    className={`bubble absolute z-10 ${fit.right ? "bubble-right right-xs" : "left-xs"} w-max px-s py-xs text-m`}
+                    style={{ bottom: spriteW * 1.04, maxWidth: fit.maxWidth }}
                   >
                     {bubble && !isThinking ? bubble : <span className="thinking-dots" aria-label={`${m.name} is thinking`}><i>.</i><i>.</i><i>.</i></span>}
                   </div>
