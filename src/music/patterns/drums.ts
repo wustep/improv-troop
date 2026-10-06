@@ -199,7 +199,7 @@ export function endDrums(ctx: BarCtx): NoteEvent[] {
   const v = velFor(ctx, 0.9);
   const out: NoteEvent[] = [
     { pitch: DRUM.crash, start: 0, dur: ctx.beats, vel: v, art: "accent" },
-    { pitch: DRUM.kick, start: 0, dur: 0.3, vel: v },
+    { pitch: DRUM.kick, start: 0, dur: 0.5, vel: v },
   ];
   if (ctx.style.id !== "baroque" && ctx.style.id !== "minimal") {
     // soft cymbal roll swelling into the release

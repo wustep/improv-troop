@@ -53,6 +53,19 @@ body {
   background: rgba(255, 252, 243, 0.6);
 }
 
+/* stage slots: n across, or up to three across in a narrow stage (see Stage.tsx) */
+.band-row {
+  container-type: inline-size;
+}
+.band-slot {
+  width: clamp(84px, calc((100cqw - 8px) / var(--per) - 8px), 220px);
+}
+@container (max-width: 559px) {
+  .band-slot {
+    width: clamp(84px, calc((100cqw - 8px) / var(--per-narrow) - 8px), 220px);
+  }
+}
+
 .spotlight {
   background: radial-gradient(ellipse 50% 50% at 50% 60%, rgba(255, 214, 102, 0.55), rgba(255, 214, 102, 0) 70%);
   transition: opacity 260ms ease;

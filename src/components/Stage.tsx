@@ -70,8 +70,11 @@ export function Stage() {
   // the band on stage is the chart's band when one is loaded (so sketches and takes match what you hear)
   const band = score?.members.length ? score.members : members;
   const n = Math.max(1, band.length);
-  // narrow screens: up to three per row, sprites shrink rather than overflow
-  const perRow = width < 560 ? (n === 4 ? 2 : Math.min(n, 3)) : n;
+  // narrow screens: up to three per row, sprites shrink rather than overflow. The slots size
+  // themselves in CSS (a container query on the row), so the server-rendered first paint is
+  // already laid out right on a phone; spriteW mirrors it for the spotlight and bubbles.
+  const perRowNarrow = n === 4 ? 2 : Math.min(n, 3);
+  const perRow = width < 560 ? perRowNarrow : n;
   const spriteW = Math.max(84, Math.min(220, (width - 8) / perRow - 8));
 
   const computer = useMemo(() => (score ? new FrameComputer(score) : null), [score]);
@@ -164,14 +167,17 @@ export function Stage() {
           </div>
         )}
 
-        <div className="relative flex flex-wrap items-end justify-center gap-x-2 gap-y-6 pt-10">
+        <div
+          className="band-row relative flex flex-wrap items-end justify-center gap-x-2 gap-y-6 pt-10"
+          style={{ "--per": n, "--per-narrow": perRowNarrow } as React.CSSProperties}
+        >
           {band.map((m, i) => {
             const inst = INSTRUMENTS[m.instrument];
             const bubble = bubbles[m.id];
             const isThinking = thinking.has(m.id);
             const isMuted = muted.includes(m.id);
             return (
-              <div key={`${m.id}:${m.instrument}`} className="relative flex flex-col items-center" style={{ width: spriteW }}>
+              <div key={`${m.id}:${m.instrument}`} className="band-slot relative flex flex-col items-center">
                 <div
                   ref={(el) => {
                     spots.current.set(m.id, el);
@@ -195,6 +201,7 @@ export function Stage() {
                     animal={m.animal}
                     instrument={m.instrument}
                     size={spriteW}
+                    className="block h-auto w-full"
                   />
                 </div>
                 <button

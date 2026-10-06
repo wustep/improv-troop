@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef } from "react";
 import type { AnimalId, InstrumentId, MemberFrameState } from "@/music/types";
 import { ANIMALS } from "@/music/instruments";
 import { ANCHOR, Blush, animalArt, mouthPath } from "./animals";
@@ -307,6 +307,14 @@ export const AnimalSprite = forwardRef<SpriteHandle, AnimalSpriteProps>(function
     [step],
   );
 
+  // Arms and instrument placement are posed per frame, so the server-rendered sprite is only
+  // half drawn: pose it once before the first paint, then show it.
+  const svgRef = useRef<SVGSVGElement>(null);
+  useLayoutEffect(() => {
+    step(rt.current.lastExternal < 0 ? IDLE_STATE : rt.current.state);
+    if (svgRef.current) svgRef.current.style.opacity = "1";
+  }, [step]);
+
   // Stay alive (breathing, blinking) when nobody is driving us.
   useEffect(() => {
     let raf = 0;
@@ -340,8 +348,9 @@ export const AnimalSprite = forwardRef<SpriteHandle, AnimalSpriteProps>(function
       viewBox={`0 0 ${VB_W} ${VB_H}`}
       width={size}
       height={(size * VB_H) / VB_W}
+      ref={svgRef}
       className={className}
-      style={{ overflow: "visible" }}
+      style={{ overflow: "visible", opacity: 0, transition: "opacity 160ms ease-out" }}
       role="img"
       aria-label={`${name ?? def.name} the ${def.species} on ${instrument}`}
     >

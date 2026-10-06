@@ -3,7 +3,7 @@
 import type * as VexNS from "vexflow";
 import type { StaveNote as StaveNoteT, Stave as StaveT, Tuplet as TupletT, Beam as BeamT, Voice as VoiceT } from "vexflow";
 import { chordText, drumKeys, spell, TPB, type Token } from "./expand";
-import { BARS_PER_ROW, LABEL_W, STAFF_H, type ClefName, type SheetModel, type StaffSpec } from "./model";
+import { LABEL_W, rowRange, STAFF_H, type ClefName, type SheetModel, type StaffSpec } from "./model";
 
 export type VF = typeof VexNS;
 
@@ -84,9 +84,148 @@ interface Cell {
   tuplets: TupletT[];
 }
 
-export function renderRow(vf: VF, host: HTMLElement, model: SheetModel, row: number, width: number): RowGeom {
+/** One bar's worth of staves (one per staff) with notes, beams and tuplets, not yet placed. */
+function buildColumn(vf: VF, model: SheetModel, row: number, bar: number, rowStart: boolean, left = LABEL_W): Cell[] {
+  const { Stave, Voice, Beam, Tuplet, Accidental, Fraction, BarlineType } = vf;
+  const { staffs, bpb } = model;
+  const isFirstRow = row === 0;
+  const col: Cell[] = [];
+  staffs.forEach((staff, si) => {
+    const clef = staff.rowClef?.[row] ?? staff.clef;
+    const stave = new Stave(left, model.staffY[si] - 40, 200);
+    stave.setDefaultLedgerLineStyle({ strokeStyle: INK, lineWidth: 1.3 });
+    if (rowStart) {
+      stave.addClef(clef);
+      if (!staff.drums) stave.addKeySignature(model.keySpec);
+      if (isFirstRow) stave.addTimeSignature(`${bpb}/4`);
+    }
+    if (bar === model.bars - 1) stave.setEndBarType(BarlineType.END);
+    const tokens = staff.bars[bar]?.tokens ?? [];
+    const notes = tokens.map((t) => makeNote(vf, t, staff, model, clef));
+
+    // Tuplets per triplet beat (must exist before the voice counts ticks).
+    const tuplets: TupletT[] = [];
+    const byBeat = new Map<number, StaveNoteT[]>();
+    tokens.forEach((t, k) => {
+      if (!t.triplet) return;
+      const arr = byBeat.get(t.beat) ?? [];
+      arr.push(notes[k]);
+      byBeat.set(t.beat, arr);
+    });
+    for (const group of byBeat.values()) {
+      const toks = tokens.filter((t) => t.triplet && t.beat === tokens[notes.indexOf(group[0])].beat);
+      const beamable = group.length >= 3 && toks.every((t) => t.kind === "note" && (t.dur === "8" || t.dur === "16"));
+      tuplets.push(new Tuplet(group, { numNotes: 3, notesOccupied: 2, bracketed: !beamable, ratioed: false }));
+    }
+
+    const voice = new Voice({ numBeats: bpb, beatValue: 4 }).setMode(Voice.Mode.SOFT);
+    voice.addTickables(notes);
+    voice.setStave(stave);
+    if (!staff.drums) {
+      try {
+        Accidental.applyAccidentals([voice], model.keySpec);
+      } catch {
+        /* exotic spelling; skip accidentals for this bar */
+      }
+    }
+    let beams: BeamT[] = [];
+    try {
+      beams = Beam.generateBeams(notes, {
+        groups: [new Fraction(1, 4)],
+        ...(staff.drums ? { stemDirection: 1, maintainStemDirections: false } : {}),
+      });
+    } catch {
+      beams = [];
+    }
+    addArticulations(vf, notes, tokens);
+    col.push({ stave, notes, tokens, voice, beams, tuplets });
+  });
+  return col;
+}
+
+/** Room each bar needs, measured with the same notes the renderer draws. */
+export interface ChartMeasure {
+  /** Minimum note-area width per bar. */
+  minW: number[];
+  /** Clef + key (+ time on the first system) in front of a system's first bar. */
+  begFirst: number;
+  beg: number;
+  /** Padding in front of the notes of a bar in the middle of a system. */
+  plain: number;
+}
+
+export function measureChart(vf: VF, model: SheetModel): ChartMeasure {
+  const { Formatter, Stave } = vf;
+  const minW: number[] = [];
+  for (let bar = 0; bar < model.bars; bar++) {
+    const col = buildColumn(vf, model, 1, bar, false);
+    try {
+      // Format as tight as it goes and see how far the notes actually reach (the formatter's
+      // own minimum-width estimate runs about twice what it really draws).
+      const f = new Formatter();
+      col.forEach((c) => f.joinVoices([c.voice]));
+      f.format(
+        col.map((c) => c.voice),
+        0,
+      );
+      let reach = 40;
+      for (const c of col) {
+        const start = c.stave.getNoteStartX();
+        for (const n of c.notes) reach = Math.max(reach, n.getAbsoluteX() + n.getWidth() - start);
+      }
+      minW.push(reach);
+    } catch {
+      minW.push(160);
+    }
+  }
+  const begOf = (row: number) => {
+    const col = buildColumn(vf, model, row, 0, true);
+    if (!col.length) return 12;
+    Stave.formatBegModifiers(col.map((c) => c.stave));
+    return Math.max(...col.map((c) => c.stave.getNoteStartX() - c.stave.getX()));
+  };
+  const plainCol = buildColumn(vf, model, 1, Math.min(1, model.bars - 1), false);
+  const plain = plainCol[0] ? plainCol[0].stave.getNoteStartX() - plainCol[0].stave.getX() : 12;
+  return { minW, begFirst: begOf(0), beg: begOf(1), plain };
+}
+
+/** Air on top of a bar's tightest width: the formatter spreads notes by duration and pads the
+ * bar's end, so a bar given exactly its minimum lets its last notes spill past the barline. */
+const SLACK = 1.04;
+const AIR = 16;
+
+/** Bar padding the renderer adds on top of a bar's minimum width. */
+export const BAR_PAD = 26;
+
+/** Width (px) a system of bars [first, end) needs, with a little air. */
+export function systemWidth(m: ChartMeasure, first: number, end: number): number {
+  let w = LABEL_W + 24 + (first === 0 ? m.begFirst : m.beg) - m.plain;
+  for (let b = first; b < end; b++) w += m.minW[b] * SLACK + AIR + m.plain + BAR_PAD;
+  return w;
+}
+
+/**
+ * Break the chart into systems the way an engraver would: each system takes as many bars
+ * (up to `maxPerRow`) as fit in `width`. Returns the first bar of each system.
+ */
+export function breakSystems(m: ChartMeasure, width: number, maxPerRow: number): number[] {
+  const starts: number[] = [];
+  let first = 0;
+  while (first < m.minW.length) {
+    starts.push(first);
+    let end = first + 1;
+    while (end < m.minW.length && end - first < maxPerRow && systemWidth(m, first, end + 1) <= width) end++;
+    first = end;
+  }
+  // don't leave the final bar alone on its own system when the one before can spare a bar
+  const k = starts.length - 1;
+  if (k >= 1 && m.minW.length - starts[k] === 1 && starts[k] - starts[k - 1] >= 3) starts[k]--;
+  return starts;
+}
+
+export function renderRow(vf: VF, host: HTMLElement, model: SheetModel, row: number, width: number, measure?: ChartMeasure | null): RowGeom {
   const t0 = performance.now();
-  const { Renderer, Stave, Voice, Formatter, Beam, Tuplet, StaveTie, StaveConnector, Accidental, Fraction, BarlineType } = vf;
+  const { Renderer, Stave, Formatter, StaveTie, StaveConnector } = vf;
 
   host.innerHTML = "";
   const renderer = new Renderer(host as HTMLDivElement, Renderer.Backends.SVG);
@@ -97,8 +236,10 @@ export function renderRow(vf: VF, host: HTMLElement, model: SheetModel, row: num
   const svg = (ctx as unknown as { svg: SVGSVGElement }).svg;
   svg.style.overflow = "visible";
 
-  const firstBar = row * BARS_PER_ROW;
-  const nBars = Math.max(0, Math.min(BARS_PER_ROW, model.bars - firstBar));
+  const perRow = model.barsPerRow;
+  const [firstBar, endBar] = rowRange(model, row);
+  const nBars = Math.max(0, endBar - firstBar);
+  const lastRow = row === model.rows - 1;
   const left = LABEL_W;
   const right = width - 10;
   const { staffs, bpb } = model;
@@ -106,63 +247,7 @@ export function renderRow(vf: VF, host: HTMLElement, model: SheetModel, row: num
 
   // 1. Staves (provisional x) + notes.
   const cells: Cell[][] = [];
-  for (let i = 0; i < nBars; i++) {
-    const bar = firstBar + i;
-    const col: Cell[] = [];
-    staffs.forEach((staff, si) => {
-      const clef = staff.rowClef?.[row] ?? staff.clef;
-      const stave = new Stave(left, model.staffY[si] - 40, 200);
-      stave.setDefaultLedgerLineStyle({ strokeStyle: INK, lineWidth: 1.3 });
-      if (i === 0) {
-        stave.addClef(clef);
-        if (!staff.drums) stave.addKeySignature(model.keySpec);
-        if (isFirstRow) stave.addTimeSignature(`${bpb}/4`);
-      }
-      if (bar === model.bars - 1) stave.setEndBarType(BarlineType.END);
-
-      const tokens = staff.bars[bar]?.tokens ?? [];
-      const notes = tokens.map((t) => makeNote(vf, t, staff, model, clef));
-
-      // Tuplets per triplet beat (must exist before the voice counts ticks).
-      const tuplets: TupletT[] = [];
-      const byBeat = new Map<number, StaveNoteT[]>();
-      tokens.forEach((t, k) => {
-        if (!t.triplet) return;
-        const arr = byBeat.get(t.beat) ?? [];
-        arr.push(notes[k]);
-        byBeat.set(t.beat, arr);
-      });
-      for (const group of byBeat.values()) {
-        const toks = tokens.filter((t) => t.triplet && t.beat === tokens[notes.indexOf(group[0])].beat);
-        const beamable = group.length >= 3 && toks.every((t) => t.kind === "note" && (t.dur === "8" || t.dur === "16"));
-        tuplets.push(new Tuplet(group, { numNotes: 3, notesOccupied: 2, bracketed: !beamable, ratioed: false }));
-      }
-
-      const voice = new Voice({ numBeats: bpb, beatValue: 4 }).setMode(Voice.Mode.SOFT);
-      voice.addTickables(notes);
-      voice.setStave(stave);
-      if (!staff.drums) {
-        try {
-          Accidental.applyAccidentals([voice], model.keySpec);
-        } catch {
-          /* exotic spelling; skip accidentals for this bar */
-        }
-      }
-      let beams: BeamT[] = [];
-      try {
-        beams = Beam.generateBeams(notes, {
-          groups: [new Fraction(1, 4)],
-          ...(staff.drums ? { stemDirection: 1, maintainStemDirections: false } : {}),
-        });
-      } catch {
-        beams = [];
-      }
-      addArticulations(vf, notes, tokens);
-      col.push({ stave, notes, tokens, voice, beams, tuplets });
-    });
-    cells.push(col);
-  }
-
+  for (let i = 0; i < nBars; i++) cells.push(buildColumn(vf, model, row, firstBar + i, i === 0, left));
 
   // 2. Align beginning modifiers across the system, measure widths.
   if (cells[0]) Stave.formatBegModifiers(cells[0].map((c) => c.stave));
@@ -173,6 +258,9 @@ export function renderRow(vf: VF, host: HTMLElement, model: SheetModel, row: num
   });
   const minW = cells.map((col, i) => {
     if (!col.length) return 40;
+    // what the notes really take (see measureChart); the formatter's own guess runs high
+    const measured = measure?.minW[firstBar + i];
+    if (measured !== undefined) return measured * SLACK + AIR;
     try {
       return formatters[i].preCalculateMinTotalWidth(col.map((c) => c.voice));
     } catch {
@@ -180,10 +268,13 @@ export function renderRow(vf: VF, host: HTMLElement, model: SheetModel, row: num
     }
   });
   const modW = cells.map((col) => (col[0] ? col[0].stave.getNoteStartX() - col[0].stave.getX() : 12));
-  const PAD = 26;
+  const PAD = BAR_PAD;
   const base = minW.map((w, i) => w + modW[i] + PAD);
   const fullAvail = right - left;
-  const avail = nBars < BARS_PER_ROW ? Math.min(fullAvail, (fullAvail * nBars) / BARS_PER_ROW + modW[0]) : fullAvail;
+  // a short last system isn't stretched across the page
+  // (`need` is the system's measured width, so it never shrinks below what its notes take)
+  const need = measure ? systemWidth(measure, firstBar, endBar) : 0;
+  const avail = lastRow && nBars < perRow ? Math.min(fullAvail, Math.max((fullAvail * nBars) / perRow + modW[0], need - left - 10)) : fullAvail;
   const sumBase = base.reduce((a, b) => a + b, 0);
   let widths: number[];
   if (sumBase <= avail) {

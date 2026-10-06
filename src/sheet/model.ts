@@ -4,7 +4,10 @@ import type { ChordChange, Score } from "../music/types";
 import { INSTRUMENTS } from "../music/instruments";
 import { expandPart, keySpec, spellingTable, type BarTokens } from "./expand";
 
+/** Most bars a system holds (fewer when they don't fit). */
 export const BARS_PER_ROW = 4;
+/** Screens narrower than this (phones) hold at most two bars per system. */
+export const NARROW_ROW = 600;
 export const LABEL_W = 70;
 /** y of the first stave's top line inside a row. */
 export const ROW_TOP = 96;
@@ -14,7 +17,10 @@ export const STAFF_GAP = 96;
 export const GRAND_GAP = 82;
 export const STAFF_H = 40;
 export const ROW_BOTTOM = 46;
+/** A four-bar system is laid out at least this wide; narrower screens scale the chart down. */
 export const MIN_ROW_WIDTH = 720;
+/** How far the chart may scale down to fit more bars on a system (phones go further). */
+export const MIN_ZOOM = { narrow: 0.6, wide: 0.85 };
 
 const ABBR: Record<string, string> = {
   piano: "Pno.",
@@ -60,6 +66,10 @@ export interface SheetModel {
   sectionStarts: Map<number, string>;
   tempo: number;
   feel: string;
+  /** First bar of each system. Systems hold as many bars as fit (see layout in SheetMusic). */
+  rowStart: number[];
+  /** Most bars in any system (a short last system isn't stretched to full width). */
+  barsPerRow: number;
   rows: number;
   rowHeight: number;
   /** Top-line y of each staff within a row. */
@@ -67,12 +77,29 @@ export interface SheetModel {
   expandMs: number;
 }
 
-/** Cellists switch to tenor clef when a system sits high; decide per row (4 bars). */
-function tenorRows(bars: BarTokens[], nBars: number): ClefName[] {
+/** Bars [first, end) of a system. */
+export function rowRange(model: Pick<SheetModel, "rowStart" | "bars">, row: number): [number, number] {
+  return [model.rowStart[row] ?? model.bars, model.rowStart[row + 1] ?? model.bars];
+}
+
+/** The system a bar sits in. */
+export function rowOf(model: Pick<SheetModel, "rowStart">, bar: number): number {
+  let r = 0;
+  while (r + 1 < model.rowStart.length && model.rowStart[r + 1] <= bar) r++;
+  return r;
+}
+
+/** Evenly sized systems of `perRow` bars. */
+export function uniformRows(nBars: number, perRow: number): number[] {
+  return Array.from({ length: Math.ceil(nBars / perRow) }, (_, r) => r * perRow);
+}
+
+/** Cellists switch to tenor clef when a system sits high; decide per row. */
+function tenorRows(bars: BarTokens[], nBars: number, rowStart: number[]): ClefName[] {
   const rows: ClefName[] = [];
-  for (let r = 0; r * BARS_PER_ROW < nBars; r++) {
+  for (let r = 0; r < rowStart.length; r++) {
     const pitches = bars
-      .slice(r * BARS_PER_ROW, (r + 1) * BARS_PER_ROW)
+      .slice(rowStart[r], rowStart[r + 1] ?? nBars)
       .flatMap((b) => b.tokens.filter((t) => t.kind === "note").flatMap((t) => t.pitches));
     if (pitches.length < 3) {
       rows.push("bass");
@@ -107,10 +134,11 @@ function bowingMarks(bars: BarTokens[]): Map<number, { k: number; text: string }
   return out;
 }
 
-export function buildModel(score: Score): SheetModel {
+export function buildModel(score: Score, rowStart?: number[]): SheetModel {
   const t0 = performance.now();
   const bpb = Math.max(2, Math.min(7, Math.round(score.frame?.meter?.beats ?? score.settings?.meter?.beats ?? 4)));
   const bars = Math.max(1, Math.round(score.frame?.bars ?? score.settings?.bars ?? 8));
+  const starts = rowStart?.length ? rowStart : uniformRows(bars, BARS_PER_ROW);
   const key = score.settings?.key ?? score.frame?.key ?? { tonic: "C", mode: "major" as const };
 
   const staffs: StaffSpec[] = [];
@@ -148,7 +176,7 @@ export function buildModel(score: Score): SheetModel {
         clef: inst.clef,
         drums: false,
         bars: expanded,
-        ...(m.instrument === "cello" ? { rowClef: tenorRows(expanded, bars) } : {}),
+        ...(m.instrument === "cello" ? { rowClef: tenorRows(expanded, bars, starts) } : {}),
         ...(inst.bowed ? { marks: bowingMarks(expanded) } : {}),
       });
     }
@@ -187,9 +215,27 @@ export function buildModel(score: Score): SheetModel {
     sectionStarts,
     tempo: Math.round(score.frame?.tempo ?? score.settings?.tempo ?? 120),
     feel,
-    rows: Math.ceil(bars / BARS_PER_ROW),
+    rowStart: starts,
+    barsPerRow: widestRow(starts, bars),
+    rows: starts.length,
     rowHeight,
     staffY,
     expandMs: performance.now() - t0,
+  };
+}
+
+function widestRow(rowStart: number[], nBars: number) {
+  return Math.max(1, ...rowStart.map((b, r) => (rowStart[r + 1] ?? nBars) - b));
+}
+
+/** The same chart broken into different systems. */
+export function withRows(model: SheetModel, rowStart: number[]): SheetModel {
+  if (rowStart.length === model.rowStart.length && rowStart.every((b, i) => b === model.rowStart[i])) return model;
+  return {
+    ...model,
+    rowStart,
+    barsPerRow: widestRow(rowStart, model.bars),
+    rows: rowStart.length,
+    staffs: model.staffs.map((st) => (st.rowClef ? { ...st, rowClef: tenorRows(st.bars, model.bars, rowStart) } : st)),
   };
 }

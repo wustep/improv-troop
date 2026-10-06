@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Score } from "../music/types";
-import { BARS_PER_ROW, LABEL_W, MIN_ROW_WIDTH, STAFF_H, buildModel, type SheetModel } from "./model";
+import { BARS_PER_ROW, LABEL_W, MIN_ROW_WIDTH, MIN_ZOOM, NARROW_ROW, STAFF_H, buildModel, rowOf, rowRange, withRows, type SheetModel } from "./model";
 import { TPB } from "./expand";
-import { renderRow, type BarGeom, type VF } from "./render";
+import { breakSystems, measureChart, renderRow, systemWidth, type BarGeom, type VF } from "./render";
 
 export interface SheetStats {
   rows: number;
@@ -117,9 +117,26 @@ export function SheetMusic({ score, getBeat, playing, playToken, onSeekBar, onSt
   const geoms = useRef(new Map<number, BarGeom>());
 
   const [lib, setLib] = useState<VF | null>(null);
-  const [width, setWidth] = useState(0);
+  // Measured width of the visible area. Systems are laid out at `width` (never narrower than
+  // reads well) and the whole chart is scaled by `zoom` to fit, so it never scrolls sideways.
+  const [avail, setAvail] = useState(0);
 
-  const model: SheetModel = useMemo(() => buildModel(score), [score]);
+  const base: SheetModel = useMemo(() => buildModel(score), [score]);
+  // How much room each bar needs, measured with the notes VexFlow will draw.
+  const measure = useMemo(() => (lib && base.staffs.length ? measureChart(lib, base) : null), [lib, base]);
+  // Systems take as many bars as fit (up to four; two on a phone), scaling the chart down a
+  // little to fit more. Busy bars get a system to themselves instead of being clipped.
+  const { rowStart, width, zoom } = useMemo(() => {
+    if (!avail) return { rowStart: base.rowStart, width: 0, zoom: 1 };
+    if (!measure) return { rowStart: base.rowStart, width: Math.max(avail, MIN_ROW_WIDTH), zoom: Math.min(1, avail / MIN_ROW_WIDTH) };
+    const narrow = avail < NARROW_ROW;
+    const pack = avail / (narrow ? MIN_ZOOM.narrow : MIN_ZOOM.wide);
+    const starts = breakSystems(measure, pack, narrow ? 2 : BARS_PER_ROW);
+    const need = Math.max(...starts.map((b, r) => systemWidth(measure, b, starts[r + 1] ?? measure.minW.length)));
+    const w = Math.max(avail, Math.ceil(need));
+    return { rowStart: starts, width: w, zoom: avail / w };
+  }, [avail, measure, base]);
+  const model: SheetModel = useMemo(() => withRows(base, rowStart), [base, rowStart]);
   const sig = useMemo(() => signature(score), [score]);
 
   // Latest callbacks without re-running effects.
@@ -147,8 +164,8 @@ export function SheetMusic({ score, getBeat, playing, playToken, onSeekBar, onSt
     if (!el) return;
     let t: number | undefined;
     const measure = () => {
-      const w = Math.max(MIN_ROW_WIDTH, Math.floor(el.clientWidth - 16));
-      setWidth((prev) => (Math.abs(prev - w) < 4 ? prev : w));
+      const w = Math.max(240, Math.floor(el.clientWidth - 16));
+      setAvail((prev) => (Math.abs(prev - w) < 4 ? prev : w));
     };
     const ro = new ResizeObserver(() => {
       window.clearTimeout(t);
@@ -184,7 +201,7 @@ export function SheetMusic({ score, getBeat, playing, playToken, onSeekBar, onSt
     if (!lib || !width || !model.staffs.length) return;
     const root = scrollRef.current;
     if (!root) return;
-    const cache = cacheFor(`${sig}@${width}`);
+    const cache = cacheFor(`${sig}@${width}/${model.rowStart.join(",")}`);
     geoms.current = new Map();
     const done = new Set<number>();
     const queue: number[] = [];
@@ -208,7 +225,7 @@ export function SheetMusic({ score, getBeat, playing, playToken, onSeekBar, onSt
         return;
       }
       try {
-        const g = renderRow(lib, host, model, row, width);
+        const g = renderRow(lib, host, model, row, width, measure);
         total += g.renderMs;
         g.bars.forEach((b) => geoms.current.set(b.bar, b));
         const el = host.firstElementChild;
@@ -261,7 +278,7 @@ export function SheetMusic({ score, getBeat, playing, playToken, onSeekBar, onSt
       window.clearTimeout(bg);
       if (idle !== null) cic(idle);
     };
-  }, [lib, width, sig, model]);
+  }, [lib, width, sig, model, measure]);
 
   // Manual scroll cancels follow (until next Play).
   useEffect(() => {
@@ -329,12 +346,13 @@ export function SheetMusic({ score, getBeat, playing, playToken, onSeekBar, onSt
         return;
       }
       const bar = Math.floor(beat / model.bpb);
-      const row = Math.floor(bar / BARS_PER_ROW);
+      const row = rowOf(model, bar);
       const rowEl = rowEls.current[row];
       if (!rowEl) return;
       const g = geoms.current.get(bar);
-      const est = (width - LABEL_W - 10) / BARS_PER_ROW;
-      const gx = g ? g.x : LABEL_W + (bar % BARS_PER_ROW) * est;
+      const [first, end] = rowRange(model, row);
+      const est = (width - LABEL_W - 10) / Math.max(1, end - first);
+      const gx = g ? g.x : LABEL_W + (bar - first) * est;
       const gw = g ? g.w : est;
       const inBar = (beat - bar * model.bpb) * TPB;
       const lx = g ? interpolateX(g.anchors, inBar) : gx + (gw * inBar) / (model.bpb * TPB);
@@ -352,8 +370,8 @@ export function SheetMusic({ score, getBeat, playing, playToken, onSeekBar, onSt
       const sc = scrollRef.current;
       if (f.on && sc && row !== f.lastRow) {
         f.lastRow = row;
-        const rowTop = rowEl.offsetTop;
-        const lead = Math.max(8, Math.min(sc.clientHeight / 3, sc.clientHeight - model.rowHeight - 8));
+        const rowTop = rowEl.offsetTop * zoom;
+        const lead = Math.max(8, Math.min(sc.clientHeight / 3, sc.clientHeight - model.rowHeight * zoom - 8));
         const target = Math.max(0, rowTop - lead);
         if (Math.abs(sc.scrollTop - target) > 2) {
           f.progUntil = performance.now() + 1200;
@@ -366,7 +384,7 @@ export function SheetMusic({ score, getBeat, playing, playToken, onSeekBar, onSt
       cancelAnimationFrame(raf);
       hide();
     };
-  }, [playing, model, width]);
+  }, [playing, model, width, zoom]);
 
   const onClick = (e: React.MouseEvent) => {
     const fn = cb.current.onSeekBar;
@@ -374,13 +392,13 @@ export function SheetMusic({ score, getBeat, playing, playToken, onSeekBar, onSt
     const rowEl = (e.target as HTMLElement).closest<HTMLElement>("[data-row]");
     if (!rowEl) return;
     const row = Number(rowEl.dataset.row);
-    const x = e.clientX - rowEl.getBoundingClientRect().left;
-    const first = row * BARS_PER_ROW;
-    const last = Math.min(model.bars, first + BARS_PER_ROW) - 1;
+    const x = (e.clientX - rowEl.getBoundingClientRect().left) / zoom;
+    const [first, end] = rowRange(model, row);
+    const last = end - 1;
     let bar = first;
     for (let b = first; b <= last; b++) {
       const g = geoms.current.get(b);
-      const gx = g ? g.x : LABEL_W + (b - first) * ((width - LABEL_W) / BARS_PER_ROW);
+      const gx = g ? g.x : LABEL_W + (b - first) * ((width - LABEL_W) / Math.max(1, end - first));
       if (x >= gx) bar = b;
     }
     fn(bar);
@@ -394,58 +412,66 @@ export function SheetMusic({ score, getBeat, playing, playToken, onSeekBar, onSt
       style={{ position: "relative", overflow: "auto", outline: "none", overscrollBehavior: "contain" }}
       aria-label={`Sheet music: ${score.title}`}
     >
-      <div
-        ref={contentRef}
-        onClick={onClick}
-        style={{ position: "relative", width: width || "100%", minHeight: 40, cursor: onSeekBar ? "pointer" : undefined }}
-      >
-        {model.staffs.length === 0 ? (
-          <div style={{ padding: 24, fontFamily: "var(--font-hand), cursive", color: "#6a6474" }}>No players on the chart yet.</div>
-        ) : (
-          Array.from({ length: model.rows }, (_, r) => (
-            <div
-              key={`${sig}-${r}`}
-              data-row={r}
-              ref={(el) => {
-                rowEls.current[r] = el;
-              }}
-              className="sheet-row"
-              style={{ height: model.rowHeight, width: width || "100%", position: "relative" }}
-            />
-          ))
-        )}
+      <div style={zoom < 1 ? { width: width * zoom, height: Math.max(40, model.rows * model.rowHeight) * zoom, overflow: "hidden" } : undefined}>
         <div
-          ref={highlightRef}
-          aria-hidden
+          ref={contentRef}
+          onClick={onClick}
           style={{
-            position: "absolute",
-            left: 0,
-            top: 0,
-            opacity: 0,
-            pointerEvents: "none",
-            borderRadius: 10,
-            background: "rgba(242, 196, 70, 0.26)",
-            boxShadow: "inset 0 0 0 1.5px rgba(214, 160, 40, 0.35)",
-            mixBlendMode: "multiply",
-            transition: "width 120ms ease, transform 120ms ease, opacity 200ms",
-            willChange: "transform",
+            position: "relative",
+            width: width || "100%",
+            minHeight: 40,
+            cursor: onSeekBar ? "pointer" : undefined,
+            ...(zoom < 1 ? { transform: `scale(${zoom})`, transformOrigin: "0 0" } : {}),
           }}
-        />
-        <div
-          ref={lineRef}
-          aria-hidden
-          style={{
-            position: "absolute",
-            left: 0,
-            top: 0,
-            width: 2,
-            opacity: 0,
-            pointerEvents: "none",
-            borderRadius: 2,
-            background: "rgba(200, 70, 60, 0.75)",
-            willChange: "transform",
-          }}
-        />
+        >
+          {model.staffs.length === 0 ? (
+            <div style={{ padding: 24, fontFamily: "var(--font-hand), cursive", color: "#6a6474" }}>No players on the chart yet.</div>
+          ) : (
+            Array.from({ length: model.rows }, (_, r) => (
+              <div
+                key={`${sig}-${r}`}
+                data-row={r}
+                ref={(el) => {
+                  rowEls.current[r] = el;
+                }}
+                className="sheet-row"
+                style={{ height: model.rowHeight, width: width || "100%", position: "relative" }}
+              />
+            ))
+          )}
+          <div
+            ref={highlightRef}
+            aria-hidden
+            style={{
+              position: "absolute",
+              left: 0,
+              top: 0,
+              opacity: 0,
+              pointerEvents: "none",
+              borderRadius: 10,
+              background: "rgba(242, 196, 70, 0.26)",
+              boxShadow: "inset 0 0 0 1.5px rgba(214, 160, 40, 0.35)",
+              mixBlendMode: "multiply",
+              transition: "width 120ms ease, transform 120ms ease, opacity 200ms",
+              willChange: "transform",
+            }}
+          />
+          <div
+            ref={lineRef}
+            aria-hidden
+            style={{
+              position: "absolute",
+              left: 0,
+              top: 0,
+              width: 2,
+              opacity: 0,
+              pointerEvents: "none",
+              borderRadius: 2,
+              background: "rgba(200, 70, 60, 0.75)",
+              willChange: "transform",
+            }}
+          />
+        </div>
       </div>
       <style>{`.sheet-row:empty::before{content:"✎ inking the chart…";position:absolute;left:${LABEL_W}px;top:40px;font-family:var(--font-hand),cursive;color:#a49c8c;font-size:15px}`}</style>
     </div>
