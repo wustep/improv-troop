@@ -139,6 +139,10 @@ function stateAt(notes: NoteEvent[], beat: number, playing: boolean, featured: b
     nextOnsetIn = (notes[lo].start - beat) * spb;
     nextPitch = notes[lo].pitch;
   }
+  const upcoming: NonNullable<MemberFrameState["upcoming"]> = [];
+  for (let i = lo; i < notes.length && (notes[i].start - beat) * spb <= 0.6; i++) {
+    upcoming.push({ pitch: notes[i].pitch, vel: notes[i].vel, inSec: (notes[i].start - beat) * spb, art: notes[i].art });
+  }
   for (let i = lo - 1; i >= 0 && beat - notes[i].start < 8; i--) {
     const n = notes[i];
     const age = (beat - n.start) * spb;
@@ -157,6 +161,7 @@ function stateAt(notes: NoteEvent[], beat: number, playing: boolean, featured: b
     recent,
     nextOnsetIn,
     nextPitch,
+    upcoming,
     role: silentFor > 1.5 && nextOnsetIn > 1.5 ? "rest" : featured ? "solo" : "comp",
     energy: 0.6,
     featured,

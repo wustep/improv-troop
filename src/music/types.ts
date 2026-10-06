@@ -236,6 +236,15 @@ export interface ActiveNote {
   art?: NoteEvent["art"];
 }
 
+/** An onset that hasn't sounded yet. */
+export interface UpcomingOnset {
+  pitch: number;
+  vel: number;
+  /** Seconds until it sounds. */
+  inSec: number;
+  art?: NoteEvent["art"];
+}
+
 export interface OnsetInfo {
   pitch: number;
   vel: number;
@@ -258,6 +267,11 @@ export interface MemberFrameState {
   /** Seconds until the next onset for this member (Infinity if none). Lets the rig anticipate (lift a stick, take a breath). */
   nextOnsetIn: number;
   nextPitch: number | null;
+  /**
+   * Every onset in the next ~0.6 s, soonest first (chords included). Lets a rig give each
+   * hand its own next note, instead of only the very next onset of the whole part.
+   */
+  upcoming?: UpcomingOnset[];
   role: Role;
   /** 0..1 loudness of the current bar. */
   energy: number;

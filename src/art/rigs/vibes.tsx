@@ -1,7 +1,7 @@
 import { L, S, ellipsePath, hash, mix, rectPath } from "../sketch";
 import { approach, clamp } from "../affine";
 import { isBlack, keyUnits } from "../fingering";
-import { type Frame, type Rig, type RigCtx, hit, newOnsets, strokeLift } from "./types";
+import { type Frame, type Rig, type RigCtx, hit, strokeLift } from "./types";
 
 // Bars F3 (53) … F6 (89).
 const LO = 53;
@@ -23,6 +23,28 @@ const barY = (p: number) => (isBlack(p) ? ACC_Y + 5 : NAT_Y + 6);
 function barLen(p: number, black: boolean) {
   const t = (clamp(p, LO, HI) - LO) / (HI - LO);
   return (black ? 14 : 22) - t * 7;
+}
+
+// Four-mallet grip, like a jazz vibraphonist: per paw an outer mallet (0) and an inner one (1).
+type Mallet = "L0" | "L1" | "R1" | "R0";
+const MALLETS: Mallet[] = ["L0", "L1", "R1", "R0"];
+
+/**
+ * Which mallet takes which note. Chords spread across the mallets low → high (two notes:
+ * the inner pair; three: both left + right inner; four: all of them). A single note goes to
+ * the inner mallet of the nearer paw, and that paw's outer mallet stays a few steps outside.
+ */
+function grip(chord: number[], m: Record<string, number>): Partial<Record<Mallet, number>> {
+  const ps = [...new Set(chord)].sort((a, b) => a - b);
+  if (ps.length >= 4) return { L0: ps[0], L1: ps[1], R1: ps[ps.length - 2], R0: ps[ps.length - 1] };
+  if (ps.length === 3) return { L0: ps[0], L1: ps[1], R1: ps[2], R0: Math.max(m.pR0, ps[2] + 3) };
+  if (ps.length === 2) return { L1: ps[0], R1: ps[1], L0: Math.min(m.pL0, ps[0] - 3), R0: Math.max(m.pR0, ps[1] + 3) };
+  const p = ps[0];
+  let arm: "L" | "R" = Math.abs(p - m.pL1) <= Math.abs(p - m.pR1) ? "L" : "R";
+  // don't cross the other paw
+  if (arm === "L" && p > m.pR1 + 2) arm = "R";
+  if (arm === "R" && p < m.pL1 - 2) arm = "L";
+  return arm === "L" ? { L1: p, L0: p - 4, R1: Math.max(m.pR1, p + 3), R0: Math.max(m.pR0, p + 7) } : { R1: p, R0: p + 4, L1: Math.min(m.pL1, p - 3), L0: Math.min(m.pL0, p - 7) };
 }
 
 export const vibes: Rig = {
@@ -81,12 +103,12 @@ export const vibes: Rig = {
       ),
       held: (
         <g>
-          {(["L", "R"] as const).map((k) => (
+          {MALLETS.map((k) => (
             <g key={k}>
-              <line ref={c.bag.r("m" + k)} stroke="#8a5a2b" strokeWidth={2.2} strokeLinecap="round" />
+              <line ref={c.bag.r("m" + k)} stroke="#8a5a2b" strokeWidth={2} strokeLinecap="round" />
               <g ref={c.bag.r("mb" + k)}>
-                <circle r={6} fill={k === "L" ? "#c8463c" : "#3b5bab"} stroke="#2c2a35" strokeWidth={1.3} />
-                <path d="M-3.5 -2 q3.5 -2.5 7 0 M-4 1.5 q4 -2.5 8 0" stroke="#fffdf4" strokeOpacity={0.55} strokeWidth={1} fill="none" />
+                <circle r={5.2} fill={k[0] === "L" ? "#c8463c" : "#3b5bab"} stroke="#2c2a35" strokeWidth={1.2} />
+                <path d="M-3 -1.8 q3 -2.2 6 0 M-3.5 1.3 q3.5 -2.2 7 0" stroke="#fffdf4" strokeOpacity={0.55} strokeWidth={1} fill="none" />
               </g>
             </g>
           ))}
@@ -97,54 +119,64 @@ export const vibes: Rig = {
   update(c: RigCtx, f: Frame) {
     const { s } = f;
     const m = c.mem;
-    if (m.pL === undefined) {
-      m.pL = 65;
-      m.pR = 77;
-      m.aL = Infinity;
-      m.aR = Infinity;
-      m.tL = -Infinity;
-      m.tR = -Infinity;
+    if (m.pL1 === undefined) {
+      m.pL0 = 60;
+      m.pL1 = 65;
+      m.pR1 = 77;
+      m.pR0 = 81;
+      for (const k of MALLETS) m["t" + k] = -Infinity;
     }
-    // Assign each new onset to a mallet: chords spread low→L / high→R, single notes go to the nearest mallet.
-    newOnsets(c, f, (o) => {
-      const T = f.t - o.age;
-      let arm: "L" | "R";
-      if (o.chordSize >= 2) {
-        const chord = s.recent.filter((q) => Math.abs(q.age - o.age) < 0.02).map((q) => q.pitch);
-        arm = o.pitch <= Math.min(...chord) ? "L" : o.pitch >= Math.max(...chord) ? "R" : Math.abs(o.pitch - m.pL) < Math.abs(o.pitch - m.pR) ? "L" : "R";
-      } else {
-        const dl = Math.abs(o.pitch - m.pL);
-        const dr = Math.abs(o.pitch - m.pR);
-        arm = dl === dr ? (m.tL < m.tR ? "L" : "R") : dl < dr ? "L" : "R";
-        // don't cross the other mallet
-        if (arm === "L" && o.pitch > m.pR + 2) arm = "R";
-        if (arm === "R" && o.pitch < m.pL - 2) arm = "L";
+    // New onsets, grouped into chords (everything struck within 20 ms), oldest first.
+    if (m.seenBeat !== undefined && s.beat < m.seenBeat - 0.25) m.lastOnsetBeat = -Infinity;
+    m.seenBeat = s.beat;
+    const bps = (s.bpm || 120) / 60;
+    const fresh = s.recent.filter((o) => o.age <= 0.5 && s.beat - o.age * bps > (m.lastOnsetBeat ?? -Infinity) + 0.01);
+    for (const age of [...new Set(fresh.map((o) => Math.round(o.age * 50) / 50))].sort((a, b) => b - a)) {
+      const chord = fresh.filter((o) => Math.abs(o.age - age) < 0.02).map((o) => o.pitch);
+      const T = f.t - age;
+      for (const [k, p] of Object.entries(grip(chord, m))) {
+        m["p" + k] = p;
+        if (chord.includes(p)) m["t" + k] = T;
       }
-      m["p" + arm] = o.pitch;
-      m["t" + arm] = T;
-    });
-    // Anticipate the next note with whichever mallet is nearer.
-    let nextArm: "L" | "R" | null = null;
-    if (s.nextPitch !== null && s.nextOnsetIn < 0.25) {
-      nextArm = Math.abs(s.nextPitch - m.pL) <= Math.abs(s.nextPitch - m.pR) ? "L" : "R";
+      m.lastOnsetBeat = Math.max(m.lastOnsetBeat ?? -Infinity, s.beat - age * bps);
+    }
+    // What's coming: the next chord (or note) gets the same grip, so the right mallets wind up.
+    const next: Partial<Record<Mallet, { pitch: number; inSec: number; strike: boolean }>> = {};
+    const up = (s.upcoming ?? (s.nextPitch !== null ? [{ pitch: s.nextPitch, inSec: s.nextOnsetIn, vel: 0.7 }] : [])).filter((u) => u.inSec < 0.25);
+    if (up.length) {
+      const first = up.filter((u) => u.inSec - up[0].inSec < 0.02);
+      const chord = first.map((u) => u.pitch);
+      for (const [k, p] of Object.entries(grip(chord, m))) next[k as Mallet] = { pitch: p, inSec: first[0].inSec, strike: chord.includes(p) };
+    }
+
+    const heads = {} as Record<Mallet, { x: number; y: number }>;
+    for (const k of MALLETS) {
+      const lastAge = f.t - m["t" + k];
+      // a mallet rebounds off its bar before it travels to the next one
+      const nx = next[k] && (lastAge > 0.07 || next[k]!.inSec < 0.1) ? next[k] : undefined;
+      const pitch = nx ? nx.pitch : m["p" + k];
+      let lift = strokeLift(lastAge, nx?.strike ? nx.inSec : Infinity, s.playing ? 0.6 : 0.3);
+      // an outer mallet that isn't playing rides a little higher, out of the way
+      if (k.endsWith("0") && !(nx?.strike) && lastAge > 0.15) lift = Math.max(lift, 0.75);
+      const kx = "x" + k;
+      if (m[kx] === undefined) m[kx] = barX(pitch);
+      m[kx] += (barX(pitch) - m[kx]) * approach(f.dt, 0.03);
+      heads[k] = { x: m[kx], y: barY(pitch) - lift * 22 };
+      c.bag.tf("mb" + k, `translate(${heads[k].x.toFixed(1)} ${heads[k].y.toFixed(1)})`);
     }
     for (const arm of ["L", "R"] as const) {
-      const pitch = nextArm === arm ? s.nextPitch! : m["p" + arm];
-      const lastAge = f.t - m["t" + arm];
-      const lift = strokeLift(lastAge, nextArm === arm ? s.nextOnsetIn : Infinity, s.playing ? 0.6 : 0.3);
-      const tx = barX(pitch);
-      const ty = barY(pitch);
-      const kx = "x" + arm;
-      if (m[kx] === undefined) m[kx] = tx;
-      m[kx] += (tx - m[kx]) * approach(f.dt, 0.03);
-      const head = { x: m[kx], y: ty - lift * 22 };
-      const hand = { x: m[kx] + (arm === "L" ? -8 : 8), y: ty - MALLET + 4 - lift * 10 };
-      c.bag.set("m" + arm, "x1", hand.x);
-      c.bag.set("m" + arm, "y1", hand.y);
-      c.bag.set("m" + arm, "x2", head.x);
-      c.bag.set("m" + arm, "y2", head.y);
-      c.bag.tf("mb" + arm, `translate(${head.x.toFixed(1)} ${head.y.toFixed(1)})`);
-      f.arms[arm] = { hand, bend: 12, pawRot: arm === "L" ? 15 : -15 };
+      const a = heads[(arm + "0") as Mallet];
+      const b = heads[(arm + "1") as Mallet];
+      // the paw sits behind and above both heads; the shafts fan out from it
+      const hand = { x: (a.x + b.x) / 2 + (arm === "L" ? -6 : 6), y: Math.min(a.y, b.y) - MALLET + 12 };
+      for (const k of [arm + "0", arm + "1"]) {
+        c.bag.set("m" + k, "x1", hand.x);
+        c.bag.set("m" + k, "y1", hand.y);
+        c.bag.set("m" + k, "x2", heads[k as Mallet].x);
+        c.bag.set("m" + k, "y2", heads[k as Mallet].y);
+      }
+      m["x" + arm] = hand.x;
+      f.arms[arm] = { hand, bend: 12, pawRot: arm === "L" ? 15 : -15, spread: clamp(Math.abs(a.x - b.x) / 14, 1, 1.6) };
     }
     // Bars ring while the note sounds (vibes sustain), flash on the strike.
     let i = 0;

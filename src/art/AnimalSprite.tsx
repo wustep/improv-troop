@@ -319,7 +319,7 @@ export const AnimalSprite = forwardRef<SpriteHandle, AnimalSpriteProps>(function
         step(
           r.lastExternal < 0
             ? IDLE_STATE
-            : { ...r.state, playing: false, active: [], nextOnsetIn: Infinity, nextPitch: null, recent: r.state.recent.map((o) => ({ ...o, age: o.age + e })) },
+            : { ...r.state, playing: false, active: [], nextOnsetIn: Infinity, nextPitch: null, upcoming: [], recent: r.state.recent.map((o) => ({ ...o, age: o.age + e })) },
         );
       }
       raf = requestAnimationFrame(loop);

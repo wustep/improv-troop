@@ -1,7 +1,7 @@
 import { DRUM, drumPiece } from "@/music/instruments";
 import { L, S, ellipsePath, hash, mix } from "../sketch";
 import { type Pt, approach, clamp } from "../affine";
-import { type Frame, type Rig, type RigCtx, hit, strokeLift, wobble } from "./types";
+import { type Frame, type Rig, type RigCtx, hit, nextWhere, strokeLift, wobble } from "./types";
 
 // A real (open-handed) kit seen from the front. Screen-left arm: hi-hat, crash, rack tom;
 // screen-right arm: ride, floor tom, snare — whichever arm is free takes the snare/tom.
@@ -197,42 +197,51 @@ export const drums: Rig = {
     const { s } = f;
     const m = c.mem;
 
-    // Assign recent hits to arms: the piece's own arm unless it's already striking something else at that moment.
+    // Assign every stick hit, just played or coming up, to an arm with one rule, so a hit
+    // keeps its arm from wind-up to rebound: the piece's own arm, unless that arm is striking
+    // something else at the same moment (or, for the snare/tom, has only just left another piece).
     const last: Record<"L" | "R", { piece: Hand; age: number; vel: number } | null> = { L: null, R: null };
+    const next: Record<"L" | "R", { piece: Hand; inSec: number } | null> = { L: null, R: null };
     const pieceAge: Partial<Record<Piece, { age: number; vel: number; pitch: number }>> = {};
+    const busy: Record<"L" | "R", { t: number; piece: Hand } | null> = { L: null, R: null };
+    const assign = (piece: Hand, t: number) => {
+      let arm = GEO[piece].arm;
+      const other = arm === "L" ? "R" : "L";
+      const b = busy[arm];
+      const window = piece === "snare" || piece === "tom" ? 0.12 : 0.025;
+      if (b && b.piece !== piece && Math.abs(t - b.t) < window) {
+        const o = busy[other];
+        // only swap if the other hand isn't itself striking right then
+        if (!o || o.piece === piece || Math.abs(t - o.t) >= 0.025) arm = other;
+      }
+      busy[arm] = { t, piece };
+      return arm;
+    };
     for (let i = s.recent.length - 1; i >= 0; i--) {
       const o = s.recent[i];
       const piece = pieceOf(o.pitch);
       pieceAge[piece] = { age: o.age, vel: o.vel, pitch: o.pitch };
-      if (piece === "kick") continue;
-      // pedal hi-hat is played by the foot, not a stick
-      if (o.pitch === DRUM.hatPedal) continue;
-      let arm = GEO[piece].arm;
-      const other = arm === "L" ? "R" : "L";
-      const cur = last[arm];
-      if (cur && Math.abs(cur.age - o.age) < 0.025 && cur.piece !== piece) arm = other;
+      // the kick and the pedal hi-hat are played by feet, not sticks
+      if (piece === "kick" || o.pitch === DRUM.hatPedal) continue;
+      const arm = assign(piece, -o.age);
       last[arm] = { piece, age: o.age, vel: o.vel };
     }
-    // Who plays the next onset?
-    let nextArm: "L" | "R" | null = null;
-    let nextPiece: Piece | null = null;
-    if (s.nextPitch !== null && s.nextOnsetIn < 0.3) {
-      nextPiece = pieceOf(s.nextPitch);
-      if (nextPiece !== "kick" && s.nextPitch !== DRUM.hatPedal) {
-        nextArm = GEO[nextPiece].arm;
-        // the snare/tom goes to whichever hand is free
-        const busy = last[nextArm];
-        if ((nextPiece === "snare" || nextPiece === "tom") && busy && busy.piece !== nextPiece && busy.age < 0.12) nextArm = nextArm === "L" ? "R" : "L";
-      }
+    for (const u of s.upcoming ?? (s.nextPitch !== null ? [{ pitch: s.nextPitch, inSec: s.nextOnsetIn, vel: 0.7 }] : [])) {
+      const piece = pieceOf(u.pitch);
+      if (piece === "kick" || u.pitch === DRUM.hatPedal) continue;
+      const arm = assign(piece, u.inSec);
+      if (!next[arm]) next[arm] = { piece, inSec: u.inSec };
     }
 
     for (const arm of ["L", "R"] as const) {
       const l = last[arm];
+      const nx = next[arm];
       let piece: Hand;
-      if (nextArm === arm && nextPiece && nextPiece !== "kick") piece = nextPiece as Hand;
+      // travel to the next piece once the last stroke has rebounded (or it's nearly time)
+      if (nx && nx.inSec < 0.3 && (!l || l.piece === nx.piece || l.age > 0.06 || nx.inSec < 0.1)) piece = nx.piece;
       else if (l && l.age < 1.5) piece = l.piece;
       else piece = HOME[arm];
-      const lift = strokeLift(l ? l.age : Infinity, nextArm === arm ? s.nextOnsetIn : Infinity, s.playing ? 0.6 : 0.35);
+      const lift = strokeLift(l ? l.age : Infinity, nx ? nx.inSec : Infinity, s.playing ? 0.6 : 0.35);
       const target = pose(piece, arm, lift);
       const kx = "x" + arm;
       const ky = "y" + arm;
@@ -267,7 +276,7 @@ export const drums: Rig = {
     const closedHold = hat && hat.pitch === DRUM.hatClosed && hat.age < 0.6 ? 1 : 0;
     const openWide = hat && hat.pitch === DRUM.hatOpen && hat.age < 0.5 ? 1 : 0;
     // foot comes down just before a pedal chick
-    const pedalNext = s.nextPitch === DRUM.hatPedal ? s.nextOnsetIn : Infinity;
+    const pedalNext = nextWhere(s, (p) => p === DRUM.hatPedal)?.inSec ?? Infinity;
     const anticip = pedalNext < 0.12 ? 1 - pedalNext / 0.12 : 0;
     const closure = clamp(Math.max(pedalChick, closedHold * 0.9, anticip * 0.8) - openWide, 0, 1);
     m.hatClose = (m.hatClose ?? 0) + (closure - (m.hatClose ?? 0)) * approach(f.dt, 0.015);
@@ -287,7 +296,7 @@ export const drums: Rig = {
 
     // Kick: the beater swings into the head as the foot presses; pulls back just before.
     const kh = hit(age("kick"), 0.09) * vel("kick");
-    const kickNext = nextPiece === "kick" ? s.nextOnsetIn : Infinity;
+    const kickNext = nextWhere(s, (p) => p === DRUM.kick)?.inSec ?? Infinity;
     const windup = kickNext < 0.15 ? Math.sin(Math.PI * 0.5 * (1 - kickNext / 0.15)) : 0;
     const strike = hit(age("kick"), 0.06);
     // seen through the port: pulls back (smaller) on the wind-up, swells as it hits the head

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { AnimalId, MemberFrameState } from "@/music/types";
+import type { AnimalId, MemberFrameState, UpcomingOnset } from "@/music/types";
 import type { Mat, Pt } from "../affine";
 
 /** Ref registry: rigs grab DOM nodes by key, no React state involved. */
@@ -149,4 +149,16 @@ export function newOnsets(
     }
   }
   c.mem.lastOnsetBeat = newest;
+}
+
+/**
+ * The soonest upcoming onset that `pred` accepts (e.g. "in this hand", "on this drum").
+ * Falls back to the single next onset when the driver doesn't send a look-ahead window.
+ */
+export function nextWhere(s: MemberFrameState, pred: (pitch: number) => boolean): UpcomingOnset | null {
+  if (s.upcoming) {
+    for (const u of s.upcoming) if (pred(u.pitch)) return u;
+    return null;
+  }
+  return s.nextPitch !== null && Number.isFinite(s.nextOnsetIn) && pred(s.nextPitch) ? { pitch: s.nextPitch, vel: 0.7, inSec: s.nextOnsetIn } : null;
 }

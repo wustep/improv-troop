@@ -1,7 +1,7 @@
 import { L, S, ellipsePath, hash, mix, rectPath } from "../sketch";
 import { approach, clamp } from "../affine";
 import { isBlack, keyUnits } from "../fingering";
-import { type Rig, type RigCtx, type Frame, hit } from "./types";
+import { type Rig, type RigCtx, type Frame, hit, nextWhere } from "./types";
 
 // A little black-lacquer upright, cartoon-style: the keyboard faces the audience so
 // you can see which keys go down, and it sits low enough that the player's chest,
@@ -162,11 +162,21 @@ export const piano: Rig = {
       const inHand = (p: number) => p >= h.lo && p <= h.hi;
       const act = s.active.filter((n) => inHand(n.pitch));
       const last = s.recent.find((o) => inHand(o.pitch));
-      const nextHere = s.nextPitch !== null && inHand(s.nextPitch);
+      // this hand's own next note (or chord), not just the part's next onset
+      const nx = nextWhere(s, inHand);
       let target: number | null = null;
       let spread = 1;
-      if (nextHere && s.nextOnsetIn < 0.22 && (act.length === 0 || s.nextOnsetIn < 0.08)) {
-        target = keyX(s.nextPitch!);
+      if (nx && nx.inSec < 0.22 && (act.length === 0 || nx.inSec < 0.08)) {
+        let lo = keyX(nx.pitch);
+        let hi = lo;
+        for (const u of s.upcoming ?? []) {
+          if (u.inSec - nx.inSec > 0.03) break;
+          if (!inHand(u.pitch)) continue;
+          lo = Math.min(lo, keyX(u.pitch));
+          hi = Math.max(hi, keyX(u.pitch));
+        }
+        target = (lo + hi) / 2;
+        spread = clamp((hi - lo) / 16, 1, 2.4);
       } else if (act.length) {
         let lo = Infinity;
         let hi = -Infinity;
@@ -187,7 +197,7 @@ export const piano: Rig = {
       m[ks] += (spread - m[ks]) * approach(f.dt, 0.05);
       const lastAge = last ? last.age : Infinity;
       const press = hit(lastAge, 0.06) * (3 + 4 * (last?.vel ?? 0.5));
-      const nextIn = nextHere ? s.nextOnsetIn : Infinity;
+      const nextIn = nx ? nx.inSec : Infinity;
       const prep = nextIn < 0.16 ? Math.sin(Math.PI * (1 - nextIn / 0.16)) * 6 : 0;
       const resting = act.length === 0 && lastAge > 0.6 && nextIn > 0.6;
       const y = KEY_TOP + 5 + press - prep - (resting ? 3 : 0);
