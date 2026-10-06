@@ -510,3 +510,27 @@ describe("drum fills", () => {
     expect(no.some((ns) => ns.filter((n) => n.pitch === DRUM.snare && n.art === "ghost").length >= 3 && has([ns], DRUM.snare, 3.5, "accent"))).toBe(true);
   });
 });
+
+describe("swing in two", () => {
+  it("plays the head in two and walks the solos", () => {
+    let checked = 0;
+    for (let seed = 1; seed <= 10; seed++) {
+      const { score } = generateLocal({ ...defaultSettings(band), style: "swing", bars: 32, seed, soloists: ["cat"] }, band);
+      const { frame, parts } = score;
+      const beats = frame.meter.beats;
+      const onsets = (bar: number) => new Set(parts.frog.filter((n) => n.start >= bar * beats - 1e-6 && n.start < (bar + 1) * beats - 1e-6 && n.art !== "ghost").map((n) => Math.floor(n.start - bar * beats))).size;
+      const mean = (bars: number[]) => bars.reduce((a, b) => a + onsets(b), 0) / bars.length;
+      const head = frame.sections.find((s) => s.kind === "head" && s.length >= 8);
+      const solo = frame.sections.find((s) => s.kind === "solo");
+      if (!head || !solo) continue;
+      const headBars = Array.from({ length: head.length - 1 }, (_, i) => head.start + i);
+      const soloBars = Array.from({ length: solo.length - 1 }, (_, i) => solo.start + i);
+      expect(mean(headBars)).toBeLessThanOrEqual(3);
+      expect(mean(soloBars)).toBeGreaterThanOrEqual(3.5);
+      // walking into the solos: the head's last bar is in four
+      expect(score.plan[head.start + head.length - 1].directives?.frog).toBe("@walk");
+      checked++;
+    }
+    expect(checked).toBeGreaterThan(5);
+  });
+});

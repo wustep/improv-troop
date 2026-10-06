@@ -235,6 +235,8 @@ export function planLocal(frame: Frame, members: Member[], motif: Motif, rng: Rn
         if (s.kind === "solo" && isLastSolo && inSec >= s.length - 2 && melodic.length >= 2 && (style.id === "swing" || style.id === "funk")) d = "@riff";
       } else {
         d = table[fn] ?? "@rest";
+        // swing: the head goes in two, and the bass starts walking on its last bar, lifting into the solos
+        if (fn === "bass" && style.id === "swing" && s.kind === "head" && s.length >= 8 && d === "@walk" && inSec < s.length - 1) d = "@two";
       }
       if (fn === "rhythm" && bar === 0 && !d.includes("light") && d.startsWith("@groove") && style.id !== "funk") d = "@groove light";
       directives[m.id] = d;
