@@ -6,7 +6,6 @@
 - **Takes persistence: one cap, quota-aware save, shape-checked load** — unify 12-vs-8 take limits, warn on quota, validate on load _(rejected 2026-10-06)_
 - **Shared note-shaping for audio and animation** — one shapeNote() in feel.ts used by engine.ts and frames.ts _(rejected 2026-10-06)_
 - **Skip no-op SVG writes in sprite Bag** — cache last attribute values in rigs/types.ts Bag _(rejected 2026-10-06)_
-- **Error and loading states with a next step** — retry error card, progressbar role, gate chart header, darker placeholder _(rejected 2026-10-06)_
 - **FormMap as keyboard scrubber** — single role=slider, pointer seek, translateX playhead _(rejected 2026-10-06)_
 - **Sheet follow-scroll visibility/restore** — "back to the band" pill when follow is off _(rejected 2026-10-06)_
 - **ARIA semantics on chip groups and RoughButton** — opt-in aria-pressed, radiogroups, labels, slider valuetext _(rejected 2026-10-06)_
