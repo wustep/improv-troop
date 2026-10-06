@@ -12,6 +12,7 @@
 - **Proposal.** Bar 29 → `Ebmaj7`, bar 30 → `Am7b5 D7b9`. Add a table test over every standard: bar count = form length, every symbol parses, and every chord's root and quality are recognized.
 - **Risks / trade-offs.** None.
 - **Files.** `src/music/standards.ts`, `src/music/engine.test.ts`
+- **Outcome.** Shipped in 7c03020, with the standards table test (bars = form, each chord's root, head bars fill).
 
 ### 2. The tune itself ignores the bar's dynamic
 - **Impact:** 🔴 high · **Effort:** S · **Status:** ✅ accepted
@@ -19,6 +20,7 @@
 - **Proposal.** Scale motif notes by the bar's dynamic relative to mf, so an mf head is unchanged and its accent shape survives. Rescale `@head` replays from the source bar's dynamic to this bar's.
 - **Risks / trade-offs.** Heads at p/mp get quieter. That's intended.
 - **Files.** `src/music/motif.ts`, `src/music/directives.ts`, `src/music/context.ts`, `src/music/realize.ts`
+- **Outcome.** Shipped in 2771f9c (`dynamicLift`, `energyIn`). The test fails on the old code: the motif bar's mean velocity was 0.86 at both pp and ff.
 
 ### 3. The toms fill drops its own final accent
 - **Impact:** 🟡 med · **Effort:** S · **Status:** ✅ accepted
@@ -26,6 +28,7 @@
 - **Proposal.** When drum hits collide, keep the louder one, and test that every fill shape ends on its accent.
 - **Risks / trade-offs.** None.
 - **Files.** `src/music/realize.ts`, `src/music/engine.test.ts`
+- **Outcome.** Shipped in a996d6b. The `finishPart` test fails on the old code.
 
 ### 4. In 3/4 the two-feel, stride and bossa bass miss a bar's second chord
 - **Impact:** 🟡 med · **Effort:** M · **Status:** ❌ rejected
@@ -70,6 +73,7 @@
 - **Proposal.** Accept `bar 2`. When the window is empty, fall back to the statement's last bar that has notes and log it. Report unknown arguments as issues. Help says "scale steps; 7 = an octave".
 - **Risks / trade-offs.** The help text in prompts changes slightly.
 - **Files.** `src/music/directives.ts`, `src/music/motif.ts`, `src/music/engine.test.ts`
+- **Outcome.** Shipped in c4019aa. All three tests fail on the old code. The fallback applies only past the statement's length, so a bar the statement leaves silent stays silent.
 
 ### 10. A 3/4 count-off motif written without "|" reads as one bar but plays as two
 - **Impact:** 🟡 med · **Effort:** S · **Status:** ❌ rejected (on inspection the notes realize correctly; only the text disagrees)
@@ -114,6 +118,7 @@
 - **Proposal.** Set the message in ink and carry the red as a non-text signal: a red ✗ mark (graphics need 3:1). In the debug panel, ink text with a coloured ● status mark. No new tokens.
 - **Risks / trade-offs.** Red is less dominant. The mark keeps the meaning.
 - **Files.** `src/components/Transport.tsx`, `src/components/DebugPanel.tsx`
+- **Outcome.** Shipped in b31d1a0. Live check: the error message computes to ink #2c2a35 (12.4:1) with a red ✗.
 
 ### 16. RoughButton hover on disabled buttons and sticky hover on touch
 - **Impact:** 🟡 med · **Effort:** S · **Status:** ❌ rejected
