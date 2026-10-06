@@ -129,6 +129,35 @@ describe("improviser pipeline", () => {
   });
 });
 
+describe("when the count-off call fails", () => {
+  const failCountOff = (status: number) =>
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body ?? "{}"));
+        if (String(body.prompt).includes("Before you count off")) return new Response(JSON.stringify({ error: "model unavailable" }), { status });
+        return new Response(JSON.stringify({ text: fakeModel(body), serverMs: 5 }), { status: 200 });
+      }),
+    );
+  it("the band still plays, from its own motif and plan, and says so", async () => {
+    failCountOff(400);
+    const settings = { ...defaultSettings(band), mode: "improviser" as const, soloists: ["bear"] };
+    const h = hooks("t-countoff");
+    const score = await startImproviser(settings, band, h).promise;
+    expect(score.engine).toBe("ai");
+    expect(score.plan.length).toBe(score.frame.bars);
+    expect(score.notes.join(" ")).toMatch(/count-off call failed/);
+    // bandmates still replied and the phrases were still written by the band
+    const calls = useDebug.getState().calls.filter((c) => c.runId === "t-countoff");
+    expect(calls.some((c) => /^bars /.test(c.label) && c.status === "ok")).toBe(true);
+  });
+  it("a bad key still stops the jam", async () => {
+    failCountOff(401);
+    const settings = { ...defaultSettings(band), mode: "improviser" as const, soloists: ["bear"] };
+    await expect(startImproviser(settings, band, hooks("t-countoff-401")).promise).rejects.toThrow(/couldn't call the tune/);
+  });
+});
+
 describe("improviser pacing", () => {
   it("pipelines phrases: the next soloist thinks while the band answers", async () => {
     installFakeFetch(20);

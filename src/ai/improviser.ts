@@ -11,7 +11,7 @@ import type { BarPlan, ChatMessage, Frame, Member, Motif, NoteEvent, Score, Troo
 import { useDebug } from "@/state/debug";
 import { chatMsg, type PipelineHooks } from "./composer";
 import { asRecord, asString, extractJson, parseBarRange } from "./json";
-import { callLLM, noteRepair, setParsed } from "./llm";
+import { callLLM, LlmError, noteRepair, setParsed } from "./llm";
 import { accompanimentFits, applyDefault, asDynamic, asTexture, enforceSlots, resolveMember, usualDirective, validateBarText, validateMotif } from "./merge";
 import { barsSchema, countOffSchema, replySchema } from "./schemas";
 import {
@@ -80,6 +80,7 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
     return true;
   };
   const autopilot = new Set<number>();
+  let countedOffAlone = false; // the count-off call failed: the band's own motif and plan
   const parts: Record<string, NoteEvent[]> = Object.fromEntries(members.map((m) => [m.id, []]));
   const memories = new Map<string, PlayerMemory>(members.map((m) => [m.id, newMemory()]));
   const featuredByBar = new Map<number, NoteEvent[]>();
@@ -117,6 +118,7 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
     engine: "ai",
     notes: [
       `Leader ${nameOf(leader.id)} on ${settings.directorModel}; band on ${settings.playerModel}.`,
+      ...(countedOffAlone ? [`${nameOf(leader.id)}'s count-off call failed, so the band played its own motif and plan.`] : []),
       ...(autopilot.size ? [`Autopilot (band vamped while thinking) on phrases ${[...autopilot].map((p) => p + 1).join(", ")}.`] : []),
       ...(final ? [] : ["(still jamming…)"]),
     ],
@@ -237,7 +239,13 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
       for (const [id, t] of Object.entries(asks)) say(chatMsg(leader.id, t, "count-off", undefined, id));
     } catch (e) {
       if ((e as Error).name === "AbortError") throw e;
-      throw new Error(`${leader.name} couldn't call the tune: ${(e as Error).message}`);
+      // a bad key stops the jam; anything else (an outage, a timeout) and the leader just counts
+      // off the band's own motif and plan, and the bandmates still have their say
+      const status = e instanceof LlmError ? e.status : 0;
+      if (status === 401 || status === 403) throw new Error(`${leader.name} couldn't call the tune: ${(e as Error).message}`);
+      countedOffAlone = true;
+      dbg.step(runId, `${leader.name}'s count-off failed (${(e as Error).message}); counting off the sketch's motif and plan`);
+      say(chatMsg(leader.id, "Let's just play it. One, two…", "count-off", undefined, "band"));
     }
 
     // ── Bandmates answer and pick their go-to texture (while the leader plays the first phrase) ──
