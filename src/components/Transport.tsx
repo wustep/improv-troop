@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { troopAudio, type LoadState } from "@/audio/engine";
+import { INSTRUMENTS } from "@/music/instruments";
 import { canShare, shareUrl } from "@/state/share";
 import { useTroop } from "@/state/store";
 import { openBrains } from "./ControlPanel";
@@ -30,7 +31,14 @@ export function Transport() {
   const audioError = useTroop((s) => s.audioError);
   const loads = useLoadStates();
   const loading = loads.filter((l) => !l.ready && !l.error);
-  const loadPct = loading.length ? Math.round((loading.reduce((s, l) => s + (l.total ? l.loaded / l.total : 0), 0) / loading.length) * 100) : 100;
+  const failed = loads.filter((l) => l.error);
+  // over every instrument, counting finished and failed ones as done, so the bar only grows
+  const loadPct = loads.length ? Math.round((loads.reduce((s, l) => s + (l.ready || l.error ? 1 : l.total ? l.loaded / l.total : 0), 0) / loads.length) * 100) : 100;
+  const members = useTroop((s) => s.members);
+  const retryLoads = () => {
+    const { members, pianoPack } = useTroop.getState();
+    void troopAudio.prepare(members, { pianoPack });
+  };
 
   const goLabel = hasKey ? (mode === "composer" ? "Compose!" : "Let them jam!") : "Sketch a new take";
 
@@ -151,7 +159,7 @@ export function Transport() {
               <span className="absolute inset-y-0 left-0 bg-(--color-2)" style={{ width: `${loadPct}%` }} />
             </span>
             <span className="text-xs" title={loading.map((l) => l.instrument).join(", ")}>
-              {loads.length - loading.length} of {loads.length} ready
+              {loads.length - loading.length - failed.length} of {loads.length} ready
             </span>
           </span>
         ) : current ? (
@@ -165,6 +173,20 @@ export function Transport() {
             )}
           </span>
         ) : null}
+        {failed.length > 0 && !loading.length && !gen.running && (
+          <span role="alert" className="flex flex-wrap items-baseline gap-x-s">
+            <span className="text-ink">
+              <span aria-hidden className="text-(--error)">
+                ✗{" "}
+              </span>
+              {failed.map((l) => `${members.find((m) => m.id === l.memberId)?.name ?? l.memberId}'s ${INSTRUMENTS[l.instrument].name.toLowerCase()}`).join(", ")}{" "}
+              didn&apos;t load, so {failed.length > 1 ? "they play" : "it plays"} silent.
+            </span>
+            <button type="button" className="text-action" onClick={retryLoads}>
+              try again
+            </button>
+          </span>
+        )}
       </div>
       <ShareLink />
     </div>
