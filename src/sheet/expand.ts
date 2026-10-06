@@ -43,6 +43,11 @@ export interface ExpandOptions {
   beatsPerBar: number;
   /** Semitones added to every pitch (notation shift). Ignored for drums. */
   shift?: number;
+  /**
+   * Drum notation: a hit is written as lasting until the next hit (within its beat), the way
+   * drum parts are read, instead of as a 16th note followed by rests.
+   */
+  percussion?: boolean;
 }
 
 const TICKS_TO_DUR: Record<number, [VexDur, 0 | 1]> = {
@@ -153,6 +158,11 @@ export function expandPart(notes: NoteEvent[], opts: ExpandOptions): BarTokens[]
   }
 
   const onsets = [...groups.values()].sort((a, b) => a.start - b.start);
+  if (opts.percussion)
+    onsets.forEach((g, i) => {
+      const beatEnd = (Math.floor(g.start / TPB) + 1) * TPB;
+      g.end = Math.max(g.end, Math.min(onsets[i + 1]?.start ?? total, beatEnd));
+    });
   // Segments covering [0, total).
   interface Seg {
     s: number;

@@ -168,7 +168,7 @@ export function buildModel(score: Score, rowStart?: number[]): SheetModel {
         bars: expandPart(notes.filter((n) => n.pitch < 60), { bars, beatsPerBar: bpb }),
       });
     } else if (inst.clef === "percussion") {
-      staffs.push({ memberId: m.id, name: m.name, abbr, clef: "percussion", drums: true, bars: expandPart(notes, { bars, beatsPerBar: bpb }) });
+      staffs.push({ memberId: m.id, name: m.name, abbr, clef: "percussion", drums: true, bars: expandPart(notes, { bars, beatsPerBar: bpb, percussion: true }) });
     } else {
       const expanded = expandPart(notes, { bars, beatsPerBar: bpb, shift: inst.notationShift });
       staffs.push({
