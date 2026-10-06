@@ -97,7 +97,7 @@ function tunePlace(frame: Frame, bar: number): { letter: string; offset: number 
   const std = getStandard(frame.standard);
   if (!std) return { letter: "tune", offset: bar - s.start };
   const formLen = std.bars.length;
-  let pos = bar % formLen;
+  let pos = (bar - (frame.intro ?? 0)) % formLen;
   for (const [letter, len] of std.form) {
     if (pos < len) return { letter, offset: pos };
     pos -= len;
@@ -210,7 +210,7 @@ export function planLocal(frame: Frame, members: Member[], motif: Motif, rng: Rn
         roles[m.id] = "lead";
         // a standard with a written melody: the leader plays the tune itself
         if (std?.melody) {
-          directives[m.id] = `@tune ${(bar % std.bars.length) + 1}`;
+          directives[m.id] = `@tune ${((bar - (frame.intro ?? 0)) % std.bars.length) + 1}`;
           continue;
         }
         const src = melodySource(frame, bar);

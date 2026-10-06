@@ -102,7 +102,7 @@ describe("local engine", () => {
       const bars = opts[Math.min(1, opts.length - 1)];
       const s = { ...defaultSettings(band), standard: std.id, key: std.key, style: std.style, bars, meter: { beats: std.meter } };
       const { score, issues } = generateLocal(s, band);
-      expect(score.frame.bars).toBe(bars);
+      expect(score.frame.bars).toBe(bars + (score.frame.intro ?? 0));
       expect(issues.filter((i) => i.detail.startsWith("engine error"))).toEqual([]);
       expect(Object.values(score.parts).some((p) => p.length > 0)).toBe(true);
     }
@@ -299,13 +299,30 @@ describe("standards in choruses", () => {
     const std = STANDARDS.find((s) => s.id === standard)!;
     return buildFrame({ ...defaultSettings(band5), standard, key: std.key, style: std.style, bars, meter: { beats: std.meter }, soloists }, band5);
   };
-  const layout = (f: ReturnType<typeof buildFrame>) => f.sections.map((s) => `${s.kind}:${s.start}+${s.length}${s.featured ? `:${s.featured.join(",")}` : ""}`);
+  // counted from the top of the form (after the intro)
+  const layout = (f: ReturnType<typeof buildFrame>) =>
+    f.sections.filter((s) => s.kind !== "intro").map((s) => `${s.kind}:${s.start - (f.intro ?? 0)}+${s.length}${s.featured ? `:${s.featured.join(",")}` : ""}`);
   it("default length gives a chorus to each soloist between the head and the head out", async () => {
     const { defaultStandardLength } = await import("./form");
     expect(defaultStandardLength("autumn", 1)).toBe(96);
     expect(defaultStandardLength("autumn", 2)).toBe(128);
     expect(defaultStandardLength("f-blues", 2)).toBe(48);
     expect(defaultStandardLength("f-blues", 5)).toBe(60);
+  });
+  it("counts off into a rhythm-section intro: the tune's last bars, turned around into the head", () => {
+    const f = frameFor("autumn", 96, ["cat"]);
+    expect(f.intro).toBe(4);
+    expect(f.sections[0]).toMatchObject({ kind: "intro", start: 0, length: 4 });
+    expect(f.bars).toBe(100);
+    // ...Gm6 | Gm6 G7 → Cm7: the last intro chord is the head's first chord's dominant
+    expect(f.chords[3].at(-1)!.symbol).toBe("G7");
+    expect(f.chords[4][0].symbol).toBe("Cm7");
+    expect(Object.keys(f.slots[0])).toEqual([]);
+    // a blues turnaround already leads home, so it stays as written
+    const blues = frameFor("f-blues", 36, ["cat"]);
+    expect(blues.chords.slice(0, 4).map((b) => b.map((c) => c.symbol).join(" "))).toEqual(["Gm7", "C7", "F7 D7", "Gm7 C7"]);
+    // one time through, or a style that starts straight in, has no intro
+    expect(frameFor("autumn", 32, ["cat"]).intro).toBe(0);
   });
   it("a 32-bar tune: head, a whole chorus solo, head out", () => {
     expect(layout(frameFor("autumn", 96, ["cat"]))).toEqual(["head:0+32:fox", "solo:32+32:cat", "out:64+32:fox"]);
@@ -322,7 +339,7 @@ describe("standards in choruses", () => {
     const trade = f.sections.find((s) => s.kind === "trade")!;
     expect(trade.turn).toBe(4);
     const who = (b: number) => Object.entries(f.slots[b]).filter(([, r]) => r === "solo" || r === "trade").map(([id]) => id).join();
-    expect([48, 52, 56].map(who)).toEqual(["cat", "owl", "bear"]);
+    expect([48, 52, 56].map((b) => who(b + (f.intro ?? 0)))).toEqual(["cat", "owl", "bear"]);
   });
 });
 
@@ -563,7 +580,7 @@ describe("standards with a written melody", () => {
         let pitches: number[] = [];
         for (const sec of sections)
           for (let b = sec.start; b < sec.start + sec.length - (sec.kind === "out" ? 1 : 0); b++) {
-            const want = parseNotes(std.melody![b % std.bars.length], beats).notes;
+            const want = parseNotes(std.melody![(b - (score.frame.intro ?? 0)) % std.bars.length], beats).notes;
             const got = score.parts[lead].filter((n) => Math.floor(n.start / beats + 1e-9) === b);
             expect(got.map((n) => +(n.start - b * beats).toFixed(3)), `${id} in ${tonic} bar ${b + 1} rhythm`).toEqual(want.map((n) => +n.start.toFixed(3)));
             expect(got.map((n) => mod(n.pitch, 12)), `${id} in ${tonic} bar ${b + 1}`).toEqual(want.map((n) => mod(n.pitch + semis, 12)));

@@ -206,6 +206,8 @@ export interface Frame {
   leaderId: string;
   /** Locked role per bar per member for lead/solo/trade slots; others decided by planner. */
   slots: Record<string, Role>[];
+  /** Bars of rhythm-section intro before a standard's first chorus (the form starts after them). */
+  intro?: number;
 }
 
 /** One generated, playable chart. */

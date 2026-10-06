@@ -12,6 +12,11 @@ import type { ChordChange, Frame, Member, Role, Section, TroopSettings } from ".
 
 export const FREE_LENGTHS = [8, 12, 16, 24, 32];
 
+/** Styles whose bands count off into a rhythm-section intro before the head. */
+const INTRO_STYLES = new Set<string>(["swing", "bossa", "neworleans", "pop", "funk"]);
+const SHARP_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const FLAT_NAMES = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+
 /** A standard is played in whole choruses: up to six of them, and at most this many bars. */
 const MAX_CHORUSES = 6;
 const MAX_STANDARD_BARS = 128;
@@ -298,10 +303,28 @@ export function buildFrame(input: TroopSettings, members: Member[]): Frame {
     if (soloLen > 0) pushSolos(head, soloLen);
     if (out > 0) sections.push({ name: words.outHead, kind: "out", start: total - out, length: out, featured: [leaderId] });
   }
+  // A standard played as a real performance gets an intro: the rhythm section plays the
+  // tune's last bars, turned around into the top, before the head comes in.
+  const intro = std && total >= 2 * std.bars.length && INTRO_STYLES.has(settings.style) ? (std.bars.length >= 8 ? 4 : 2) : 0;
+  if (intro) {
+    const introBars = barTexts.slice(std!.bars.length - intro, std!.bars.length);
+    // the last intro bar leads into the head's first chord with its dominant
+    const target = parseChord(barTexts[0].split(/\s+/)[0]);
+    const lastBar = introBars[intro - 1].split(/\s+/);
+    const lead = parseChord(lastBar[lastBar.length - 1]);
+    if (mod(lead.root - target.root, 12) !== 7 || (lead.quality !== "dom" && lead.quality !== "maj")) {
+      const v7 = `${(flats ? FLAT_NAMES : SHARP_NAMES)[mod(target.root + 7, 12)]}7`;
+      introBars[intro - 1] = lastBar[0] === v7 ? v7 : `${lastBar[0]} ${v7}`;
+    }
+    chords.unshift(...introBars.map((t) => splitBar(t, beats)));
+    for (const sec of sections) sec.start += intro;
+    sections.unshift({ name: "Intro", kind: "intro", start: 0, length: intro });
+  }
+  const bars = total + intro;
   sections.sort((a, b) => a.start - b.start);
 
   // ── Locked slots ──
-  const slots: Record<string, Role>[] = Array.from({ length: total }, () => ({}));
+  const slots: Record<string, Role>[] = Array.from({ length: bars }, () => ({}));
   for (const s of sections) {
     for (let b = s.start; b < s.start + s.length; b++) {
       if (s.kind === "head" || s.kind === "out") {
@@ -320,7 +343,8 @@ export function buildFrame(input: TroopSettings, members: Member[]): Frame {
   }
 
   return {
-    bars: total,
+    bars,
+    intro,
     meter: { beats },
     tempo: settings.tempo,
     key: settings.key,
