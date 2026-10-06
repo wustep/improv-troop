@@ -12,6 +12,14 @@ import type { AnimalId, InstrumentId, Member } from "@/music/types";
 import { useTroop } from "@/state/store";
 import { RoughBox, RoughButton } from "./ui/rough";
 
+/** The tune list, grouped by what you get: a song with its melody, jazz changes, pop chords, a groove. */
+const TUNE_GROUPS: { label: string; has: (t: (typeof STANDARDS)[number]) => boolean }[] = [
+  { label: "Songs (the band plays the melody)", has: (t) => !!t.melody },
+  { label: "Jazz standards (the changes)", has: (t) => !t.melody && ["swing", "bossa"].includes(t.style) },
+  { label: "Pop progressions", has: (t) => !t.melody && t.style === "pop" },
+  { label: "Grooves and grounds", has: (t) => !t.melody && !["swing", "bossa", "pop"].includes(t.style) },
+];
+
 function ModelSelect({ value, onChange, label }: { value: string; onChange: (id: string) => void; label: string }) {
   return (
     <select className="sketch-select w-full" value={value} onChange={(e) => onChange(e.target.value)} aria-label={label}>
@@ -199,13 +207,18 @@ export function ControlPanel() {
           aria-label="Tune"
         >
           <option value="">An original (the band writes the changes)</option>
-          <optgroup label="Play a standard">
-            {STANDARDS.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </optgroup>
+          {TUNE_GROUPS.map((g) => {
+            const tunes = STANDARDS.filter(g.has);
+            return tunes.length ? (
+              <optgroup key={g.label} label={g.label}>
+                {tunes.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </optgroup>
+            ) : null;
+          })}
         </select>
       </Field>
 
