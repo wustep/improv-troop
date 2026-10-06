@@ -41,7 +41,11 @@ function CallRow({ c }: { c: LlmCall }) {
         <td className="pr-xs text-ink-soft" title={c.params ? JSON.stringify(c.params) : undefined}>
           {c.status === "ok" ? (c.structured ? "schema" : "text") : ""}
         </td>
-        <td className={c.status === "error" ? "text-(--error)" : c.repairs.length ? "text-(--warning)" : "text-(--success)"}>
+        <td>
+          {/* the status reads in ink; the coloured mark is a glance aid (warning yellow is too light for text) */}
+          <span aria-hidden className={c.status === "error" ? "text-(--error)" : c.status === "pending" ? "text-ink-soft" : c.repairs.length ? "text-(--warning)" : "text-(--success)"}>
+            ●{" "}
+          </span>
           {c.status === "error" ? c.error : c.status === "ok" ? (c.repairs.length ? `${c.repairs.length} repairs` : "ok") : "pending"}
           {c.attempt > 1 ? ` (try ${c.attempt})` : ""}
         </td>
@@ -305,7 +309,14 @@ function AudioTab({ sheetStats }: { sheetStats: { rows: number; renderMs: number
         <ul>
           {loads.map((l) => (
             <li key={l.memberId}>
-              {l.memberId}: {l.instrument} — {l.pack} — {l.ready ? "ready" : l.error ? <span className="text-(--error)">{l.error}</span> : `${l.loaded}/${l.total}`}
+              {l.memberId}: {l.instrument} — {l.pack} — {l.ready ? "ready" : l.error ? (
+                <span>
+                  <span aria-hidden className="text-(--error)">
+                    ✗{" "}
+                  </span>
+                  {l.error}
+                </span>
+              ) : `${l.loaded}/${l.total}`}
             </li>
           ))}
         </ul>

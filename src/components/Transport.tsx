@@ -112,7 +112,9 @@ export function Transport() {
           <span>{gen.status}</span>
         ) : gen.error ? (
           <span role="alert" className="flex flex-wrap items-baseline gap-x-s">
-            <span className="text-(--error)">The band lost the thread: {gen.error}</span>
+            <span className="text-ink">
+              <span aria-hidden className="text-(--error)">✗ </span>The band lost the thread: {gen.error}
+            </span>
             {/key/i.test(gen.error) ? (
               <button type="button" className="text-action" onClick={openBrains}>
                 check the key
@@ -128,7 +130,9 @@ export function Transport() {
           </span>
         ) : audioError ? (
           <span role="alert" className="flex flex-wrap items-baseline gap-x-s">
-            <span className="text-(--error)">No sound: {audioError}.</span>
+            <span className="text-ink">
+              <span aria-hidden className="text-(--error)">✗ </span>No sound: {audioError}.
+            </span>
             <button type="button" className="text-action" onClick={() => void play()}>
               press play again
             </button>
