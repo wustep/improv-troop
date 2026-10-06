@@ -262,6 +262,28 @@ describe("style feel in the rhythm section", () => {
   });
 });
 
+describe("two chord players", () => {
+  it("complement each other instead of doubling, in every style", () => {
+    for (const second of ["guitar", "vibes"] as const) {
+      const pair: Member[] = [...defaultMembers(), { id: "penguin", animal: "penguin", name: "Pip", instrument: second }];
+      for (const style of STYLE_LIST) {
+        let notes = 0;
+        let doubled = 0;
+        for (const seed of [1, 2, 3]) {
+          const { score } = generateLocal({ ...defaultSettings(pair), style, seed, bars: 16 }, pair);
+          const last = (score.frame.bars - 1) * score.frame.meter.beats;
+          const piano = new Set(score.parts.bear.map((n) => `${Math.round(n.start * 48)}:${n.pitch}`));
+          for (const n of score.parts.penguin.filter((n) => n.start < last)) {
+            notes++;
+            if (piano.has(`${Math.round(n.start * 48)}:${n.pitch}`)) doubled++;
+          }
+        }
+        if (notes) expect(doubled / notes, `${style} ${second}`).toBeLessThan(0.3);
+      }
+    }
+  });
+});
+
 describe("comping voicings", () => {
   const band6: Member[] = [...defaultMembers(), { id: "cat", animal: "cat", name: "Mochi", instrument: "sax" }, { id: "penguin", animal: "penguin", name: "Pip", instrument: "guitar" }];
   it("keep clear of mud low down and of the bassist's register, even under a low tune", () => {

@@ -319,7 +319,8 @@ export function pulse(ctx: BarCtx): NoteEvent[] {
     if (ctx.beats === 4 && !ctx.lastBar) hits.push({ pos: 3.5, dur: 0.5, next: true });
   }
   // the second comper (a guitar with keys) answers on the offbeats
-  const mine = ctx.peerIndex >= 1 && !busy ? hits.filter((h) => h.pos % 1 === 0).map((h) => ({ ...h, pos: h.pos + 0.5, dur: 0.4 })).filter((h) => h.pos < ctx.beats) : hits;
+  const offbeats: Hit[] = Array.from({ length: ctx.beats }, (_, b) => ({ pos: b + 0.5, dur: 0.4 }));
+  const mine = ctx.peerIndex >= 1 ? offbeats : hits;
   const out: NoteEvent[] = [];
   const vel = velFor(ctx, 0.55);
   for (const h of mine) {
@@ -334,6 +335,17 @@ export function pulse(ctx: BarCtx): NoteEvent[] {
 
 /** Stride / oom-pah: low root on 1 and 3, chord on 2 and 4. */
 export function stride(ctx: BarCtx): NoteEvent[] {
+  // a second chord player (guitar or banjo with the piano) strums four to the bar, light shells
+  // in the middle, instead of a second oom-pah on top of the first
+  if (ctx.peerIndex >= 1) {
+    const out: NoteEvent[] = [];
+    const vel = velFor(ctx, 0.5);
+    for (let b = 0; b < ctx.beats; b++) {
+      const v = voiceIn(ctx, harmAt(ctx, b), "shell", [57, 72]);
+      out.push(...chordHit(v, b, 0.45, vel * (b % 2 === 1 ? 1.08 : 0.92), "staccato"));
+    }
+    return out;
+  }
   const out: NoteEvent[] = [];
   const vel = velFor(ctx, 0.62);
   const bassPart = ctx.inst.id === "piano" ? strideBass(ctx) : [];
@@ -385,7 +397,7 @@ export function arp(ctx: BarCtx): NoteEvent[] {
   const cell = ctx.mem.arpCell;
   const eighths = Array.from({ length: ctx.beats * 2 }, (_, i) => i / 2);
   const grid =
-    variant === 0 ? eighths : variant === 1 ? eighths.filter((t) => t % 1 !== 0 || t > 0) : variant === 2 ? (ctx.beats === 4 ? [0, 1.5, 3] : [0, 1.5]) : Array.from({ length: ctx.beats }, (_, i) => i);
+    variant === 0 ? eighths : variant === 1 ? eighths.filter((t) => t % 1 !== 0) : variant === 2 ? (ctx.beats === 4 ? [0, 1.5, 3] : [0, 1.5]) : Array.from({ length: ctx.beats }, (_, i) => i);
   grid.forEach((t, gi) => {
     const hm = harmAt(ctx, t);
     const v = voiceChord(hm.chord, "triad", lo, hi, ctx.mem.lastVoicing, hm);
@@ -407,6 +419,8 @@ export function arp(ctx: BarCtx): NoteEvent[] {
  * With a bassist in the band the left hand leaves the bass to them and keeps the tenor.
  */
 export function prelude(ctx: BarCtx): NoteEvent[] {
+  // a second keyboard or guitar plays the continuo under the first one's figuration
+  if (ctx.peerIndex >= 1) return continuo(ctx);
   const out: NoteEvent[] = [];
   const vel = velFor(ctx, 0.55);
   const groupLen = ctx.beats === 3 ? 1 : 2;
