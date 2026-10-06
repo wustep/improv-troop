@@ -58,18 +58,22 @@ export default function Home() {
         </button>
       </header>
 
+      {/* Below lg the page is one column, and main's pieces join the grid so the band settings sit
+          right under the stage instead of below the whole chart. */}
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <main className="min-w-0">
-          <Stage />
-          <div className="mt-3">
-            <Transport />
+        <main className="contents min-w-0 lg:block">
+          <div className="order-1 min-w-0 lg:order-none">
+            <Stage />
+            <div className="mt-3">
+              <Transport />
+            </div>
+            {debugOpen && <DebugPanel sheetStats={sheetStats} />}
           </div>
-          {debugOpen && <DebugPanel sheetStats={sheetStats} />}
-          <div className="mt-4 grid gap-4 md:grid-cols-[minmax(0,1fr)_260px]">
+          <div className="order-3 grid min-w-0 gap-4 md:grid-cols-[minmax(0,1fr)_260px] lg:order-none lg:mt-4">
             <BandTalk />
             <Takes />
           </div>
-          <section className="mt-5" aria-label="Sheet music">
+          <section className="order-4 min-w-0 lg:order-none lg:mt-5" aria-label="Sheet music">
             <div className="mb-1 flex items-baseline gap-3">
               <h2 className="font-[family-name:var(--font-script)] text-3xl font-bold">The chart</h2>
               <button type="button" className="text-sm text-ink-soft underline decoration-dotted underline-offset-4" onClick={() => setShowSheet((v) => !v)}>
@@ -92,7 +96,7 @@ export default function Home() {
             )}
           </section>
         </main>
-        <div className="lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:self-start lg:overflow-y-auto">
+        <div className="order-2 min-w-0 lg:sticky lg:top-4 lg:order-none lg:max-h-[calc(100vh-2rem)] lg:self-start lg:overflow-y-auto">
           <ControlPanel />
         </div>
       </div>

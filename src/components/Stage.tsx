@@ -34,7 +34,7 @@ function IntroNote({ onClose }: { onClose: () => void }) {
       <ol className="ml-4 list-decimal">
         <li>
           Pick the band and their instruments <span className="hidden lg:inline">→</span>
-          <span className="lg:hidden">(below)</span>
+          <span className="lg:hidden">(just below)</span>
         </li>
         <li>Press ▶ to hear their sketch</li>
         <li>Add a gateway key, then <b>Let them jam!</b> to make them think it through</li>
