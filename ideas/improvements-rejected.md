@@ -47,3 +47,22 @@
 - **A `pnpm take` CLI, and engine.test.ts split by module** — `scripts/take.ts` prints the frame, plan, issues and parts. Move the notation/theory blocks out _(rejected 2026-10-06)_
 - **Direct tests for ensemble()** — Hand-built inputs, one test per fix type, and an additive `kind` on `EnsembleFix` _(rejected 2026-10-06)_
 - **A typed `window.__jamming` dev handle** — `JammingDevHandle` plus a global `Window` declaration and an install helper _(rejected 2026-10-06)_
+- **The chart says "inking the chart…" forever if VexFlow fails** — libError state with retry; failed rows get their own message _(rejected 2026-10-06)_
+- **On phones the director's card sits on top of the band** — In-flow, full-width director card under 560px via container query _(rejected 2026-10-06)_
+- **When stopped, the stage says what's loaded** — Idle stage header shows title and key · tempo _(rejected 2026-10-06)_
+- **FormMap shows which bars the model actually wrote** — Per-bar provenance tick (model notes / directive / engine) _(rejected 2026-10-06)_
+- **One instrument picker open at a time** — Lift openId, Escape closes, focus returns to trigger _(rejected 2026-10-06)_
+- **First paint misleading empty state before hydrate** — Read `hydrated`, "tuning up…", reserve FormMap row _(rejected 2026-10-06)_
+- **Hide "click a bar" hint when the sheet is folded** — Hint follows sheet visibility _(rejected 2026-10-06)_
+- **Trades actually trade (sequenced improviser trade calls)** — Horn first, drummer hears it with a LISTEN block _(rejected 2026-10-06)_
+- **Composer soloists hear the previous soloist** — Sequence handoffs and pass the closing bars _(rejected 2026-10-06)_
+- **Motif echo measure for the critic** — motifEcho feature; fall back to @motif when the head loses it _(rejected 2026-10-06)_
+- **Short phrase endings land on chord tones** — rehearse also checks the last note before a rest _(rejected 2026-10-06)_
+- **Best-of-4 judge sees repair counts** — bars-kept and repairs in criticPrompt, plus a pick penalty _(rejected 2026-10-06)_
+- **Repairs that respect bar arithmetic** — spill multi-bar cells, extend short bars, rescale double-length bars _(rejected 2026-10-06)_
+- **Bossa anticipates the next chord** — bass next root on &4, comp anticipation _(rejected 2026-10-06)_
+- **Funk/bossa phrase-end turnarounds** — turnaround cell on phrase-end bars _(rejected 2026-10-06)_
+- **Chart-wide dynamic arc** — solo-order-aware arcDynamic _(rejected 2026-10-06)_
+- **Hairpins into dynamic changes** — velocity ramp before a dynamic change _(rejected 2026-10-06)_
+- **Baroque bass avoids parallels** — strong-beat P5/P8 check against the melody _(rejected 2026-10-06)_
+- **Band talk for handoffs and shout choruses** — ANSWER lines and riff calls in narrate.ts _(rejected 2026-10-06)_
