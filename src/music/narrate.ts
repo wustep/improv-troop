@@ -75,8 +75,11 @@ export function narrateLocal(frame: Frame, plan: BarPlan[], members: Member[], r
         break;
       }
       case "trade": {
-        const [a, b] = (s.featured ?? []).filter(has);
-        if (a && b) say(a, `Trading with ${nameOf(b)}. You go after me.`, "jam", s.start, b);
+        const who = (s.featured ?? []).filter(has);
+        const drums = who[who.length - 1];
+        const horns = who.slice(0, -1);
+        if (horns.length && drums)
+          say(horns[0], `Trading ${s.turn ?? 2}s with ${nameOf(drums)}${horns.length > 1 ? `, ${horns.slice(1).map(nameOf).join(" and ")} after me` : ""}. You go after me.`, "jam", s.start, drums);
         break;
       }
       case "out":

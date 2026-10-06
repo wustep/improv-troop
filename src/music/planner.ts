@@ -201,7 +201,7 @@ export function planLocal(frame: Frame, members: Member[], motif: Motif, rng: Rn
       }
       if (slot === "solo") {
         roles[m.id] = "solo";
-        const turnStart = s.kind === "trade" ? inSec % 4 === 0 : inSec === 0;
+        const turnStart = s.kind === "trade" ? inSec % (s.turn ?? 2) === 0 : inSec === 0;
         // a solo is a story: state a transform, leave space, build, climax, hand off
         const last = inSec === s.length - 1;
         // taking over from another soloist: usually pick up what they just played and answer it

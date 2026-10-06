@@ -267,7 +267,10 @@ export const useTroop = create<TroopState>((set, get) => {
         patch.meter = { beats: std.meter };
         patch.style = std.style;
         patch.tempo = std.tempo;
-        patch.bars = defaultStandardLength(id);
+        // a chorus for each soloist (the drummer's turn is a trading chorus)
+        const { settings, members } = get();
+        const soloists = settings.soloists.filter((sid) => members.some((m) => m.id === sid));
+        patch.bars = defaultStandardLength(id, soloists.length);
       } else {
         patch.bars = 16;
       }

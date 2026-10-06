@@ -63,7 +63,8 @@ describe("frame", () => {
     }
   });
   it("snaps standards to whole choruses", () => {
-    expect(lengthOptions("f-blues")).toEqual([12, 24, 36, 48]);
+    expect(lengthOptions("f-blues")).toEqual([12, 24, 36, 48, 60, 72]);
+    expect(lengthOptions("autumn")).toEqual([32, 64, 96, 128]);
   });
 });
 
@@ -205,6 +206,40 @@ describe("melodic hygiene", () => {
       }
     }
     expect(bad).toBe(0);
+  });
+});
+
+describe("standards in choruses", () => {
+  const cat: Member = { id: "cat", animal: "cat", name: "Mochi", instrument: "sax" };
+  const band5 = [...defaultMembers(), cat];
+  const frameFor = (standard: string, bars: number, soloists: string[]) => {
+    const std = STANDARDS.find((s) => s.id === standard)!;
+    return buildFrame({ ...defaultSettings(band5), standard, key: std.key, style: std.style, bars, meter: { beats: std.meter }, soloists }, band5);
+  };
+  const layout = (f: ReturnType<typeof buildFrame>) => f.sections.map((s) => `${s.kind}:${s.start}+${s.length}${s.featured ? `:${s.featured.join(",")}` : ""}`);
+  it("default length gives a chorus to each soloist between the head and the head out", async () => {
+    const { defaultStandardLength } = await import("./form");
+    expect(defaultStandardLength("autumn", 1)).toBe(96);
+    expect(defaultStandardLength("autumn", 2)).toBe(128);
+    expect(defaultStandardLength("f-blues", 2)).toBe(48);
+    expect(defaultStandardLength("f-blues", 5)).toBe(60);
+  });
+  it("a 32-bar tune: head, a whole chorus solo, head out", () => {
+    expect(layout(frameFor("autumn", 96, ["cat"]))).toEqual(["head:0+32:fox", "solo:32+32:cat", "out:64+32:fox"]);
+  });
+  it("two soloists each take whole choruses of the blues", () => {
+    expect(layout(frameFor("f-blues", 60, ["cat", "bear"]))).toEqual(["head:0+12:fox", "solo:12+24:cat", "solo:36+12:bear", "out:48+12:fox"]);
+  });
+  it("more soloists than choruses split them where the form does", () => {
+    expect(layout(frameFor("autumn", 96, ["cat", "bear"]))).toEqual(["head:0+32:fox", "solo:32+16:cat", "solo:48+16:bear", "out:64+32:fox"]);
+  });
+  it("the drummer trades 4s for a chorus, the horns taking turns", () => {
+    const f = frameFor("f-blues", 72, ["cat", "bear", "owl"]);
+    expect(layout(f)).toEqual(["head:0+12:fox", "solo:12+24:cat", "solo:36+12:bear", "trade:48+12:cat,bear,owl", "out:60+12:fox"]);
+    const trade = f.sections.find((s) => s.kind === "trade")!;
+    expect(trade.turn).toBe(4);
+    const who = (b: number) => Object.entries(f.slots[b]).filter(([, r]) => r === "solo" || r === "trade").map(([id]) => id).join();
+    expect([48, 52, 56].map(who)).toEqual(["cat", "owl", "bear"]);
   });
 });
 

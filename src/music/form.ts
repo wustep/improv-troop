@@ -12,21 +12,30 @@ import type { ChordChange, Frame, Member, Role, Section, TroopSettings } from ".
 
 export const FREE_LENGTHS = [8, 12, 16, 24, 32];
 
+/** A standard is played in whole choruses: up to six of them, and at most this many bars. */
+const MAX_CHORUSES = 6;
+const MAX_STANDARD_BARS = 128;
+
 export function lengthOptions(standardId: string | null): number[] {
   const std = getStandard(standardId);
   if (!std) return FREE_LENGTHS;
   const len = std.bars.length;
   const out: number[] = [];
-  for (let n = 1; n * len <= 48; n++) out.push(n * len);
+  for (let n = 1; n <= MAX_CHORUSES && n * len <= MAX_STANDARD_BARS; n++) out.push(n * len);
   return out.length ? out : [len];
 }
 
-/** A full performance of a standard: head, solos, out head — three choruses when they fit. */
-export function defaultStandardLength(standardId: string | null): number {
+/**
+ * A full performance of a standard: the head, a chorus for each soloist (two to three of
+ * them, as time allows), and the head out.
+ */
+export function defaultStandardLength(standardId: string | null, soloists = 1): number {
   const opts = lengthOptions(standardId);
   const std = getStandard(standardId);
   if (!std) return 16;
-  return opts.includes(std.bars.length * 3) ? std.bars.length * 3 : opts[opts.length - 1];
+  const want = 2 + Math.min(3, Math.max(1, soloists));
+  const fits = opts.filter((o) => o <= std.bars.length * want);
+  return fits[fits.length - 1] ?? opts[0];
 }
 
 export function snapLength(standardId: string | null, bars: number): number {
@@ -94,6 +103,47 @@ function assignSolos(start: number, length: number, soloists: string[], unit: nu
     t += len;
     if (isLast) break;
   }
+  return out;
+}
+
+/**
+ * Solos on a standard go by the form, the way a band plays one: each soloist takes whole
+ * choruses (the first soloists get any extra). With more soloists than choruses, choruses
+ * split where the form does (the bridge, the second half) so nobody starts mid-phrase.
+ */
+function assignChorusSolos(start: number, length: number, soloists: string[], formLen: number, form: [string, number][]): SoloPlan[] | null {
+  if (!soloists.length || length <= 0 || length % formLen) return null;
+  const choruses = length / formLen;
+  const k = soloists.length;
+  if (k <= choruses) {
+    const out: SoloPlan[] = [];
+    let t = start;
+    soloists.forEach((soloist, i) => {
+      const n = Math.floor(choruses / k) + (i < choruses % k ? 1 : 0);
+      out.push({ start: t, length: n * formLen, soloist });
+      t += n * formLen;
+    });
+    return out;
+  }
+  // split each chorus at the form's section boundary nearest its middle
+  let acc = 0;
+  let split = formLen / 2;
+  for (const [, n] of form.slice(0, -1)) {
+    acc += n;
+    if (Math.abs(acc - formLen / 2) < Math.abs(split - formLen / 2) || split % 1) split = acc;
+  }
+  if (split <= 0 || split >= formLen || split % 1) return null;
+  const halves: [number, number][] = [];
+  for (let c = 0; c < choruses; c++) halves.push([start + c * formLen, split], [start + c * formLen + split, formLen - split]);
+  if (k > halves.length) return null;
+  const out: SoloPlan[] = [];
+  let h = 0;
+  soloists.forEach((soloist, i) => {
+    const n = Math.floor(halves.length / k) + (i < halves.length % k ? 1 : 0);
+    const mine = halves.slice(h, h + n);
+    h += n;
+    out.push({ start: mine[0][0], length: mine.reduce((sum, [, len]) => sum + len, 0), soloist });
+  });
   return out;
 }
 
@@ -178,31 +228,36 @@ export function buildFrame(settings: TroopSettings, members: Member[]): Frame {
 
   const pushSolos = (start: number, length: number) => {
     const melodicSoloists = soloists.filter((s) => s !== drummer);
-    const drumsSolo = drummer && soloists.includes(drummer);
-    const plans = assignSolos(start, length, melodicSoloists.length ? melodicSoloists : drumsSolo ? [] : [leaderId], length >= 8 ? 4 : 2);
+    const drumsSolo = !!drummer && soloists.includes(drummer);
+    const horns = melodicSoloists.length ? melodicSoloists : [leaderId];
+    const formLen = std?.bars.length ?? 0;
+    // trading with the drummer: the last stretch of the solos, a chorus on a standard
+    // when there's room for one (trading 4s), else the last few bars (2s)
+    let tradeLen = 0;
     if (drumsSolo) {
-      // the drummer trades 2s with the last soloist (or the leader) in the final slot
-      const tradeLen = Math.min(length, Math.max(4, Math.floor(length / (plans.length + 1) / 2) * 2 || 4));
-      if (plans.length) {
-        const last = plans[plans.length - 1];
-        if (last.length > tradeLen) {
-          last.length -= tradeLen;
-        } else {
-          plans.pop();
-        }
-      }
+      const wholeChorus = std && length % formLen === 0 && (length / formLen >= 2 || !melodicSoloists.length);
+      tradeLen = wholeChorus ? formLen : Math.min(length, Math.max(4, Math.floor(length / (melodicSoloists.length + 1) / 2) * 2 || 4));
+      if (!melodicSoloists.length) tradeLen = length;
+    }
+    const soloLen = length - tradeLen;
+    if (soloLen > 0) {
+      const who = melodicSoloists.length ? melodicSoloists : [leaderId];
+      const plans = (std && assignChorusSolos(start, soloLen, who, formLen, std.form)) || assignSolos(start, soloLen, who, soloLen >= 8 ? 4 : 2);
       for (const p of plans) sections.push({ name: `Solo · ${nameOf(p.soloist)}`, kind: "solo", start: p.start, length: p.length, featured: [p.soloist] });
-      const tStart = start + length - Math.min(tradeLen, length);
-      const partner = melodicSoloists[melodicSoloists.length - 1] ?? leaderId;
+    }
+    if (tradeLen > 0) {
+      const tStart = start + length - tradeLen;
+      const turn = tradeLen >= 8 ? 4 : 2;
+      // the horns take turns with the drummer: horn, drums, next horn, drums...
+      const partners = tradeLen >= 3 * turn ? horns : [horns[horns.length - 1]];
       sections.push({
-        name: `Trading 2s · ${nameOf(partner)} & ${nameOf(drummer!)}`,
+        name: `Trading ${turn}s · ${[...partners, drummer!].map(nameOf).join(" & ")}`,
         kind: "trade",
         start: tStart,
-        length: start + length - tStart,
-        featured: [partner, drummer!],
+        length: tradeLen,
+        featured: [...partners, drummer!],
+        turn,
       });
-    } else {
-      for (const p of plans) sections.push({ name: `Solo · ${nameOf(p.soloist)}`, kind: "solo", start: p.start, length: p.length, featured: [p.soloist] });
     }
   };
 
@@ -249,11 +304,13 @@ export function buildFrame(settings: TroopSettings, members: Member[]): Frame {
         if (leaderId) slots[b][leaderId] = "lead";
       } else if (s.kind === "solo" && s.featured?.[0]) {
         slots[b][s.featured[0]] = "solo";
-      } else if (s.kind === "trade" && s.featured?.length === 2) {
-        const [horn, drums] = s.featured;
-        const turn = Math.floor((b - s.start) / 2) % 2;
-        slots[b][horn] = turn === 0 ? "solo" : "rest";
-        slots[b][drums] = turn === 0 ? "groove" : "trade";
+      } else if (s.kind === "trade" && s.featured && s.featured.length >= 2) {
+        const horns = s.featured.slice(0, -1);
+        const drums = s.featured[s.featured.length - 1];
+        const turn = Math.floor((b - s.start) / (s.turn ?? 2));
+        const hornUp = turn % 2 === 0 ? horns[(turn / 2) % horns.length] : null;
+        for (const h of horns) slots[b][h] = h === hornUp ? "solo" : "rest";
+        slots[b][drums] = hornUp ? "groove" : "trade";
       }
     }
   }

@@ -92,8 +92,10 @@ export interface Section {
   kind: SectionKind;
   start: number; // bar index
   length: number; // bars
-  /** For solo/trade sections: who is featured. */
+  /** For solo/trade sections: who is featured (a trade: the horns in turn, then the drummer). */
   featured?: string[];
+  /** For trade sections: bars per turn (trading 4s or 2s). */
+  turn?: number;
 }
 
 export type Texture =
