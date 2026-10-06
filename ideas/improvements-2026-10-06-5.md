@@ -12,6 +12,7 @@
 - **Proposal.** After the current chord, a small ink-soft "→ next" chord, written from the same ref-driven rAF loop, and hidden on narrow stages.
 - **Risks / trade-offs.** Crowding at `text-xl`; must stay ref-driven (no per-frame renders).
 - **Files.** `src/components/Stage.tsx`
+- **Outcome.** Shipped in b79ff26 and verified live at 375px ("Bb6 → Eb13"). Also fixed a bug found along the way: the label and chord stayed on stage after a stop.
 
 ### 2. Number keys mute players
 - **Impact:** ⚪ low · **Effort:** S · **Status:** ❌ rejected
@@ -42,6 +43,7 @@
 - **Proposal.** `harmonyBlock` takes an optional next bar and appends "then bar N: X (aim your last note at one of these: …)". Improviser featured calls and Composer `partsPrompt` pass it.
 - **Risks / trade-offs.** ~30 tokens per call.
 - **Files.** `src/ai/prompts.ts`, `src/ai/improviser.ts`, `src/ai/composer.ts`
+- **Outcome.** Shipped in 3b3e319 (inside `harmonyBlock`, so both callers get it), with a new `prompts.test.ts`.
 
 ### 6. The critic's own scores decide, and candidates are judged fairly
 - **Impact:** 🟡 med · **Effort:** S · **Status:** ✅ accepted
@@ -49,6 +51,7 @@
 - **Proposal.** Pick by score, with `best` only breaking ties. Ignore out-of-range indexes and clamp scores. Show candidates in a seeded shuffle. Realize every candidate with the same seed.
 - **Risks / trade-offs.** Small.
 - **Files.** `src/ai/composer.ts`
+- **Outcome.** Shipped in 450b27a, with `pickCandidate` and tests.
 
 ### 7. Featured players get a solo vocabulary; unknown directives are rejected
 - **Impact:** 🟡 med · **Effort:** S · **Status:** ❌ rejected
@@ -86,6 +89,7 @@
 - **Proposal.** In `buildFrame`'s standards branch, make the last bar the tonic when it isn't already, and end the bar before it on V7 when that bar was a turnaround.
 - **Risks / trade-offs.** `melodySource` replay of the penultimate bar; blues tonic colour.
 - **Files.** `src/music/form.ts`, `src/music/engine.test.ts`
+- **Outcome.** Confirmed first: 6 of 11 standards ended on a turnaround. Shipped in a280620; every standard at every length now ends on its tonic.
 
 ### 12. Ambient pads float through held harmony
 - **Impact:** 🟡 med · **Effort:** S–M · **Status:** ✅ accepted
@@ -93,6 +97,7 @@
 - **Proposal.** Hold the pad through an unchanged chord instead of re-striking it, and weight bells toward 4ths and 5ths from the last bell.
 - **Risks / trade-offs.** Incremental realize; ensemble release-at-change.
 - **Files.** `src/music/patterns/comp.ts`, `src/music/context.ts`
+- **Outcome.** Shipped in 8e22330. Pads held in 44 of 45 eligible bars (from 0); bell 4ths and 5ths up from 29% to 51%.
 
 ### 13. Solos save their top note and don't repeat their peaks
 - **Impact:** 🟡 med · **Effort:** M · **Status:** ❌ rejected
