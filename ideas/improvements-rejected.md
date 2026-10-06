@@ -105,3 +105,16 @@
 - **FormMap bars hittable on phones** — coarse-pointer seek snaps to phrase start, legend _(rejected 2026-10-06)_
 - **Rough borders on first paint** — synchronous measure and token edge until measured _(rejected 2026-10-06)_
 - **Stable take numbers and dated times** — number by creation, "yesterday"/date for older takes _(rejected 2026-10-06)_
+- **3/4 two-feel, stride and bossa bass hit every chord change** — hits at each ctx.chords beat in 3/4 _(rejected 2026-10-06)_
+- **A standard keeps its own mode** — buildFrame uses std mode, mode select disabled for standards _(rejected 2026-10-06)_
+- **Cello fifths and piano solo LH follow chord quality** — chord's own fifth in pizz/pad drone, harmAt into pianoSoloLeftHand _(rejected 2026-10-06)_
+- **parseChord sus2 / 7#5 / 7b5** — correct tones and scales with a table test _(rejected 2026-10-06)_
+- **3/4 drum-solo hat, stop-time velocity, funk approach range** — meter-aware hat foot, velFor on stop-time, approach from above _(rejected 2026-10-06)_
+- **3/4 count-off motif text gets its "|"** — rewrite motif text when length > beats _(rejected 2026-10-06)_
+- **@head N checked against the form** — advance across ranges, require leader lead bar over same chord _(rejected 2026-10-06)_
+- **Explain textures to the model; drop no-op tutti/ostinato** — per-texture meanings in prompts _(rejected 2026-10-06)_
+- **Mock replies follow the meter** — meter-sized mock motif/bars/grids, per-role defaults, 3/4 pipeline test _(rejected 2026-10-06)_
+- **Prompt pitch spelling per chord** — flats/sharps per harmony span in prompt blocks _(rejected 2026-10-06)_
+- **RoughButton hover ignores disabled and touch** — no hover hatch when disabled or non-mouse pointer _(rejected 2026-10-06)_
+- **Name-tag hover hint doesn't reflow the stage** — drop or reserve " · tap to mute" _(rejected 2026-10-06)_
+- **Hide "judge ?/10"; hint for an empty Leader row** — judge segment only with a score _(rejected 2026-10-06)_
