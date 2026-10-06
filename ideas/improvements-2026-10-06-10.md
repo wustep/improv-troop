@@ -83,3 +83,45 @@
 - The tune is named when its written melody plays.
 - The intro gets a line.
 - The bass chair is respected.
+
+## After the measured critique
+
+A critic agent generated 308 takes and measured them: chord-tone landings, doubling, density curves, velocities, drum patterns and harmonic rhythm. The fixes it led to:
+
+### Second chord players complement the first (0faa6ad)
+- **Problem.** In New Orleans, baroque, pop and minimal, the second chord player shadowed the first.
+- **Shipped.**
+  - New Orleans: a guitar strums four to the bar under the stride.
+  - Baroque: the second player takes the continuo.
+  - Pop: the second comper stays on the offbeats.
+  - Minimal: the arpeggio plays the offbeat cell it was meant to.
+
+### Even solo turns (1f26af6)
+- **Problem.** With an intro, the first soloist on a free chart got a third of the solo space.
+- **Shipped.** Solos split evenly.
+
+### Solos build (2e601d3)
+- **Shipped.** A fourth density tier of runs for climax bars, which now carry 1.6–1.8× the notes of a plain bar (up from 1.4×).
+
+### Loud bars keep their shape (96c1cba)
+- **Shipped.** A soft velocity knee instead of a hard clamp, so ff out heads keep their accents.
+
+### Drum kits by style (cffc92e, 4ef9456)
+- Ambient drums breathe instead of ticking the same pattern every bar.
+- Minimal has no crash and no backbeat.
+- Bossa only touches a cymbal, and its hats whisper under the clave.
+
+### Harmony
+- **Pop and minimal (c821433).** Held notes are chord tones or a plain 9th or 6th, not a jazz #11.
+- **Minimal and ambient (f24352c).** Each chord rings for two bars, and the closing cadence takes the style's color: Vsus for ambient, a plain V for minimal and pop.
+
+### Tags (afd32b9)
+- **Shipped.** Swing and New Orleans standards played three or more times through swerve to iii–VI–ii–V twice before the last chord.
+
+### Titles (3d704c9)
+- A model-made take on a standard is named for the tune.
+
+## Not done, and why
+- **Real gateway tests.** No key was reachable: none in the test browser's storage, the environment, or a Vercel CLI. Reading the browser profile on disk was blocked as credential access. Every model-path change is covered only by the mock model and pipeline tests.
+- **Free-chart solos' "sparse" bar.** It still carries the opener's tail. Accepted; the bars that follow build properly.
+- **More written melodies.** Only tunes that could be transcribed with confidence were added: Saints, Greensleeves, Ode to Joy.
