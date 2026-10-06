@@ -209,6 +209,59 @@ describe("melodic hygiene", () => {
   });
 });
 
+describe("style feel in the rhythm section", () => {
+  const cat: Member = { id: "cat", animal: "cat", name: "Mochi", instrument: "sax" };
+  const gtr: Member = { id: "penguin", animal: "penguin", name: "Pip", instrument: "guitar" };
+  const take = (style: StyleId, seed: number, extra: Partial<ReturnType<typeof defaultSettings>> = {}) =>
+    generateLocal({ ...defaultSettings([...defaultMembers(), cat, gtr]), style, seed, bars: 32, soloists: ["cat"], ...extra }, [...defaultMembers(), cat, gtr]).score;
+  const barNotes = (notes: { start: number }[], bar: number, beats: number) => notes.filter((n) => Math.floor(n.start / beats + 1e-9) === bar);
+  it("the bossa bass leans into each chord change on the and of 4", () => {
+    let leaned = 0;
+    let changes = 0;
+    for (const seed of [1, 2, 3, 4]) {
+      const s = take("bossa", seed);
+      for (let b = 0; b < s.frame.bars - 2; b++) {
+        if (!s.plan[b].directives?.frog?.startsWith("@bossa")) continue;
+        const next = parseChord(s.frame.chords[b + 1][0].symbol);
+        if (next.symbol === s.frame.chords[b].at(-1)!.symbol) continue;
+        changes++;
+        const pickup = barNotes(s.parts.frog, b, 4).find((n) => Math.abs((n as { start: number }).start - b * 4 - 3.5) < 0.01) as { pitch: number } | undefined;
+        if (pickup && mod(pickup.pitch, 12) === next.bass) leaned++;
+      }
+    }
+    expect(changes).toBeGreaterThan(20);
+    expect(leaned / changes).toBeGreaterThan(0.8);
+  });
+  it("funk guitar locks one rhythm through a section, up high, around the bass", () => {
+    for (const seed of [1, 2, 3]) {
+      const s = take("funk", seed);
+      for (const sec of s.frame.sections) {
+        const rhythms = new Set<string>();
+        for (let b = sec.start; b < sec.start + sec.length - 1; b++) {
+          if ((b - sec.start + 1) % 4 === 0 || s.plan[b].directives?.penguin !== "@funk") continue;
+          rhythms.add(barNotes(s.parts.penguin, b, 4).map((n) => +(n.start - b * 4).toFixed(2)).filter((x, i, a) => a.indexOf(x) === i).join(","));
+        }
+        if (rhythms.size) expect(rhythms.size, `seed ${seed} ${sec.name}`).toBeLessThanOrEqual(2);
+      }
+      const gtrNotes = s.parts.penguin.filter((n) => n.start < (s.frame.bars - 1) * 4);
+      expect(Math.min(...gtrNotes.map((n) => n.pitch))).toBeGreaterThanOrEqual(55);
+    }
+  });
+  it("a jazz waltz comps with more than one rhythm, and the bass takes every chord change", () => {
+    const s = take("swing", 3, { meter: { beats: 3 } });
+    const rhythms = new Set<string>();
+    for (let b = 0; b < s.frame.bars - 1; b++) {
+      rhythms.add(barNotes(s.parts.bear, b, 3).map((n) => +(n.start - b * 3).toFixed(2)).filter((x, i, a) => a.indexOf(x) === i).join(","));
+      for (const c of s.frame.chords[b]) {
+        if (c.beat === 0) continue;
+        const hit = s.parts.frog.some((n) => Math.abs(n.start - (b * 3 + c.beat)) < 0.01 && mod(n.pitch, 12) === parseChord(c.symbol).bass);
+        expect(hit, `bar ${b + 1}: ${c.symbol} on beat ${c.beat + 1}`).toBe(true);
+      }
+    }
+    expect(rhythms.size).toBeGreaterThan(2);
+  });
+});
+
 describe("comping voicings", () => {
   const band6: Member[] = [...defaultMembers(), { id: "cat", animal: "cat", name: "Mochi", instrument: "sax" }, { id: "penguin", animal: "penguin", name: "Pip", instrument: "guitar" }];
   it("keep clear of mud low down and of the bassist's register, even under a low tune", () => {
@@ -825,6 +878,8 @@ describe("bass fifths", () => {
           for (const c of score.frame.chords[b]) if (c.beat <= pos + 1e-6) sym = c.symbol;
           const c = parseChord(sym);
           const pcs = [...c.tones.map((t) => mod(c.root + t, 12)), c.bass];
+          // the bossa's &4 leans into the next bar: the next chord's root is the anticipation
+          if (d.startsWith("@bossa") && pos === 3.5 && score.frame.chords[b + 1]) pcs.push(parseChord(score.frame.chords[b + 1][0].symbol).bass);
           expect(pcs, `${id} seed ${seed} bar ${b + 1}: ${n.pitch} over ${sym}`).toContain(mod(n.pitch, 12));
           checked++;
         }

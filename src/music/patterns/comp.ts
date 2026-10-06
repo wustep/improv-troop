@@ -45,6 +45,12 @@ function voiceRange(ctx: BarCtx, pos?: number): [number, number] {
   return [floor, hi];
 }
 
+function voiceIn(ctx: BarCtx, h: Harm, fam: VoicingFamily, [lo, hi]: [number, number]): number[] {
+  const v = voiceChord(h.chord, fam, lo, hi, ctx.mem.lastVoicing, h);
+  ctx.mem.lastVoicing = v;
+  return v;
+}
+
 function voice(ctx: BarCtx, h: Harm, fam = family(ctx), pos?: number): number[] {
   const [lo, hi] = voiceRange(ctx, pos);
   const v = voiceChord(h.chord, fam, lo, hi, ctx.mem.lastVoicing, h);
@@ -128,12 +134,37 @@ const FUNK_CELLS: Hit[][] = [
   ],
 ];
 
-function playHits(ctx: BarCtx, hits: Hit[], fam?: VoicingFamily, art?: NoteEvent["art"]): NoteEvent[] {
+// Jazz waltz: the "1 (2 3)" lilt, with the same variety as 4/4 comping.
+const WALTZ_CELLS: Hit[][] = [
+  [
+    { pos: 1, dur: 0.5 },
+    { pos: 2, dur: 0.5 },
+  ],
+  [{ pos: 0, dur: 1.5 }],
+  [
+    { pos: 0, dur: 0.5 },
+    { pos: 1.5, dur: 0.5 },
+  ],
+  [{ pos: 1.5, dur: 0.5 }],
+  [
+    { pos: 1, dur: 1 },
+    { pos: 2.5, dur: 0.5, next: true },
+  ],
+  [
+    { pos: 0.5, dur: 0.5 },
+    { pos: 2, dur: 0.5 },
+  ],
+];
+
+/** Funk guitar sits up high: a 9th "grip" (3, 7, 9, 13) above the bass and keys. */
+const FUNK_RANGE: [number, number] = [58, 79];
+
+function playHits(ctx: BarCtx, hits: Hit[], fam?: VoicingFamily, art?: NoteEvent["art"], range?: [number, number]): NoteEvent[] {
   const out: NoteEvent[] = [];
   const vel = velFor(ctx, ctx.style.id === "funk" ? 0.7 : 0.6);
   for (const h of hits) {
     if (h.pos >= ctx.beats) continue;
-    const v = voice(ctx, harmOf(ctx, h.pos, h.next), fam, h.pos);
+    const v = range ? voiceIn(ctx, harmOf(ctx, h.pos, h.next), fam ?? family(ctx), range) : voice(ctx, harmOf(ctx, h.pos, h.next), fam, h.pos);
     const dur = Math.min(h.dur, ctx.beats - h.pos);
     out.push(...chordHit(v, h.pos, dur, vel * (h.pos % 1 === 0.5 ? 1.05 : 1), art));
     if (h.pos === 0 || ctx.chords.some((x) => x.beat === h.pos)) out.push(...leftHand(ctx, h.pos, Math.max(dur, 1), vel));
@@ -189,9 +220,15 @@ function compCore(ctx: BarCtx, second: boolean): NoteEvent[] {
     case "bossa":
       return play(ctx.beats === 3 ? [{ pos: 0, dur: 1 }, { pos: 1.5, dur: 1 }] : BOSSA_BARS[(ctx.bar + (second ? 1 : 0)) % 2]);
     case "funk": {
-      const cell = pickCell(FUNK_CELLS);
-      const hits = sparse ? cell.slice(0, 2) : cell;
-      return play(hits, "shell", "staccato");
+      // a funk part is a riff: the same cell through the section (like the bass), a variation
+      // at phrase ends, and the hits that would land on the bassist's notes step aside
+      const sectionCell = (n: number) => FUNK_CELLS[(hashString(`${ctx.seed}:${ctx.member.id}:${ctx.section.start}`) + n + (second ? 1 : 0)) % FUNK_CELLS.length];
+      let hits = sectionCell(ctx.phraseEnd ? 1 : 0);
+      const bassAt = (pos: number) => (ctx.bassLine ?? []).some((n) => n.art !== "ghost" && Math.abs(n.start - pos) < 0.1);
+      const clear = hits.filter((h) => !bassAt(h.pos));
+      if (clear.length >= 2) hits = clear;
+      if (sparse) hits = hits.slice(0, 2);
+      return playHits(ctx, second ? secondComper(ctx, hits) : hits, second ? "shell" : "rootless", "staccato", FUNK_RANGE);
     }
     case "neworleans":
       return stride(ctx);
@@ -203,12 +240,9 @@ function compCore(ctx: BarCtx, second: boolean): NoteEvent[] {
       return pad(ctx);
     case "swing":
     default: {
-      if (ctx.beats === 3) {
-        return play(sparse ? [{ pos: 1, dur: 0.5 }] : [{ pos: 1, dur: 0.5 }, { pos: 2, dur: 0.5 }]);
-      }
-      let cell = pickCell(SWING_CELLS);
+      let cell = pickCell(ctx.beats === 3 ? WALTZ_CELLS : SWING_CELLS);
       if (sparse && cell.length > 1 && ctx.rng.chance(0.5)) cell = [cell[0]];
-      if (busy && ctx.rng.chance(0.5)) cell = [...cell, ...pickCell(SWING_CELLS.slice(4))].filter((h, i, a) => a.findIndex((x) => x.pos === h.pos) === i);
+      if (busy && ctx.rng.chance(0.5)) cell = [...cell, ...pickCell((ctx.beats === 3 ? WALTZ_CELLS : SWING_CELLS).slice(4))].filter((h, i, a) => a.findIndex((x) => x.pos === h.pos) === i);
       cell = listen(ctx, cell);
       // a chord change mid-bar must be acknowledged
       if (ctx.chords.length > 1 && !cell.some((h) => h.pos >= ctx.chords[1].beat - 0.5 && h.pos < ctx.beats)) {

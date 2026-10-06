@@ -86,56 +86,75 @@ export function walk(ctx: BarCtx): NoteEvent[] {
   return out;
 }
 
-/** Two-feel: root on 1, fifth on 3 (or the second chord), optional pickup. */
+/** Where the bass plays in a bar: the meter's strong beats, plus every chord change. */
+function hitsAt(ctx: BarCtx, grid: number[]): number[] {
+  const at = new Set([...grid.filter((g) => g < ctx.beats), ...chordSpans(ctx).map((sp) => sp.start)].map((x) => Math.round(x * 4) / 4));
+  return [...at].sort((x, y) => x - y);
+}
+
+/** Two-feel: root on 1, fifth on 3 (or the root of a new chord wherever it falls), optional pickup. */
 export function two(ctx: BarCtx): NoteEvent[] {
   const out: NoteEvent[] = [];
   const [lo, hi] = range(ctx);
   let prev = ctx.mem.lastPitch ?? lo + 8;
   const vel = velFor(ctx, 0.8);
   const spans = chordSpans(ctx);
-  const half = ctx.beats === 3 ? 3 : 2;
-  for (let b = 0; b < ctx.beats; b += half) {
+  // 4/4: 1 and 3; a waltz: the dotted half (and the second chord, wherever it lands)
+  const at = hitsAt(ctx, ctx.beats === 3 ? [0] : [0, 2]);
+  at.forEach((b, i) => {
+    const end = at[i + 1] ?? ctx.beats;
     const c = chordAt(ctx, b);
-    const isChange = spans.some((s) => Math.abs(s.start - b) < 1e-6);
-    let p = isChange && b > 0 ? root(ctx, c, prev) : b === 0 ? root(ctx, c, prev) : nearestPc(fifthPc(c), prev);
+    const isChange = spans.some((sp) => Math.abs(sp.start - b) < 1e-6);
+    let p = b === 0 || isChange ? root(ctx, c, prev) : nearestPc(fifthPc(c), prev);
     p = fold(p, lo, hi);
-    const pickup = b + half === ctx.beats && ctx.rng.chance(ctx.style.id === "neworleans" ? 0.55 : 0.3);
-    out.push({ pitch: p, start: b, dur: pickup ? half - 0.5 : half, vel });
+    const pickup = end === ctx.beats && end - b >= 1 && ctx.rng.chance(ctx.style.id === "neworleans" ? 0.55 : 0.3);
+    out.push({ pitch: p, start: b, dur: pickup ? end - b - 0.5 : end - b, vel });
     if (pickup) {
       const nh = ctx.harmony.at(ctx.start + ctx.beats);
       const target = root(ctx, nh.chord, p);
       out.push({ pitch: fold(approach(ctx, p, target, nh.scale), lo, hi), start: ctx.beats - 0.5, dur: 0.5, vel: vel * 0.8 });
     }
     prev = p;
-  }
+  });
   ctx.mem.lastPitch = prev;
   return out;
 }
 
-/** Bossa: root (dotted quarter) + fifth on &2, anticipating the next chord on &4. */
+/**
+ * Bossa: the surdo pulse. Root on 1 (dotted quarter), the fifth on &2 and again on 3, and a
+ * pickup on &4: the next bar's root when the harmony moves, so the bass leans into the change.
+ */
 export function bossa(ctx: BarCtx): NoteEvent[] {
   const out: NoteEvent[] = [];
   const [lo, hi] = range(ctx);
   const prev = ctx.mem.lastPitch ?? lo + 8;
   const vel = velFor(ctx, 0.72);
+  const nextChord = ctx.harmony.at(ctx.start + ctx.beats).chord;
   if (ctx.beats === 3) {
-    const r = root(ctx, chordAt(ctx, 0), prev);
+    const c = chordAt(ctx, 0);
+    const r = root(ctx, c, prev);
     out.push({ pitch: r, start: 0, dur: 1.5, vel });
-    out.push({ pitch: fold(above(r, fifthPc(chordAt(ctx, 0)), hi), lo, hi), start: 1.5, dur: 1.5, vel: vel * 0.85 });
+    const c2 = chordAt(ctx, 1.5);
+    const p2 = c2.symbol !== c.symbol ? root(ctx, c2, r) : fold(above(r, fifthPc(c), hi), lo, hi);
+    out.push({ pitch: p2, start: 1.5, dur: 1.5, vel: vel * 0.85 });
     ctx.mem.lastPitch = r;
     return out;
   }
   const c1 = chordAt(ctx, 0);
   const c2 = chordAt(ctx, 2);
+  const moved = c2.symbol !== c1.symbol;
   const r1 = root(ctx, c1, prev);
   const f1 = fold(above(r1, fifthPc(c1), hi), lo, hi);
-  const r2 = c2.symbol !== c1.symbol ? root(ctx, c2, r1) : r1;
-  const f2 = c2.symbol !== c1.symbol ? fold(above(r2, fifthPc(c2), hi), lo, hi) : f1;
+  // beat 3: a new chord's root, or the fifth again (the surdo's answer)
+  const third = moved ? root(ctx, c2, r1) : f1;
+  const nextRoot = root(ctx, nextChord, third);
+  const changes = !ctx.lastBar && nextChord.symbol !== c2.symbol;
+  const pickup = changes ? nextRoot : moved ? fold(above(third, fifthPc(c2), hi), lo, hi) : r1;
   out.push({ pitch: r1, start: 0, dur: 1.5, vel });
   out.push({ pitch: f1, start: 1.5, dur: 0.5, vel: vel * 0.8 });
-  out.push({ pitch: r2, start: 2, dur: 1.5, vel: vel * 0.95 });
-  out.push({ pitch: f2, start: 3.5, dur: 0.5, vel: vel * 0.8 });
-  ctx.mem.lastPitch = r2;
+  out.push({ pitch: third, start: 2, dur: 1.5, vel: vel * 0.95 });
+  if (!ctx.lastBar) out.push({ pitch: pickup, start: 3.5, dur: 0.5, vel: vel * 0.8 });
+  ctx.mem.lastPitch = third;
   return out;
 }
 
@@ -281,8 +300,7 @@ export function pedal(ctx: BarCtx): NoteEvent[] {
 export function strideBass(ctx: BarCtx): NoteEvent[] {
   const out: NoteEvent[] = [];
   const vel = velFor(ctx, 0.72);
-  const step = ctx.beats === 3 ? 3 : 2;
-  for (let b = 0; b < ctx.beats; b += step) {
+  for (const b of hitsAt(ctx, ctx.beats === 3 ? [0] : [0, 2])) {
     const c = chordAt(ctx, b);
     const r = bassNote(c, 36, 50, ctx.mem.lastPitch);
     const alt = b > 0 && ctx.chords.every((x) => x.beat !== b) ? fold(above(r, fifthPc(c), 52), 36, 52) : r;
