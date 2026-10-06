@@ -3,7 +3,7 @@ import { INSTRUMENTS } from "./instruments";
 import { makeRng } from "./rng";
 import { getStandard } from "./standards";
 import { STYLES } from "./styles";
-import { mod, pcOf, romanToChord, transposeChordSymbol, keyPrefersFlats } from "./theory";
+import { mod, parseChord, pcOf, romanToChord, transposeChordSymbol, keyPrefersFlats } from "./theory";
 import type { ChordChange, Frame, Member, Role, Section, TroopSettings } from "./types";
 
 // Level 0 of the hierarchy: the locked frame. Length, form, harmony and the
@@ -118,6 +118,17 @@ export function buildFrame(settings: TroopSettings, members: Member[]): Frame {
           .map((s) => transposeChordSymbol(s, semis, flats))
           .join(" "),
       );
+    }
+    // a performance ends home: a form's last bar is usually its turnaround back to the top,
+    // so it becomes the cadence into a final tonic bar (a blues ends Gm7 C7 | F, not on C7)
+    const tonicPc = pcOf(settings.key.tonic);
+    const last = barTexts[total - 1].split(/\s+/);
+    const homeRoot = (sym: string) => parseChord(sym).root === tonicPc;
+    if (!homeRoot(last[0])) {
+      if (total >= 2) barTexts[total - 2] = barTexts[total - 1];
+      barTexts[total - 1] = tonicChord(settings);
+    } else if (last.length > 1) {
+      barTexts[total - 1] = last[0];
     }
   } else {
     const prog = rng.pick(style.progressions[settings.key.mode]);

@@ -223,6 +223,22 @@ describe("standards form", () => {
       }
     }
   });
+  it("ends home on the tonic, with the form's turnaround as the cadence into it", () => {
+    const band = defaultMembers();
+    for (const std of STANDARDS) {
+      for (const bars of lengthOptions(std.id)) {
+        const s = { ...defaultSettings(band), standard: std.id, key: std.key, style: std.style, bars, meter: { beats: std.meter } };
+        const { chords } = generateLocal(s, band).score.frame;
+        const end = chords[chords.length - 1];
+        expect(end.length, `${std.id} ${bars}`).toBe(1);
+        expect(parseChord(end[0].symbol).root, `${std.id} ${bars} ends on ${end[0].symbol}`).toBe(mod(parsePitch(`${std.key.tonic}4`)!, 12));
+      }
+    }
+    // a blues turns around and lands: ... | Gm7 C7 | F6
+    const blues = STANDARDS.find((x) => x.id === "f-blues")!;
+    const { chords } = generateLocal({ ...defaultSettings(band), standard: blues.id, key: blues.key, style: blues.style, bars: 12, meter: { beats: 4 } }, band).score.frame;
+    expect(chords[10].map((c) => c.symbol).join(" ")).toBe("Gm7 C7");
+  });
 });
 
 describe("voicings", () => {
