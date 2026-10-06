@@ -55,7 +55,8 @@ export const GROOVES: Record<string, Record<number, Grid>> = {
     4: {
       base: "sh:gxgxgxgxgxgxgxgx bd:x...............",
       light: "hh:g.g.g.g.g.g.g.g.",
-      peak: "sh:gxgxgxgxgxgxgxgx rim:x...x...x...x... bd:x.......x.......",
+      // the pulse thickens, but never turns into a backbeat
+      peak: "sh:xxgxxxgxxxgxxxgx bd:x.......x.......",
     },
     3: { base: "sh:gxgxgxgxgxgx bd:x..........." },
   },
@@ -244,7 +245,28 @@ function pickFill(ctx: BarCtx, len: number): NoteEvent[] {
   return FILL_SHAPES[name](ctx, start, len, step).filter((n) => n.start >= start - 1e-6 && n.start < ctx.beats - 1e-6);
 }
 
+/**
+ * Ambient drums don't keep time, they breathe: a soft cymbal bloom where the harmony moves (or
+ * every other bar), a mallet roll swelling into it from the bar before, and now and then a
+ * low mallet tom. Never the same tick every bar.
+ */
+function ambientKit(ctx: BarCtx): NoteEvent[] {
+  const out: NoteEvent[] = [];
+  const changes = ctx.chords[0].chord.symbol !== ctx.prev.symbol;
+  const bloomHere = ctx.firstBar ? false : changes || ctx.barInSection % 2 === 0;
+  const bloomNext = !ctx.lastBar && (ctx.next.symbol !== ctx.chords[ctx.chords.length - 1].chord.symbol || ctx.barInSection % 2 === 1);
+  if (bloomHere) out.push({ pitch: DRUM.crash, start: 0, dur: ctx.beats, vel: 0.22 + ctx.energy * 0.12 });
+  if (bloomNext && ctx.rng.chance(ctx.texture === "sparse" ? 0.5 : 0.8)) {
+    // a mallet roll on the ride, swelling over the last beats into the bloom
+    const from = ctx.beats - (ctx.energy > 0.5 ? 2 : 1);
+    for (let t = from; t < ctx.beats - 1e-6; t += 0.25) out.push({ pitch: DRUM.ride, start: t, dur: 0.25, vel: 0.06 + ((t - from) / (ctx.beats - from)) * 0.24 });
+  }
+  if (ctx.rng.chance(0.25)) out.push({ pitch: DRUM.floorTom, start: ctx.rng.pick([1, 1.5, 2].filter((x) => x < ctx.beats)), dur: 1, vel: 0.2 });
+  return out;
+}
+
 export function groove(ctx: BarCtx): NoteEvent[] {
+  if (ctx.style.id === "ambient") return scale(ambientKit(ctx), ctx);
   const which = ctx.args.includes("light") || ctx.texture === "sparse" || ctx.texture === "breakdown"
     ? "light"
     : ctx.args.includes("peak") || ctx.texture === "peak"
@@ -254,11 +276,13 @@ export function groove(ctx: BarCtx): NoteEvent[] {
   if (ctx.style.id === "swing") notes.push(...swingComping(ctx));
   if ((ctx.style.id === "funk" || ctx.style.id === "bossa" || ctx.style.id === "pop") && ctx.bassLine?.length) notes = lockKickToBass(notes, ctx.bassLine, ctx.beats);
 
-  // section downbeat crash
-  if (ctx.sectionStart && !ctx.firstBar && ctx.style.id !== "baroque") {
+  // section downbeat crash (a minimalist pulse never breaks for one; a bossa drummer only
+  // touches a cymbal, softly)
+  if (ctx.sectionStart && !ctx.firstBar && ctx.style.id !== "baroque" && ctx.style.id !== "minimal") {
+    const soft = ctx.style.id === "bossa";
     notes = notes.filter((n) => !(n.start === 0 && (n.pitch === DRUM.ride || n.pitch === DRUM.hatClosed)));
-    notes.push({ pitch: DRUM.crash, start: 0, dur: 1, vel: ctx.style.id === "ambient" ? 0.45 : 0.85, art: "accent" });
-    notes.push({ pitch: DRUM.kick, start: 0, dur: 0.2, vel: 0.8 });
+    notes.push({ pitch: DRUM.crash, start: 0, dur: 1, vel: soft ? 0.4 : 0.85, art: soft ? undefined : "accent" });
+    if (!soft) notes.push({ pitch: DRUM.kick, start: 0, dur: 0.2, vel: 0.8 });
   }
 
   // phrase-end fills
@@ -273,10 +297,6 @@ export function groove(ctx: BarCtx): NoteEvent[] {
     notes.push(...pickFill(ctx, len));
   }
 
-  // ambient: cymbal swell (velocity ramps up across the bar)
-  if (ctx.style.id === "ambient") {
-    notes = notes.map((n) => (n.pitch === DRUM.ride ? { ...n, vel: 0.15 + (n.start / ctx.beats) * 0.35 } : n));
-  }
   return scale(notes, ctx);
 }
 

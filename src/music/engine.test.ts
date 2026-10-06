@@ -262,6 +262,29 @@ describe("style feel in the rhythm section", () => {
   });
 });
 
+describe("drums by style", () => {
+  const owlBars = (style: StyleId, seed: number) => {
+    const { score } = generateLocal({ ...defaultSettings(band), style, seed, bars: 32 }, band);
+    const beats = score.frame.meter.beats;
+    return { score, bar: (b: number) => score.parts.owl.filter((n) => Math.floor(n.start / beats + 1e-9) === b).map((n) => `${n.pitch}@${(n.start - b * beats).toFixed(2)}`).join(" ") };
+  };
+  it("ambient drums breathe instead of ticking the same pattern every bar", () => {
+    for (const seed of [1, 2, 3]) {
+      const { score, bar } = owlBars("ambient", seed);
+      const patterns = new Set(Array.from({ length: score.frame.bars - 1 }, (_, b) => bar(b)));
+      expect(patterns.size, `seed ${seed}`).toBeGreaterThan(4);
+    }
+  });
+  it("a minimalist pulse has no crash and no backbeat; bossa only touches a cymbal", () => {
+    for (const seed of [1, 2]) {
+      const min = owlBars("minimal", seed).score;
+      expect(min.parts.owl.some((n) => n.start < (min.frame.bars - 1) * 4 && (n.pitch === DRUM.crash || n.pitch === DRUM.stick || n.pitch === DRUM.snare))).toBe(false);
+      const bossa = owlBars("bossa", seed).score;
+      expect(bossa.parts.owl.filter((n) => n.pitch === DRUM.crash).every((n) => n.vel < 0.6)).toBe(true);
+    }
+  });
+});
+
 describe("loud bars", () => {
   it("keep their shape: a fortissimo out head stays under the ceiling, its accents still on top", async () => {
     const { softCeiling } = await import("./realize");
