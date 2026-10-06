@@ -26,6 +26,7 @@
 - **Proposal.** Dim both to a low level when the featured player has no note sounding, just played or about to play, with smoothing so choppy phrasing doesn't flicker.
 - **Risks / trade-offs.** Flicker; keep it smoothed.
 - **Files.** `src/art/AnimalSprite.tsx`, `src/components/Stage.tsx`
+- **Outcome.** Shipped in 64719ac (`isPhrasing`). Live check: the spotlight softened in 3 of 60 samples of a dense solo, i.e. only in real gaps.
 
 ### 4. Windups on vibes, bass and piano follow velocity
 - **Impact:** 🟡 med · **Effort:** S · **Status:** ❌ rejected
@@ -62,6 +63,7 @@
 - **Problem.** `improviser.ts` writes a bandmate's count-off `default` (e.g. `@walk`) over every accompanying bar. That erases the planner's shaped directives: the swing head in two, `@groove light`/`@groove peak`, shout `@riff`s, per-section melodic parts.
 - **Proposal.** Treat the default as a swap for the player's usual directive only. Replace bars whose directive is that usual one, and leave shaped bars alone.
 - **Risks / trade-offs.** The model's taste counts for slightly less.
+- **Outcome.** Confirmed with a pipeline test that fails on the old code (the swing head lost its two-feel to the bassist's "@walk"). Shipped in 1ad3758 (`usualDirective`, `applyDefault`).
 - **Files.** `src/ai/improviser.ts`, `src/ai/pipeline.test.ts`
 
 ### 9. A motif moved into range keeps its text in step
@@ -70,6 +72,7 @@
 - **Proposal.** Rebuild `text` from the notes after any change.
 - **Risks / trade-offs.** Respelling may differ from what the model wrote.
 - **Files.** `src/ai/merge.ts`, `src/ai/merge.test.ts`
+- **Outcome.** Shipped in 9dce71c (`motifText`), with a round-trip test through `motifFromText`.
 
 ### 10. A quality gate for the count-off motif
 - **Impact:** 🟡 med · **Effort:** M · **Status:** ❌ rejected
@@ -121,6 +124,7 @@
 - **Proposal.** `fifthOf`/`seventhOf` helpers from the chord's root and tones; slash bass only for the "R" degree.
 - **Risks / trade-offs.** Output changes for existing seeds.
 - **Files.** `src/music/patterns/bass.ts`, `src/music/engine.test.ts`
+- **Outcome.** Shipped in 401f065. Across five standards × 6 seeds, wrong fifths went from 90 of 900 to 0.
 
 ### 17. Ghost notes aren't quietened twice
 - **Impact:** 🟡 med · **Effort:** S · **Status:** ✅ accepted
@@ -128,6 +132,7 @@
 - **Proposal.** One ghost velocity rule in `feel.ts` with a floor, used by the engine.
 - **Risks / trade-offs.** The mix changes slightly.
 - **Files.** `src/audio/feel.ts`, `src/audio/engine.ts`, `src/audio/feel.test.ts`
+- **Outcome.** Shipped in c002d50, as a cap at 0.4 rather than a floor, so a fade's dying ride stays quiet.
 
 ### 18. Walking bass: turnarounds mid-register, enclosures, register by chorus
 - **Impact:** 🟡 med · **Effort:** M · **Status:** ❌ rejected
