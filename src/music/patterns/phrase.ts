@@ -43,10 +43,13 @@ interface PhraseStyle {
   guide: boolean;
   /** Fill notes come from the chord's pentatonic. */
   pentatonic?: boolean;
+  /** Units for a solo's climax: runs of the style's fastest notes (a fourth density tier). */
+  runs?: string[];
 }
 
 const PHRASE: Record<StyleId, PhraseStyle> = {
   swing: {
+    runs: ["8t 8t 8t", "8 8", "16 16 16 16", "8t 8t 8t"],
     units: [
       ["4", "r/8 8", "8 8", "4", "8 8"],
       ["8 8", "8 8", "8 8", "8 8", "4", "r/8 8", "8t 8t 8t"],
@@ -69,6 +72,7 @@ const PHRASE: Record<StyleId, PhraseStyle> = {
     guide: true,
   },
   bossa: {
+    runs: ["8 8", "8 8", "16 16 8"],
     units: [
       ["4", "2", "4", "r/8 8"],
       ["4", "8 8", "r/8 8", "4", "4. 8", "4"],
@@ -91,6 +95,7 @@ const PHRASE: Record<StyleId, PhraseStyle> = {
     guide: true,
   },
   funk: {
+    runs: ["16 16 16 16", "16 16 8", "16 16 16 16"],
     units: [
       ["8 r/8", "r/16 16 r/8", "16 16 r/8", "r/4"],
       ["16 16 r/8", "r/16 16 16 16", "8 r/8", "16 r/16 8", "r/8 16 16", "8 16 16"],
@@ -114,6 +119,7 @@ const PHRASE: Record<StyleId, PhraseStyle> = {
     pentatonic: true,
   },
   pop: {
+    runs: ["8 8", "16 16 8", "8 8"],
     // a singable line: short cells, mostly steps, the same rhythm answered (a hook)
     units: [
       ["4", "2", "4", "r/8 8"],
@@ -138,6 +144,7 @@ const PHRASE: Record<StyleId, PhraseStyle> = {
     pentatonic: true,
   },
   neworleans: {
+    runs: ["8t 8t 8t", "8 8", "8t 8t 8t"],
     units: [
       ["4", "4", "8 8", "r/8 8"],
       ["8 8", "4", "8 8", "r/8 8", "4t 4t 4t"],
@@ -275,7 +282,8 @@ function tierOf(ctx: BarCtx, opts: LineOpts): number {
   // stop-time and breakdowns clear the floor for the soloist: fill it
   if ((ctx.texture === "stoptime" || ctx.texture === "breakdown") && ctx.role === "solo") d *= 1.3;
   if (ctx.texture === "peak") d *= 1.2;
-  return d < 0.62 ? 0 : d < 1.12 ? 1 : 2;
+  // a climax (a dense bar late in a solo, at a peak) gets the fourth tier: runs
+  return d < 0.62 ? 0 : d < 1.12 ? 1 : d < 1.75 ? 2 : 3;
 }
 
 /** Plan the rhythm of one phrase starting at `t0`, finishing (landing included) by `end`. */
@@ -286,7 +294,7 @@ function phraseRhythm(ctx: BarCtx, ps: PhraseStyle, t0: number, end: number, tie
   const grid = ps.units[2].some((u) => u.includes("16")) ? 0.25 : 0.5;
   const q = (x: number) => Math.max(grid, Math.round(x / grid) * grid);
   // a busier player lands shorter and breathes quicker; a sparse one lets it ring
-  const ease = tier === 2 ? 0.45 : tier === 0 ? 1.3 : 1;
+  const ease = tier === 3 ? 0.3 : tier === 2 ? 0.45 : tier === 0 ? 1.3 : 1;
   const breathAfter = (landEnd: number) => {
     const b = q((ps.breath[0] + rng.next() * (ps.breath[1] - ps.breath[0])) * ease) - (ps.breath[0] === 0 && rng.chance(0.5) ? grid : 0);
     // the breath belongs to this run of bars: the next instruction starts fresh
@@ -316,7 +324,7 @@ function phraseRhythm(ctx: BarCtx, ps: PhraseStyle, t0: number, end: number, tie
   let landAt: number;
   if (opts.landAt !== undefined) landAt = opts.landAt;
   else {
-    const scale = tier === 0 ? 0.7 : tier === 2 ? 1.3 : 1;
+    const scale = tier === 0 ? 0.7 : tier === 3 ? 1.6 : tier === 2 ? 1.3 : 1;
     const want = Math.min(breathMax - 1, rng.int(Math.round(ps.length[0] * scale), Math.round(ps.length[1] * scale)));
     const cands: number[] = [];
     for (let b = Math.ceil(t0 + 1); b <= end - Math.min(ps.landing[0], 0.5) + EPS; b++) if (isStrong(ctx, b)) cands.push(b);
@@ -342,8 +350,9 @@ function phraseRhythm(ctx: BarCtx, ps: PhraseStyle, t0: number, end: number, tie
     } else if (i === 0 && rng.chance(ps.pickup)) {
       cell = parseCell(ps.pickupUnit);
     } else {
-      const lvl = Math.max(0, Math.min(2, tier - (i === 0 ? 1 : 0)));
-      const options = (opts.units ?? ps.units[lvl]).map(parseCell).filter((c) => c.reduce((s, x) => s + x.dur, 0) <= room + EPS);
+      const lvl = Math.max(0, Math.min(3, tier - (i === 0 ? 1 : 0)));
+      const units = lvl === 3 ? (ps.runs ?? ps.units[2]) : ps.units[lvl];
+      const options = (opts.units ?? units).map(parseCell).filter((c) => c.reduce((s, x) => s + x.dur, 0) <= room + EPS);
       cell = options.length ? rng.pick(options) : [{ dur: Math.min(room, grid), rest: false }];
     }
     for (const c of cell) {
@@ -363,7 +372,7 @@ function phraseRhythm(ctx: BarCtx, ps: PhraseStyle, t0: number, end: number, tie
       }
     }
   }
-  const landDur = opts.landDur ?? Math.min(end - landOnset, q((ps.landing[0] + rng.next() * (ps.landing[1] - ps.landing[0])) * (tier === 2 ? 0.7 : 1)) + (anticipate ? 0.5 : 0));
+  const landDur = opts.landDur ?? Math.min(end - landOnset, q((ps.landing[0] + rng.next() * (ps.landing[1] - ps.landing[0])) * (tier >= 2 ? 0.7 : 1)) + (anticipate ? 0.5 : 0));
   slots.push({ start: landOnset, dur: Math.max(0.25, landDur) });
   const landEnd = landOnset + Math.max(0.25, landDur);
   return { slots, until: opts.landDur !== undefined ? landEnd : breathAfter(landEnd), usedEcho: false, anticipate };
@@ -458,7 +467,7 @@ export function planPhrase(
     if (start < lo + 5 && (shape === "fall" || shape === "valley")) shape = rng.chance(0.5) ? "rise" : "arch";
     if (featured && endsSection && until >= end - 1) shape = "fall";
   }
-  let span = (tier === 2 ? ps.span[1] : ps.span[0]) * (opts.spanScale ?? 1) * (featured ? 1 + 0.4 * Math.sin(Math.PI * Math.min(1, arc * 1.3)) : 0.8);
+  let span = (tier >= 2 ? ps.span[1] : ps.span[0]) * (opts.spanScale ?? 1) * (featured ? 1 + 0.4 * Math.sin(Math.PI * Math.min(1, arc * 1.3)) : 0.8);
   // a short phrase can't cover an octave without leaping around: the contour scales with its notes
   span = Math.min(span, 2 + slots.length * 2.2);
   const [smin, smax] = shapeRange(shape);

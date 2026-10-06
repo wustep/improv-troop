@@ -262,6 +262,29 @@ describe("style feel in the rhythm section", () => {
   });
 });
 
+describe("solos build", () => {
+  it("a solo's dense bars (its climax) carry clearly more notes than its plain ones", () => {
+    const five: Member[] = [...defaultMembers(), { id: "cat", animal: "cat", name: "Mochi", instrument: "sax" }];
+    for (const style of ["swing", "bossa", "pop"] as StyleId[]) {
+      const dense: number[] = [];
+      const plain: number[] = [];
+      for (let seed = 1; seed <= 8; seed++) {
+        const { score } = generateLocal({ ...defaultSettings(five), style, seed, bars: 32, soloists: ["cat"] }, five);
+        for (const sec of score.frame.sections.filter((x) => x.kind === "solo")) {
+          for (let b = sec.start; b < sec.start + sec.length; b++) {
+            const d = score.plan[b].directives?.cat ?? "";
+            const n = score.parts.cat.filter((x) => Math.floor(x.start / 4 + 1e-9) === b).length;
+            if (d === "@line dense") dense.push(n);
+            else if (d === "@line") plain.push(n);
+          }
+        }
+      }
+      const avg = (x: number[]) => x.reduce((a, v) => a + v, 0) / x.length;
+      expect(avg(dense) / avg(plain), style).toBeGreaterThan(1.52);
+    }
+  });
+});
+
 describe("slow harmony", () => {
   it("minimalist and ambient pieces let each chord ring for two bars, and float home without a hard V7", () => {
     for (const style of ["minimal", "ambient"] as StyleId[]) {
