@@ -214,6 +214,16 @@ export function topLine(notes: NoteEvent[]): NoteEvent[] {
   return out.sort((a, b) => a.start - b.start);
 }
 
+/**
+ * Velocities above 0.8 ease toward 1 instead of clipping at it, so a fortissimo out head keeps
+ * its accents and phrase shape rather than every note landing on the ceiling.
+ */
+export function softCeiling(v: number): number {
+  if (!Number.isFinite(v)) return 0.7;
+  if (v <= 0.8) return v;
+  return 0.8 + 0.2 * Math.tanh((v - 0.8) / 0.2);
+}
+
 /** Monophonic cleanup, range folding, and breathing for one part. */
 export function finishPart(member: Member, notes: NoteEvent[]): NoteEvent[] {
   const inst = INSTRUMENTS[member.instrument];
@@ -225,7 +235,7 @@ export function finishPart(member: Member, notes: NoteEvent[]): NoteEvent[] {
         while (p < inst.range[0]) p += 12;
         while (p > inst.range[1]) p -= 12;
       }
-      return { ...n, pitch: p, dur: Math.max(0.05, n.dur), vel: Math.max(0.05, Math.min(1, n.vel)) };
+      return { ...n, pitch: p, dur: Math.max(0.05, n.dur), vel: Math.max(0.05, softCeiling(n.vel)) };
     })
     .sort((a, b) => a.start - b.start || b.pitch - a.pitch);
 

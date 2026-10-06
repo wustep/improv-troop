@@ -262,6 +262,20 @@ describe("style feel in the rhythm section", () => {
   });
 });
 
+describe("loud bars", () => {
+  it("keep their shape: a fortissimo out head stays under the ceiling, its accents still on top", async () => {
+    const { softCeiling } = await import("./realize");
+    expect(softCeiling(0.6)).toBe(0.6);
+    expect(softCeiling(1.1)).toBeLessThan(1);
+    expect(softCeiling(1.1)).toBeGreaterThan(softCeiling(0.95));
+    const { score } = generateLocal({ ...defaultSettings(band), style: "swing", seed: 2, bars: 32 }, band);
+    const out = score.frame.sections.find((s) => s.kind === "out")!;
+    const lead = score.parts[score.frame.leaderId].filter((n) => n.start >= out.start * 4 && n.start < (out.start + out.length - 1) * 4);
+    expect(lead.every((n) => n.vel < 0.995)).toBe(true);
+    expect(new Set(lead.map((n) => n.vel.toFixed(2))).size).toBeGreaterThan(3);
+  });
+});
+
 describe("two chord players", () => {
   it("complement each other instead of doubling, in every style", () => {
     for (const second of ["guitar", "vibes"] as const) {
@@ -935,7 +949,9 @@ describe("drum fills", () => {
       { pitch: DRUM.kick, start: 3, dur: 0.1, vel: 0.7 },
       { pitch: DRUM.kick, start: 3, dur: 0.1, vel: 0.5 },
     ]);
-    expect(out.filter((n) => n.pitch === DRUM.snare)).toMatchObject([{ vel: 0.9, art: "accent" }]);
+    const snare = out.filter((n) => n.pitch === DRUM.snare);
+    expect(snare).toMatchObject([{ art: "accent" }]);
+    expect(snare[0].vel).toBeGreaterThan(0.85);
     expect(out.filter((n) => n.pitch === DRUM.kick)).toMatchObject([{ vel: 0.7 }]);
   });
 
