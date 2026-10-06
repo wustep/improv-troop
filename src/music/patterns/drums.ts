@@ -7,7 +7,7 @@ import type { NoteEvent } from "../types";
 
 type Grid = { base: string; light?: string; peak?: string };
 
-const GROOVES: Record<string, Record<number, Grid>> = {
+export const GROOVES: Record<string, Record<number, Grid>> = {
   swing: {
     4: {
       base: "rd:x...x.x.x...x.x. ph:....x.......x... bd:g...g...g...g...",
@@ -37,7 +37,7 @@ const GROOVES: Record<string, Record<number, Grid>> = {
   },
   neworleans: {
     4: {
-      base: "sd:X.gx.gx.g.X.x.g ph:....x.......x... bd:x.....x.x.......",
+      base: "sd:X.gx.gx.g.X.x.g. ph:....x.......x... bd:x.....x.x.......",
       light: "sd:x...g.x...g.x.g. bd:x.......x.......",
       peak: "sd:X.gxXgx.gxX.xXgx ph:....x.......x... bd:x.....x.x.....x. cr:x...............",
     },
@@ -70,7 +70,7 @@ const GROOVES: Record<string, Record<number, Grid>> = {
   },
 };
 
-const FUNK_KICKS = ["bd:x.....x.x.x.....", "bd:x..x..x...x...x.", "bd:x.x....x..x.x..."].map((s) => s.slice(0, 19));
+export const FUNK_KICKS = ["bd:x.....x.x.x.....", "bd:x..x..x...x...x.", "bd:x.x....x..x.x..."].map((s) => s.slice(0, 19));
 
 function gridFor(ctx: BarCtx, which: "base" | "light" | "peak"): string {
   const style = GROOVES[ctx.style.id] ?? GROOVES.swing;

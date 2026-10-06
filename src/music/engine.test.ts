@@ -498,6 +498,19 @@ describe("arrangement textures", () => {
   });
 });
 
+describe("groove grids", () => {
+  it("every built-in lane fills its bar in 16ths", async () => {
+    const { GROOVES, FUNK_KICKS } = await import("./patterns/drums");
+    const off: string[] = [];
+    for (const [style, meters] of Object.entries(GROOVES))
+      for (const [beats, grid] of Object.entries(meters))
+        for (const [which, text] of Object.entries(grid))
+          for (const lane of (text as string).split(/\s+/)) if (lane.split(":")[1].length !== +beats * 4) off.push(`${style} ${beats}/4 ${which} ${lane}`);
+    for (const lane of FUNK_KICKS) if (lane.split(":")[1].length !== 16) off.push(`funk kick ${lane}`);
+    expect(off).toEqual([]);
+  });
+});
+
 describe("drum fills", () => {
   // the last beat of every bar the drummer plays, as a fingerprint of what's in it
   const lastBeats = (style: StyleId, seeds: number[]) =>
