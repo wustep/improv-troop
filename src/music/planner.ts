@@ -1,6 +1,6 @@
 import { ENDINGS } from "./ending";
 import { sectionAt } from "./form";
-import { INSTRUMENTS } from "./instruments";
+import { ANIMALS, INSTRUMENTS, SOLO_OPENERS } from "./instruments";
 import type { Rng } from "./rng";
 import { getStandard } from "./standards";
 import { CELLO_TEXTURE, STYLES, type StyleDef } from "./styles";
@@ -9,7 +9,11 @@ import type { BarPlan, Dynamic, Frame, Member, Motif, Role, Section, Texture } f
 // Level 1 (local): fill roles, textures, dynamics and per-bar directives inside
 // the locked frame. The model planners produce the same shape.
 
-const SOLO_OPENERS = ["@motif invert", "@motif up 2", "@motif rhythm", "@motif displace 0.5", "@motif frag 3", "@motif retro", "@motif aug"];
+/** How this player opens up the motif: any way at all, tilted toward the ones they like. */
+function openerFor(m: Member, rng: Rng): string {
+  const likes = ANIMALS[m.animal]?.taste.openers ?? {};
+  return rng.weighted([...SOLO_OPENERS], SOLO_OPENERS.map((o) => 1 + (likes[o] ?? 0)));
+}
 
 const LOUDNESS: Dynamic[] = ["pp", "p", "mp", "mf", "f", "ff"];
 
@@ -198,12 +202,15 @@ export function planLocal(frame: Frame, members: Member[], motif: Motif, rng: Rn
         // taking over from another soloist: usually pick up what they just played and answer it
         const prevSec = s.start > 0 ? sectionAt(frame, s.start - 1) : null;
         const handoff = s.kind === "solo" && inSec === 0 && prevSec?.kind === "solo" && !prevSec.featured?.includes(m.id);
-        if (turnStart) directives[m.id] = handoff && brng.chance(0.7) ? "@answer" : brng.pick(SOLO_OPENERS);
+        const taste = ANIMALS[m.animal]?.taste;
+        if (turnStart) directives[m.id] = handoff && brng.chance(taste?.answers ?? 0.7) ? "@answer" : openerFor(m, brng);
         else if (s.kind === "trade") directives[m.id] = "@line";
         else if (last) directives[m.id] = isLastSolo ? "@line dense" : "@line long";
         else if (inSec === s.length - 2 && s.length >= 4) directives[m.id] = "@line dense";
         else if (inSec === 1) directives[m.id] = "@line sparse";
         else if (inSec === Math.floor(s.length / 2) && s.length >= 6) directives[m.id] = "@motif frag 3 up 4";
+        // in character: some players leave more space, some can't help a flurry
+        else if (taste?.density && inSec % 3 === 2) directives[m.id] = taste.density < 0 ? "@line sparse" : "@line run";
         else directives[m.id] = "@line";
         continue;
       }

@@ -68,18 +68,46 @@ export interface AnimalDef {
   defaultInstrument: InstrumentId;
   /** Personality used for improviser-mode prompts. */
   persona: string;
+  /** The same personality for the local band, which has no prompt to read. */
+  taste: Taste;
 }
 
+/**
+ * How an animal solos when the local engine plans it. Mild on purpose: the style still decides
+ * the language, the taste only tilts which ideas a player reaches for.
+ */
+export interface Taste {
+  /** Extra weight (on top of 1 each) for the ways a solo can open up the motif. */
+  openers: Partial<Record<SoloOpener, number>>;
+  /** Space or flurries in the middle of a solo: every third plain bar goes sparse (-1) or runs (+1). */
+  density: -1 | 0 | 1;
+  /** Chance to pick up the last soloist's closing phrase instead of starting fresh. */
+  answers: number;
+}
+
+export const SOLO_OPENERS = [
+  "@motif invert",
+  "@motif up 2",
+  "@motif rhythm",
+  "@motif displace 0.5",
+  "@motif frag 3",
+  "@motif retro",
+  "@motif aug",
+  "@motif seq -1",
+  "@motif ornament",
+] as const;
+export type SoloOpener = (typeof SOLO_OPENERS)[number];
+
 export const ANIMALS: Record<AnimalId, AnimalDef> = {
-  bear: { id: "bear", name: "Bruno", species: "bear", ink: "#6b3f22", fill: "#c98d5a", defaultInstrument: "piano", persona: "warm, patient, thinks in voicings; likes to set the table for others" },
-  frog: { id: "frog", name: "Lily", species: "frog", ink: "#2f6b2a", fill: "#8cc56a", defaultInstrument: "bass", persona: "steady, dry humour, locks to the drummer, rarely shows off" },
-  owl: { id: "owl", name: "Hoot", species: "owl", ink: "#3d3486", fill: "#7d71c9", defaultInstrument: "drums", persona: "watchful timekeeper, cues the band with fills, loves a good hit" },
-  fox: { id: "fox", name: "Rusty", species: "fox", ink: "#b0461b", fill: "#f0954f", defaultInstrument: "trumpet", persona: "bold, bright ideas, plays the motif loud and proud" },
-  cat: { id: "cat", name: "Mochi", species: "cat", ink: "#4a5568", fill: "#a9b4c2", defaultInstrument: "sax", persona: "cool, bluesy, leaves space, answers phrases sideways" },
-  bunny: { id: "bunny", name: "Clover", species: "rabbit", ink: "#b0546f", fill: "#f4c4cf", defaultInstrument: "violin", persona: "lyrical, quick, sings long lines, loves a sequence" },
-  elephant: { id: "elephant", name: "Tuck", species: "elephant", ink: "#4f6b7d", fill: "#a8c3d2", defaultInstrument: "trombone", persona: "big-hearted, plays riffs and pads, a good listener" },
-  penguin: { id: "penguin", name: "Pip", species: "penguin", ink: "#22303c", fill: "#54697a", defaultInstrument: "vibes", persona: "precise, sparkly, plays shimmering patterns, a bit nerdy" },
-  sheep: { id: "sheep", name: "Olive", species: "sheep", ink: "#5a4636", fill: "#d9c7a3", defaultInstrument: "cello", persona: "gentle and lyrical, lives in the tenor register; sings long bowed lines and sneaky countermelodies, and plucks a warm pizzicato when the groove needs it" },
+  bear: { id: "bear", name: "Bruno", species: "bear", ink: "#6b3f22", fill: "#c98d5a", defaultInstrument: "piano", persona: "warm, patient, thinks in voicings; likes to set the table for others", taste: { openers: { "@motif rhythm": 2, "@motif up 2": 1, "@motif aug": 2 }, density: 0, answers: 0.8 } },
+  frog: { id: "frog", name: "Lily", species: "frog", ink: "#2f6b2a", fill: "#8cc56a", defaultInstrument: "bass", persona: "steady, dry humour, locks to the drummer, rarely shows off", taste: { openers: { "@motif frag 3": 3, "@motif rhythm": 2 }, density: -1, answers: 0.6 } },
+  owl: { id: "owl", name: "Hoot", species: "owl", ink: "#3d3486", fill: "#7d71c9", defaultInstrument: "drums", persona: "watchful timekeeper, cues the band with fills, loves a good hit", taste: { openers: { "@motif rhythm": 3, "@motif displace 0.5": 2, "@motif frag 3": 1 }, density: 0, answers: 0.5 } },
+  fox: { id: "fox", name: "Rusty", species: "fox", ink: "#b0461b", fill: "#f0954f", defaultInstrument: "trumpet", persona: "bold, bright ideas, plays the motif loud and proud", taste: { openers: { "@motif up 2": 3, "@motif ornament": 2, "@motif rhythm": 1 }, density: 1, answers: 0.5 } },
+  cat: { id: "cat", name: "Mochi", species: "cat", ink: "#4a5568", fill: "#a9b4c2", defaultInstrument: "sax", persona: "cool, bluesy, leaves space, answers phrases sideways", taste: { openers: { "@motif displace 0.5": 3, "@motif frag 3": 2, "@motif retro": 1 }, density: -1, answers: 0.9 } },
+  bunny: { id: "bunny", name: "Clover", species: "rabbit", ink: "#b0546f", fill: "#f4c4cf", defaultInstrument: "violin", persona: "lyrical, quick, sings long lines, loves a sequence", taste: { openers: { "@motif seq -1": 4, "@motif up 2": 1, "@motif ornament": 1 }, density: 1, answers: 0.6 } },
+  elephant: { id: "elephant", name: "Tuck", species: "elephant", ink: "#4f6b7d", fill: "#a8c3d2", defaultInstrument: "trombone", persona: "big-hearted, plays riffs and pads, a good listener", taste: { openers: { "@motif rhythm": 2, "@motif frag 3": 2, "@motif aug": 1 }, density: 0, answers: 0.9 } },
+  penguin: { id: "penguin", name: "Pip", species: "penguin", ink: "#22303c", fill: "#54697a", defaultInstrument: "vibes", persona: "precise, sparkly, plays shimmering patterns, a bit nerdy", taste: { openers: { "@motif retro": 2, "@motif invert": 2, "@motif ornament": 2 }, density: 1, answers: 0.5 } },
+  sheep: { id: "sheep", name: "Olive", species: "sheep", ink: "#5a4636", fill: "#d9c7a3", defaultInstrument: "cello", persona: "gentle and lyrical, lives in the tenor register; sings long bowed lines and sneaky countermelodies, and plucks a warm pizzicato when the groove needs it", taste: { openers: { "@motif aug": 3, "@motif seq -1": 1, "@motif invert": 1 }, density: -1, answers: 0.7 } },
 };
 
 export const ANIMAL_LIST: AnimalId[] = ["bear", "frog", "owl", "fox", "cat", "bunny", "elephant", "penguin", "sheep"];

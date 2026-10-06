@@ -17,6 +17,7 @@ const OPENERS: Record<string, string[]> = {
   retro: ["I'm playing the tune backwards.", "Backwards, from the last note in."],
   aug: ["I'll stretch it out, nice and slow.", "Same tune, twice as long."],
   seq: ["I'll walk the tune down step by step.", "Same tune, a step lower each time."],
+  ornament: ["I'll dress the tune up a little.", "Same tune, with some curls on it."],
 };
 
 const SOLO_PLAIN = ["My chorus.", "Let me take this one.", "My turn."];
