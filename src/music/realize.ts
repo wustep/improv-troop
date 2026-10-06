@@ -104,6 +104,7 @@ export function makeBarCtx(
   featured: NoteEvent[],
   featuredPrev: NoteEvent[],
   played: Map<number, NoteEvent[]> = new Map(),
+  bassLine: NoteEvent[] | null = null,
 ): BarCtx {
   const { frame, plan, members, motif, seed } = o;
   const style = STYLES[frame.style];
@@ -159,6 +160,7 @@ export function makeBarCtx(
     peerIndex,
     peerCount: Math.max(1, peers.length),
     playedIn: (b: number) => played.get(b) ?? null,
+    bassLine,
   };
 }
 
@@ -247,7 +249,7 @@ export function realize(o: RealizeOptions): RealizeResult {
       ...topLine(featuredByBar.get(bar - 2) ?? []).map((n) => ({ ...n, start: n.start - 2 * beats })),
       ...topLine(featuredByBar.get(bar - 1) ?? []).map((n) => ({ ...n, start: n.start - beats })),
     ];
-    const ctx = makeBarCtx(o, m, bar, memOf(m.id), featured, prev, featuredByBar);
+    const ctx = makeBarCtx(o, m, bar, memOf(m.id), featured, prev, featuredByBar, bassByBar.get(bar) ?? null);
     let res;
     try {
       res = realizeDirective(ctx, directive);
@@ -262,8 +264,10 @@ export function realize(o: RealizeOptions): RealizeResult {
     }
     const mix = ROLE_MIX[ctx.role] ?? 1;
     for (const n of rel) parts[m.id].push({ ...n, start: n.start + bar * beats, dur: Math.min(n.dur, beats * 2), vel: n.vel * mix });
+    if (ctx.role === "bass") bassByBar.set(bar, rel);
     return rel;
   };
+  const bassByBar = new Map<number, NoteEvent[]>();
 
   // pass 1: featured players (others listen to them)
   const featuredHere = new Map<number, string>();
@@ -280,10 +284,10 @@ export function realize(o: RealizeOptions): RealizeResult {
       }
     }
   }
-  // pass 2: everyone else
+  // pass 2: everyone else, the bass first so the drummer can lock to it
   for (const bar of bars) {
     const bp = plan[bar];
-    for (const m of members) {
+    for (const m of [...members].sort((a, b) => Number(bp?.roles[b.id] === "bass") - Number(bp?.roles[a.id] === "bass"))) {
       if (isFeaturedRole(bp?.roles[m.id])) continue;
       if (o.filter && !o.filter(m.id, bar)) continue;
       run(m, bar);

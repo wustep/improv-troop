@@ -116,6 +116,23 @@ function swingComping(ctx: BarCtx): NoteEvent[] {
   return out;
 }
 
+/**
+ * Funk and bossa drummers play the bass line with the kick: the kick lands where the bass
+ * does (its real notes, not ghosts), always on the one, never on top of the backbeat.
+ */
+function lockKickToBass(notes: NoteEvent[], bass: NoteEvent[], beats: number): NoteEvent[] {
+  // (a bossa cross-stick is the clave, not a backbeat: the kick can sit under it)
+  const backbeats = notes.filter((n) => n.pitch === DRUM.snare && n.art !== "ghost").map((n) => n.start);
+  const vel = notes.find((n) => n.pitch === DRUM.kick)?.vel ?? 0.8;
+  const onBackbeat = (t: number) => backbeats.some((b) => Math.abs(b - t) < 0.05);
+  const kicks = [...new Set(bass.filter((b) => b.art !== "ghost" && b.vel > 0.3 && b.start < beats - 1e-6 && !onBackbeat(b.start)).map((b) => +b.start.toFixed(3)))]
+    // the strongest positions first: on the beat, then on the 8th, then 16ths; at most five
+    .sort((a, b) => (a % 1 === 0 ? 0 : a % 0.5 === 0 ? 1 : 2) - (b % 1 === 0 ? 0 : b % 0.5 === 0 ? 1 : 2) || a - b)
+    .slice(0, 5);
+  if (!kicks.includes(0)) kicks.push(0);
+  return [...notes.filter((n) => n.pitch !== DRUM.kick), ...kicks.map((t) => ({ pitch: DRUM.kick, start: t, dur: 0.2, vel: t === 0 ? vel : vel * 0.9 }))];
+}
+
 function fill(ctx: BarCtx, beats: number): NoteEvent[] {
   const out: NoteEvent[] = [];
   const start = ctx.beats - beats;
@@ -141,6 +158,7 @@ export function groove(ctx: BarCtx): NoteEvent[] {
       : "base";
   let notes = parseDrumGrid(gridFor(ctx, which), ctx.beats).notes;
   if (ctx.style.id === "swing") notes.push(...swingComping(ctx));
+  if ((ctx.style.id === "funk" || ctx.style.id === "bossa") && ctx.bassLine?.length) notes = lockKickToBass(notes, ctx.bassLine, ctx.beats);
 
   // section downbeat crash
   if (ctx.sectionStart && !ctx.firstBar && ctx.style.id !== "baroque") {

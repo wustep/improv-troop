@@ -89,6 +89,8 @@ export interface BarCtx {
   peerCount: number;
   /** What the featured player played in an earlier bar (relative to that bar), for replaying the head. */
   playedIn(bar: number): NoteEvent[] | null;
+  /** The bass line in this bar (relative to bar start), once it's written: the drummer locks to it. */
+  bassLine: NoteEvent[] | null;
 }
 
 /** Context harmony at a beat inside the bar. */
