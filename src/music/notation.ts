@@ -247,8 +247,16 @@ export function parseDrumGrid(text: string, beats: number): ParseResult {
       errors.push(`unknown drum "${name}"`);
       continue;
     }
-    const steps = m[2].replace(/\|/g, "");
+    let steps = m[2].replace(/\|/g, "");
     if (!steps.length) continue;
+    // A lane a step or two off the 16th grid is a miscount, not a new subdivision: spread
+    // as written it would drift against the band all bar. Pad or trim it to 16ths.
+    const sixteenths = Math.round(beats * 4);
+    const subdivision = [1, 2, 3, 4, 6, 8].some((k) => steps.length === Math.round(beats * k));
+    if (!subdivision && Math.abs(steps.length - sixteenths) <= 2) {
+      errors.push(`${name}: ${steps.length} steps, read as 16ths`);
+      steps = steps.length < sixteenths ? steps.padEnd(sixteenths, ".") : steps.slice(0, sixteenths);
+    }
     const stepBeats = beats / steps.length;
     for (let i = 0; i < steps.length; i++) {
       const ch = steps[i];

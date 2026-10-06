@@ -87,6 +87,24 @@ describe("drums ↔ grid round trip", () => {
   }
 });
 
+describe("miscounted drum lanes", () => {
+  const starts = (text: string, beats = 4) => parseDrumGrid(text, beats).notes.map((n) => n.start);
+  const backbeat = "....x.......x...";
+  it("a lane a step short or long stays on the 16th grid", () => {
+    expect(starts(`sd:${backbeat}.`)).toEqual([1, 3]);
+    expect(starts(`sd:${backbeat.slice(0, 15)}`)).toEqual([1, 3]);
+    expect(starts(`sd:${backbeat}..`)).toEqual([1, 3]);
+    expect(parseDrumGrid(`sd:${backbeat.slice(0, 15)}`, 4).errors).toEqual(["sd: 15 steps, read as 16ths"]);
+    expect(parseDrumGrid(`sd:${backbeat}`, 4).errors).toEqual([]);
+  });
+  it("a deliberate subdivision is kept as written", () => {
+    expect(starts("bd:x.x.")).toEqual([0, 2]); // quarters
+    expect(starts("hh:xxxxxxxx")).toEqual([0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5]); // 8ths
+    expect(starts(`rd:${"x..".repeat(4)}`)).toEqual([0, 1, 2, 3]); // 8th triplets
+    expect(starts("sd:..x...x....", 3)).toEqual([0.5, 1.5]); // 11 steps in 3/4: read as 12
+  });
+});
+
 describe("notation edges", () => {
   it("reads every note value it writes", () => {
     for (const [spec, beats] of [
