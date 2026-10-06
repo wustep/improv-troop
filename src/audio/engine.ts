@@ -56,7 +56,16 @@ interface InstEntry {
   /** Resolves when ready or definitively failed. Never rejects. */
   done: Promise<void>;
   notes: Set<number>;
+  /** When every pack failed (ms), so a later prepare can try again. */
+  failedAt?: number;
+  /** Last time a member was assigned this entry (a counter), for keeping a few spares. */
+  used: number;
 }
+
+/** Unused instruments kept loaded so switching back is instant; older ones are disposed. */
+const SPARE_ENTRIES = 3;
+/** A failed instrument is retried on a later prepare, but not more often than this. */
+const RETRY_FAILED_MS = 5000;
 
 interface Track {
   memberId: string;
@@ -168,6 +177,7 @@ export class TroopAudio {
   private entries = new Map<string, InstEntry>();
   private memberEntry = new Map<string, string>();
   private memberPan = new Map<string, number>();
+  private useCounter = 0;
   private currentMembers: Member[] = [];
   private loadListeners = new Set<(s: LoadState[]) => void>();
   private endListeners = new Set<() => void>();
@@ -302,20 +312,49 @@ export class TroopAudio {
       }
       waits.push(entry.done);
     }
+    this.sweepEntries();
     this.emitLoad();
     await Promise.all(waits);
     this.emitLoad();
+  }
+
+  /**
+   * Dispose instruments nobody on stage uses any more (keeping a few recent spares), so swapping
+   * instruments, piano packs or bands doesn't pile up decoded samples. Only while nothing is
+   * sounding: smplr's dispose() also clears the shared scheduler's queue.
+   */
+  private sweepEntries() {
+    if (this.state === "playing") return;
+    const inUse = new Set<string>();
+    for (const key of this.memberEntry.values()) inUse.add(key).add(`${key}|pizz`);
+    const idle = [...this.entries.values()]
+      .filter((e) => !inUse.has(e.key) && (e.ready || e.failed))
+      .sort((a, b) => b.used - a.used);
+    for (const e of idle.slice(SPARE_ENTRIES)) {
+      try {
+        e.inst?.dispose();
+      } catch {
+        /* already gone */
+      }
+      this.entries.delete(e.key);
+    }
   }
 
   /** Map members → instrument-instance keys. Duplicate instruments get their own instance (own pan). */
   private assignEntries(members: Member[]) {
     const seen = new Map<InstrumentId, number>();
     const n = members.length;
+    // only the members being prepared keep an entry (a score already playing holds its own keys)
+    this.memberEntry.clear();
+    this.memberPan.clear();
+    const used = ++this.useCounter;
     members.forEach((m, i) => {
       const k = seen.get(m.instrument) ?? 0;
       seen.set(m.instrument, k + 1);
       const pack = m.instrument === "piano" ? this.pianoPack : "default";
-      this.memberEntry.set(m.id, `${m.instrument}:${pack}#${k}`);
+      const key = `${m.instrument}:${pack}#${k}`;
+      this.memberEntry.set(m.id, key);
+      for (const e of [this.entries.get(key), this.entries.get(`${key}|pizz`)]) if (e) e.used = used;
       const fn = INSTRUMENTS[m.instrument]?.fn;
       const spread = n > 1 ? -1 + (2 * i) / (n - 1) : 0;
       const width = fn === "bass" || fn === "rhythm" ? PAN_WIDTH * 0.35 : PAN_WIDTH;
@@ -325,7 +364,12 @@ export class TroopAudio {
 
   private getEntry(key: string, instrument: InstrumentId, hint?: number[], chain?: PackSpec[]): InstEntry {
     const existing = this.entries.get(key);
-    if (existing) return existing;
+    // one network blip shouldn't silence a player until reload: try a failed instrument again
+    const retry = existing?.failed && Date.now() - (existing.failedAt ?? 0) > RETRY_FAILED_MS;
+    if (existing && !retry) {
+      existing.used = this.useCounter;
+      return existing;
+    }
     const entry: InstEntry = {
       key,
       instrument,
@@ -341,6 +385,7 @@ export class TroopAudio {
       pack: "",
       done: Promise.resolve(),
       notes: new Set(hint ?? []),
+      used: this.useCounter,
     };
     this.entries.set(key, entry);
     entry.done = this.loadEntry(entry, hint);
@@ -416,6 +461,7 @@ export class TroopAudio {
       }
     }
     entry.failed = true;
+    entry.failedAt = Date.now();
     entry.ready = false;
     entry.error = errors.join("; ") || "no pack available";
     this.emitLoad();
@@ -705,7 +751,8 @@ export class TroopAudio {
     if (muted) this.muted.add(memberId);
     else this.muted.delete(memberId);
     if (muted) {
-      const key = this.memberEntry.get(memberId);
+      // the chart that's playing may not be the band last prepared
+      const key = this.tracks.find((t) => t.memberId === memberId)?.entryKey || this.memberEntry.get(memberId);
       const e = key ? this.entries.get(key) : undefined;
       try {
         e?.inst?.stop();
