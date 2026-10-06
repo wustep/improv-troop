@@ -12,6 +12,7 @@
 - **Proposal.** Restore the 16th step. Add a test that every built-in groove lane is `beats*4` steps long.
 - **Risks / trade-offs.** None. The second-line feel will now sit on the grid.
 - **Files.** `src/music/patterns/drums.ts`, `src/music/engine.test.ts`
+- **Outcome.** Shipped in 2095174. The new lane-length test fails on the old grid (it flags the New Orleans base snare).
 
 ### 2. The baroque prelude doubles the bassist
 - **Impact:** 🟡 med · **Effort:** S · **Status:** ✅ accepted
@@ -19,6 +20,7 @@
 - **Proposal.** With a bassist, drop the held bass and keep the tenor inner voice and the figure above it.
 - **Risks / trade-offs.** The texture gets slightly thinner. That's intended.
 - **Files.** `src/music/patterns/comp.ts`, `src/music/engine.test.ts`
+- **Outcome.** Shipped in 7162001. The test (no piano note under MIDI 50 in prelude bars with a bassist) fails on the old code. Without a bassist the prelude still holds the bass.
 
 ### 3. Funk comp locks to the section; grip voicings
 - **Impact:** 🟡 med · **Effort:** M · **Status:** ❌ rejected (repeat-adjacent; lower leverage this loop)
@@ -35,6 +37,7 @@
 - **Proposal.** Pass the bar's role to `validateBarText` in both featured loops. For a featured role, accept only the featured vocabulary (@motif @line @answer @solo @trade @head @fill, notes or a drum grid) plus @end. Otherwise log a repair and keep the plan. `enforceSlots` also replaces "@end"/"@hits" in a featured slot that isn't the last bar.
 - **Risks / trade-offs.** A deliberately sparse soloist who writes @comp loses that choice, but @rest and written notes still let them breathe.
 - **Files.** `src/ai/merge.ts`, `src/ai/improviser.ts`, `src/ai/composer.ts`, `src/ai/merge.test.ts`
+- **Outcome.** Shipped in d1b493a (`FEATURED_VOCAB`; featured loops pass the slot role). `enforceSlots` now also catches @end/@hits mid-solo.
 
 ### 5. Model drum grids a step short or long snap to the 16th grid
 - **Impact:** 🔴 high · **Effort:** S · **Status:** ✅ accepted
@@ -42,6 +45,7 @@
 - **Proposal.** Musical subdivisions (beats × 2, 3, 4, 6, 8) are kept as written. A lane within two steps of beats×4 is padded or trimmed to beats×4, reporting "sd: 15 steps, read as 16ths" as a parse error, which surfaces as a repair.
 - **Risks / trade-offs.** Trimming may drop a final hit on a 17-step lane. That's better than the whole lane being off the grid.
 - **Files.** `src/music/notation.ts`, `src/music/notation.test.ts`
+- **Outcome.** Shipped in e7d2fa7. Quarter, 8th, triplet and 32nd lanes are kept as written.
 
 ### 6. A featured drummer gets the drum-grid grammar, not note grammar
 - **Impact:** 🟡 med · **Effort:** S · **Status:** ❌ rejected
@@ -72,6 +76,7 @@
 - **Proposal.** Exempt buttons only when they show keyboard focus (`:focus-visible`). For a mouse-focused button, prevent the click and toggle the transport.
 - **Risks / trade-offs.** Browsers without `:focus-visible` keep today's behavior.
 - **Files.** `src/components/Transport.tsx`
+- **Outcome.** `:focus-visible` didn't work: Chrome marks a focused button focus-visible as soon as any key is pressed. Shipped in b06de4d by tracking the button the pointer last pressed (Tab clears it). Live check in Chrome: click Hoot's tag, then Space plays the band with Hoot still muted. Tab to Rusty's tag, then Space mutes Rusty.
 
 ### 10. The count-in shows the beats being counted
 - **Impact:** 🟡 med · **Effort:** S · **Status:** ❌ rejected
