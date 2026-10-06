@@ -56,6 +56,8 @@ export function motifForFrame(frame: Frame, members: Member[], rng = makeRng(1))
 }
 
 export function newScoreId() {
+  // A take's identity, not its music: two takes from the same seed are still two takes.
+  // eslint-disable-next-line no-restricted-properties
   return `take-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
 }
 
@@ -79,6 +81,7 @@ export function generateLocal(settings: TroopSettings, members: Member[]): Local
   const score: Score = {
     id: newScoreId(),
     title: `${style.name}${frame.standard ? ` · ${getStandard(frame.standard)?.name}` : ""}`,
+    // eslint-disable-next-line no-restricted-properties -- when it was made, not what it plays
     createdAt: Date.now(),
     settings,
     members,
