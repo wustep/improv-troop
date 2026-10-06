@@ -10,7 +10,14 @@ import { fakeModel } from "./mock";
 function installFakeFetch(latencyMs = 0) {
   const fn = vi.fn(async (_url: string, init?: RequestInit) => {
     const body = JSON.parse(String(init?.body ?? "{}"));
-    if (latencyMs) await new Promise((r) => setTimeout(r, latencyMs));
+    if (latencyMs)
+      await new Promise((resolve, reject) => {
+        const t = setTimeout(resolve, latencyMs);
+        init?.signal?.addEventListener("abort", () => {
+          clearTimeout(t);
+          reject(new DOMException("Aborted", "AbortError"));
+        });
+      });
     const text = fakeModel(body);
     return new Response(JSON.stringify({ text, usage: { inputTokens: 100, outputTokens: 50 }, serverMs: 5 }), { status: 200 });
   });
@@ -109,6 +116,10 @@ describe("improviser pipeline", () => {
     expect(ctl.readyBars()).toBeGreaterThanOrEqual(12);
     const score = await ctl.promise;
     expect(score.notes.some((n) => n.includes("Autopilot"))).toBe(true);
+    // the calls still thinking about the bars autopilot played were called off, not left to finish
+    const calls = useDebug.getState().calls.filter((c) => c.runId === "t-auto" && /^bars ([5-9]|1[0-2])-/.test(c.label));
+    expect(calls.some((c) => c.error === "cancelled")).toBe(true);
+    expect(calls.some((c) => c.repairs.some((r) => r.includes("already vamped")))).toBe(false);
     for (const m of band) {
       const starts = score.parts[m.id].map((n) => n.start);
       // no duplicated phrases: onsets strictly non-decreasing and unique per pitch

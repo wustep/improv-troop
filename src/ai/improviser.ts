@@ -69,6 +69,16 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
   const phrases: number[][] = [];
   for (let s = 0; s < frame.bars; s += P) phrases.push(Array.from({ length: Math.min(P, frame.bars - s) }, (_, i) => s + i));
   const stage: Stage[] = phrases.map(() => "none");
+  // each phrase's model calls can be called off once autopilot has played it, freeing their
+  // slots (and the user's key) for the phrases still to come
+  const phraseCtl = phrases.map(() => new AbortController());
+  const phraseSignal = (pi: number) => AbortSignal.any([signal, phraseCtl[pi].signal]);
+  /** A call cut short: rethrow if the whole run was cancelled, otherwise the phrase went on without it. */
+  const calledOff = (e: unknown) => {
+    if ((e as Error).name !== "AbortError") return false;
+    if (signal.aborted) throw e;
+    return true;
+  };
   const autopilot = new Set<number>();
   const parts: Record<string, NoteEvent[]> = Object.fromEntries(members.map((m) => [m.id, []]));
   const memories = new Map<string, PlayerMemory>(members.map((m) => [m.id, newMemory()]));
@@ -148,6 +158,7 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
       realizeStage(pi, "rest");
       stage[pi] = "done";
       autopilot.add(pi);
+      phraseCtl[pi].abort();
       filled = true;
       dbg.step(runId, `phrase ${pi + 1} (bars ${phrases[pi][0] + 1}-${phrases[pi].at(-1)! + 1}) went on autopilot — the band vamped while thinking`);
     }
@@ -329,7 +340,7 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
           const { text, call } = await callLLM({
             runId,
             apiKey,
-            signal,
+            signal: phraseSignal(pi),
             label: `bars ${myBars[0] + 1}-${myBars.at(-1)! + 1}`,
             agent: id,
             model: settings.playerModel,
@@ -389,7 +400,7 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
           const line = asString(o.say, 160)?.trim();
           if (line) say(chatMsg(id, line, "jam", bars[0]));
         } catch (e) {
-          if ((e as Error).name === "AbortError") throw e;
+          if (calledOff(e)) return; // autopilot already played these bars
           dbg.step(runId, `${m.name} blanked on bars ${bars[0] + 1}+ (${(e as Error).message}); engine improvised`);
         }
       });
@@ -424,7 +435,7 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
             const { text, call } = await callLLM({
               runId,
               apiKey,
-              signal,
+              signal: phraseSignal(pi),
               label: `bars ${myBars[0] + 1}-${myBars.at(-1)! + 1}`,
               agent: id,
               model: settings.playerModel,
@@ -479,7 +490,7 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
             const line = asString(o.say, 160)?.trim();
             if (line) say(chatMsg(id, line, "jam", bars[Math.min(1, bars.length - 1)]));
           } catch (e) {
-            if ((e as Error).name === "AbortError") throw e;
+            if (calledOff(e)) return; // autopilot already played these bars
             dbg.step(runId, `${m.name} kept their default on bars ${bars[0] + 1}+ (${(e as Error).message})`);
           }
         }),
