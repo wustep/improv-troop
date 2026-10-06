@@ -24,6 +24,8 @@ export interface PlayerMemory {
   lastShape: string | null;
   /** Density tier of the last phrase (an answer matches the call's density). */
   lastTier: number | null;
+  /** The drummer's last fill shape, so the next one says something else. */
+  lastFill: string | null;
 }
 
 export function newMemory(): PlayerMemory {
@@ -40,6 +42,7 @@ export function newMemory(): PlayerMemory {
     lastRhythm: null,
     lastShape: null,
     lastTier: null,
+    lastFill: null,
   };
 }
 

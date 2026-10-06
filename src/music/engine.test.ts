@@ -481,3 +481,32 @@ describe("arrangement textures", () => {
     expect(fk.parts[piano.id].some((n) => Math.floor(n.start / 4 + 1e-9) === bd)).toBe(false);
   });
 });
+
+describe("drum fills", () => {
+  // the last beat of every bar the drummer plays, as a fingerprint of what's in it
+  const lastBeats = (style: StyleId, seeds: number[]) =>
+    seeds.flatMap((seed) => {
+      const { score } = generateLocal({ ...defaultSettings(band), style, bars: 32, seed, soloists: ["cat"] }, band);
+      const beats = score.frame.meter.beats;
+      return score.plan.map((_, b) =>
+        score.parts.owl.filter((n) => n.start >= b * beats + beats - 1 - 1e-6 && n.start < (b + 1) * beats - 1e-6).map((n) => ({ ...n, start: +(n.start - b * beats).toFixed(3) })),
+      );
+    });
+  const has = (bars: ReturnType<typeof lastBeats>, pitch: number, start: number, art?: string) =>
+    bars.some((ns) => ns.some((n) => n.pitch === pitch && Math.abs(n.start - start) < 0.01 && (!art || n.art === art)));
+  const seeds = Array.from({ length: 12 }, (_, i) => i + 1);
+
+  it("swing drummers say more than one thing at the end of a phrase", () => {
+    const bars = lastBeats("swing", seeds);
+    // the set-up: a kick on the last triplet partial, and the drag's snare there
+    expect(has(bars, DRUM.kick, 3 + 2 / 3, "accent")).toBe(true);
+    expect(bars.some((ns) => ns.filter((n) => n.pitch === DRUM.snare && n.art === "ghost").length >= 1 && has([ns], DRUM.floorTom, 3 + 2 / 3))).toBe(true);
+    // and the old tom run is still in the vocabulary
+    expect(has(bars, DRUM.midTom, 3 + 1 / 3)).toBe(true);
+  });
+  it("funk opens the hat or cracks the snare; New Orleans press-rolls", () => {
+    expect(has(lastBeats("funk", seeds), DRUM.hatOpen, 3.5, "accent")).toBe(true);
+    const no = lastBeats("neworleans", seeds);
+    expect(no.some((ns) => ns.filter((n) => n.pitch === DRUM.snare && n.art === "ghost").length >= 3 && has([ns], DRUM.snare, 3.5, "accent"))).toBe(true);
+  });
+});

@@ -134,6 +134,7 @@ function lockKickToBass(notes: NoteEvent[], bass: NoteEvent[], beats: number): N
   return [...notes.filter((n) => n.pitch !== DRUM.kick), ...kicks.map((t) => ({ pitch: DRUM.kick, start: t, dur: 0.2, vel: t === 0 ? vel : vel * 0.9 }))];
 }
 
+/** The classic run: snare into the toms, high to low, getting louder. */
 function fill(ctx: BarCtx, beats: number): NoteEvent[] {
   const out: NoteEvent[] = [];
   const start = ctx.beats - beats;
@@ -149,6 +150,89 @@ function fill(ctx: BarCtx, beats: number): NoteEvent[] {
   }
   out.push({ pitch: DRUM.kick, start, dur: 0.2, vel: 0.7 });
   return out;
+}
+
+type FillShape = (ctx: BarCtx, start: number, len: number, step: number) => NoteEvent[];
+
+const hit = (pitch: number, start: number, vel: number, art?: NoteEvent["art"]): NoteEvent => ({ pitch, start, dur: 0.2, vel, art });
+
+/**
+ * The other things a drummer says at the end of a phrase. Each fills the last `len` beats;
+ * `step` is the subdivision (triplets in swing and New Orleans, 16ths otherwise).
+ */
+const FILL_SHAPES: Record<string, FillShape> = {
+  run: (ctx, _start, len) => fill(ctx, len),
+  // set-up: snare on the last beat, kick on its last partial, kicking the band into the one
+  setup: (_ctx, start, len, step) => {
+    const last = start + len - 1;
+    return [hit(DRUM.snare, last, 0.7, "accent"), hit(DRUM.snare, last + step, 0.35, "ghost"), hit(DRUM.kick, last + 1 - step, 0.85, "accent")];
+  },
+  // drag: soft grace strokes leading into an accented snare on the last partial
+  drag: (_ctx, start, len, step) => {
+    const last = start + len - 1;
+    const out = [hit(DRUM.kick, last, 0.6)];
+    for (let t = last + step; t < last + 1 - step - 1e-6; t += step) out.push(hit(DRUM.snare, t, 0.3, "ghost"));
+    out.push(hit(DRUM.snare, last + 1 - step, 0.9, "accent"), hit(DRUM.floorTom, last + 1 - step, 0.6));
+    return out;
+  },
+  // the toms talk back: floor tom and kick on the beat, snare and high tom answering between
+  toms: (_ctx, start, len, step) => {
+    const out: NoteEvent[] = [];
+    for (let b = start; b < start + len - 1e-6; b++) {
+      out.push(hit(DRUM.floorTom, b, 0.75, "accent"), hit(DRUM.kick, b, 0.7));
+      out.push(hit(DRUM.snare, b + 1 - step, 0.6));
+      if (step < 0.3) out.push(hit(DRUM.highTom, b + 0.5, 0.55));
+    }
+    out.push(hit(DRUM.snare, start + len - step, 0.9, "accent"));
+    return out;
+  },
+  // New Orleans press roll: a buzz of soft strokes swelling into an accent on the "and"
+  press: (_ctx, start, len) => {
+    const out: NoteEvent[] = [];
+    const end = start + len - 0.5;
+    for (let t = start; t < end - 1e-6; t += 1 / 6) out.push(hit(DRUM.snare, t, 0.25 + ((t - start) / len) * 0.35, "ghost"));
+    out.push(hit(DRUM.snare, end, 0.9, "accent"), hit(DRUM.kick, end, 0.75));
+    return out;
+  },
+  // funk: 16th ghosts on the snare, a backbeat-loud crack on the last 8th
+  ghosts: (_ctx, start, len) => {
+    const out: NoteEvent[] = [];
+    for (let t = start; t < start + len - 0.5 - 1e-6; t += 0.25) out.push(hit(DRUM.snare, t, t % 1 === 0 ? 0.55 : 0.28, t % 1 === 0 ? undefined : "ghost"));
+    out.push(hit(DRUM.snare, start + len - 0.5, 0.95, "accent"), hit(DRUM.highTom, start + len - 0.25, 0.7), hit(DRUM.kick, start + len - 0.25, 0.7));
+    return out;
+  },
+  // funk: hats stay on, one opens up on the last "and" and the snare snaps under it
+  hats: (_ctx, start, len) => {
+    const out: NoteEvent[] = [];
+    for (let t = start; t < start + len - 1e-6; t += 0.25) {
+      const open = Math.abs(t - (start + len - 0.5)) < 1e-6;
+      out.push(hit(open ? DRUM.hatOpen : DRUM.hatClosed, t, open ? 0.8 : 0.45, open ? "accent" : undefined));
+    }
+    out.push(hit(DRUM.snare, start + len - 1, 0.85, "accent"), hit(DRUM.kick, start + len - 0.75, 0.7));
+    return out;
+  },
+  // bossa: a quiet cross-stick pickup into the next bar
+  rim: (_ctx, start, len) => [hit(DRUM.stick, start + len - 1, 0.55), hit(DRUM.stick, start + len - 0.5, 0.7, "accent")],
+};
+
+/** Small fills (a beat) at phrase ends; big ones (two beats) into a new section. */
+const FILL_VOCAB: Record<string, { small: string[]; big: string[] }> = {
+  swing: { small: ["run", "setup", "drag"], big: ["run", "toms"] },
+  neworleans: { small: ["run", "press", "drag"], big: ["press", "toms", "run"] },
+  funk: { small: ["ghosts", "hats", "run"], big: ["ghosts", "toms", "run"] },
+  bossa: { small: ["rim", "run"], big: ["rim", "run"] },
+};
+
+/** Pick a fill shape for this style and length, never the same one twice in a row. */
+function pickFill(ctx: BarCtx, len: number): NoteEvent[] {
+  const vocab = FILL_VOCAB[ctx.style.id] ?? { small: ["run", "setup"], big: ["run", "toms"] };
+  const pool = len >= 2 ? vocab.big : vocab.small;
+  const fresh = pool.filter((n) => n !== ctx.mem.lastFill);
+  const name = ctx.rng.pick(fresh.length ? fresh : pool);
+  ctx.mem.lastFill = name;
+  const step = ctx.style.id === "swing" || ctx.style.id === "neworleans" ? 1 / 3 : 0.25;
+  const start = ctx.beats - len;
+  return FILL_SHAPES[name](ctx, start, len, step).filter((n) => n.start >= start - 1e-6 && n.start < ctx.beats - 1e-6);
 }
 
 export function groove(ctx: BarCtx): NoteEvent[] {
@@ -177,7 +261,7 @@ export function groove(ctx: BarCtx): NoteEvent[] {
     const len = ctx.sectionEnd && ctx.energy > 0.6 ? 2 : 1;
     const cut = ctx.beats - len;
     notes = notes.filter((n) => n.start < cut || n.pitch === DRUM.hatPedal);
-    notes.push(...fill(ctx, len));
+    notes.push(...pickFill(ctx, len));
   }
 
   // ambient: cymbal swell (velocity ramps up across the bar)
