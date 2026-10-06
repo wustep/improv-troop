@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { STYLES, swingAt } from "@/music/styles";
-import { applyFeel, beatAt, beatToSeconds, feelSpan, hash01, jitter, pocketSec, removeFeel, secAt, secondsToBeats, spbAt } from "./feel";
+import { applyFeel, beatAt, beatToSeconds, feelSpan, ghostVel, GHOST_MAX, hash01, jitter, pocketSec, removeFeel, secAt, secondsToBeats, spbAt } from "./feel";
 
 describe("beatToSeconds", () => {
   it("converts at tempo", () => {
@@ -134,5 +134,19 @@ describe("tempo map", () => {
       prev = t;
     }
     expect(beatAt({ spb: 0.5 }, 3)).toBeCloseTo(6);
+  });
+});
+
+describe("ghostVel", () => {
+  it("keeps the soft level the part already chose", () => {
+    // a drum-grid ghost (0.3) and a funk bass ghost stay where they were written, not a third of it
+    expect(ghostVel(0.3)).toBe(0.3);
+    expect(ghostVel(0.2)).toBe(0.2);
+    // a fade's dying ride stays dying
+    expect(ghostVel(0.03)).toBe(0.03);
+  });
+  it("never lets a ghost come out loud", () => {
+    expect(ghostVel(0.9)).toBe(GHOST_MAX);
+    expect(GHOST_MAX).toBeLessThan(0.5);
   });
 });

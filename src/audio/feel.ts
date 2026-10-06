@@ -92,6 +92,16 @@ export function jitter(amount: number, ...parts: Array<string | number>): number
   return (hash01(...parts) * 2 - 1) * amount;
 }
 
+/**
+ * How loud a ghost note plays. Whatever wrote it already set it soft (grids at 0.3, written
+ * notes at 0.4 of the bar's level, funk bass ghosts, a fade's dying ride), so this only keeps
+ * a ghost from coming out loud; quietening it again would leave it barely there.
+ */
+export const GHOST_MAX = 0.4;
+export function ghostVel(vel: number): number {
+  return Math.min(vel, GHOST_MAX);
+}
+
 // ─── Pocket: where each player sits against the beat ────────────────────────
 // A band doesn't play dead on the grid. In swing the bass sits a hair on top of the beat and
 // a soloist lays back; in funk the backbeat comes a touch late; baroque and minimalism are

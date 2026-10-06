@@ -1,7 +1,7 @@
 import { DrumMachine, Reverb, Scheduler, type Smplr } from "smplr";
 import type { InstrumentId, Member, NoteEvent, Score } from "@/music/types";
 import { INSTRUMENTS } from "@/music/instruments";
-import { applyFeel, beatAt, beatToSeconds, jitter, pocketOf, secAt, spbAt, type TempoMap } from "./feel";
+import { applyFeel, beatAt, beatToSeconds, ghostVel, jitter, pocketOf, secAt, spbAt, type TempoMap } from "./feel";
 import {
   DECAYING,
   DEFAULT_VOLUME,
@@ -940,7 +940,7 @@ export class TroopAudio {
 
     let vel = clamp(Number.isFinite(note.vel) ? note.vel : 0.7, 0, 1);
     if (note.art === "accent") vel = Math.min(1, vel * 1.12 + 0.08);
-    if (note.art === "ghost") vel *= 0.45;
+    if (note.art === "ghost") vel = ghostVel(vel);
     vel *= 1 + jitter(0.06, id, note.start, note.pitch, "v");
     vel = clamp(vel, 0.02, 1);
 
