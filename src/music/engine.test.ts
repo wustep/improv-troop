@@ -498,6 +498,24 @@ describe("arrangement textures", () => {
   });
 });
 
+describe("baroque prelude", () => {
+  // the piano's notes in the bars it plays @prelude, below the tenor
+  const lowPreludeNotes = (members: Member[]) =>
+    [1, 2, 3, 4].flatMap((seed) => {
+      const { score } = generateLocal({ ...defaultSettings(members), style: "baroque", seed }, members);
+      const beats = score.frame.meter.beats;
+      const bars = score.plan.filter((b) => b.directives?.bear === "@prelude").map((b) => b.index);
+      return (score.parts.bear ?? []).filter((n) => bars.includes(Math.floor(n.start / beats + 1e-6)) && n.pitch < 50);
+    });
+  it("leaves the bass line to the bassist", () => {
+    expect(band.some((m) => m.instrument === "bass")).toBe(true);
+    expect(lowPreludeNotes(band)).toEqual([]);
+  });
+  it("holds the bass itself when nobody else does", () => {
+    expect(lowPreludeNotes(band.filter((m) => m.instrument !== "bass")).length).toBeGreaterThan(0);
+  });
+});
+
 describe("groove grids", () => {
   it("every built-in lane fills its bar in 16ths", async () => {
     const { GROOVES, FUNK_KICKS } = await import("./patterns/drums");

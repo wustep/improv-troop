@@ -337,7 +337,10 @@ export function arp(ctx: BarCtx): NoteEvent[] {
   return out;
 }
 
-/** Baroque prelude figuration: held bass + inner voice, 16th arpeggio above (per half bar). */
+/**
+ * Baroque prelude figuration: held bass + inner voice, 16th arpeggio above (per half bar).
+ * With a bassist in the band the left hand leaves the bass to them and keeps the tenor.
+ */
 export function prelude(ctx: BarCtx): NoteEvent[] {
   const out: NoteEvent[] = [];
   const vel = velFor(ctx, 0.55);
@@ -345,7 +348,7 @@ export function prelude(ctx: BarCtx): NoteEvent[] {
   for (let g = 0; g < ctx.beats; g += groupLen) {
     const hm = harmAt(ctx, g);
     const c = hm.chord;
-    const bass = ctx.inst.id === "piano" ? bassNote(c, 43, 55, ctx.mem.lastPitch) : null;
+    const bass = ctx.inst.id === "piano" && !ctx.hasBass ? bassNote(c, 43, 55, ctx.mem.lastPitch) : null;
     const v = voiceChord(c, "triad", 60, 79, ctx.mem.lastVoicing, hm);
     ctx.mem.lastVoicing = v;
     if (bass !== null) {
@@ -353,7 +356,8 @@ export function prelude(ctx: BarCtx): NoteEvent[] {
       ctx.mem.lastPitch = bass;
     }
     const inner = nearestPc(mod(c.root + (c.tones[1] ?? 4), 12), 57);
-    if (ctx.inst.id === "piano") out.push({ pitch: inner, start: g + 0.25, dur: groupLen - 0.25, vel: vel * 0.8 });
+    const innerAt = bass === null ? 0 : 0.25;
+    if (ctx.inst.id === "piano") out.push({ pitch: inner, start: g + innerAt, dur: groupLen - innerAt, vel: vel * 0.8 });
     const fig = [v[0], v[1], v[2], v[0] + 12, v[2], v[1]];
     const start = ctx.inst.id === "piano" ? 0.5 : 0;
     for (let i = 0; start + i * 0.25 < groupLen - 1e-6; i++) {
