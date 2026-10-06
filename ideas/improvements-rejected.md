@@ -31,3 +31,19 @@
 - **Run `next build` in CI** — Add a build step with `.next/cache` cached _(rejected 2026-10-06)_
 - **Store persistence tests** — Stubbed-localStorage tests covering corrupt JSON and unknown values _(rejected 2026-10-06)_
 - **A pure track/cursor module for the audio scheduler, with tests** — Extract them into `src/audio/tracks.ts` and test them _(rejected 2026-10-06)_
+- **A tempo change during live improv is undone by the next phrase** — Overlay `settings.tempo` onto each incoming score in `onScore`/`finish` _(rejected 2026-10-06)_
+- **setTempo follow-ups: loading, count-in, pocket and pizz mute** — Accept the tempo while loading, rebuild the clicks during count-in, rebuild pockets, and stop the pizz entry on mute _(rejected 2026-10-06)_
+- **The UI is stuck on "playing" if the engine fails to start** — Emit ended or an error on a failed start, and add a play-token check in `store.play` _(rejected 2026-10-06)_
+- **A tempo drag rebuilds the sheet model, the VexFlow measurements and FrameComputer** — Memoize on content plus tempo separately, and pass tempo to FrameComputer as a parameter _(rejected 2026-10-06)_
+- **The settings panel stops matching the stage when replaying a take** — A "Listening to take #3…" line in the panel with "use these settings" and "back to my sketch" _(rejected 2026-10-06)_
+- **Group the ControlPanel: who's playing, what they play, how it goes** — Three quiet group headings with `.rule-top`, "set by {tune}" on Key, and a fixed hint _(rejected 2026-10-06)_
+- **One vocabulary for "sketch" and "take"** — "Live sketch" vs "take #n" or "jammed take", plus a line in the intro note _(rejected 2026-10-06)_
+- **Band talk follows the playhead** — Highlight lines for the current bar, auto-scroll only when already near the bottom, make bar dividers seek, and hide the glyphs from screen readers _(rejected 2026-10-06)_
+- **Intro and tag ending as arrangement choices** — `intro` and `ending` settings, with chips in the panel _(rejected 2026-10-06)_
+- **Cheer the soloist and the band responds** — A clap during solos raises the remaining bars to build/peak and re-realizes from the next bar _(rejected 2026-10-06)_
+- **Today's Jam: a daily tune and band everyone shares** — A UTC-date-seeded standard, style, band and seed, arriving non-destructively like a share link _(rejected 2026-10-06)_
+- **A Composer brief: tell the director what the tune is about** — An optional one-line brief fed to the director, count-off and critic prompts, and used in take labels _(rejected 2026-10-06)_
+- **Unit tests for motif, harmony and planner helpers** — Table-driven invariant tests _(rejected 2026-10-06)_
+- **A `pnpm take` CLI, and engine.test.ts split by module** — `scripts/take.ts` prints the frame, plan, issues and parts. Move the notation/theory blocks out _(rejected 2026-10-06)_
+- **Direct tests for ensemble()** — Hand-built inputs, one test per fix type, and an additive `kind` on `EnsembleFix` _(rejected 2026-10-06)_
+- **A typed `window.__jamming` dev handle** — `JammingDevHandle` plus a global `Window` declaration and an install helper _(rejected 2026-10-06)_
