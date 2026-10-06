@@ -62,16 +62,25 @@ export function harmonyBlock(frame: Frame, plan: BarPlan[], bars: number[]): str
   const flats = keyPrefersFlats(frame.key);
   const names = (pcs: number[]) => pcs.map((pc) => pcName(pc, flats)).join(" ");
   const beats = frame.meter.beats;
-  const lines = bars.map((b) => {
+  const spansIn = (b: number) => {
     const spans = h.spans.filter((s) => s.start >= b * beats - 1e-6 && s.start < (b + 1) * beats - 1e-6);
-    const at = spans.length ? spans : [h.at(b * beats)];
-    return `  bar ${b + 1}: ${at
-      .map((s) => {
-        const pass = s.scale.filter((pc) => !s.stable.includes(pc));
-        return `${s.chord.symbol} = chord ${names(s.tones)}${s.colors.length ? `, colors ${names(s.colors)}` : ""}${pass.length ? `; ${names(pass)} only in passing` : ""}`;
-      })
-      .join(" | ")}`;
-  });
+    return spans.length ? spans : [h.at(b * beats)];
+  };
+  const lines = bars.map(
+    (b) =>
+      `  bar ${b + 1}: ${spansIn(b)
+        .map((s) => {
+          const pass = s.scale.filter((pc) => !s.stable.includes(pc));
+          return `${s.chord.symbol} = chord ${names(s.tones)}${s.colors.length ? `, colors ${names(s.colors)}` : ""}${pass.length ? `; ${names(pass)} only in passing` : ""}`;
+        })
+        .join(" | ")}`,
+  );
+  // where the phrase is headed: the chord just after the last bar written, to land the ending on
+  const next = bars.length ? Math.max(...bars) + 1 : -1;
+  if (next > 0 && next < frame.bars && !bars.includes(next)) {
+    const s = spansIn(next)[0];
+    lines.push(`  then bar ${next + 1}: ${s.chord.symbol} (aim the phrase's last note at ${names(s.tones)}, or step into one on the downbeat)`);
+  }
   return `HARMONY (land and hold on chord tones or colors; scale notes between them; never hold an "only in passing" note):\n${lines.join("\n")}`;
 }
 
