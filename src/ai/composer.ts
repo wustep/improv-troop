@@ -4,7 +4,7 @@ import { motifForFrame, newScoreId } from "@/music/local";
 import { planLocal } from "@/music/planner";
 import { isFeaturedRole, realize } from "@/music/realize";
 import { makeRng } from "@/music/rng";
-import { STYLES } from "@/music/styles";
+import { STYLES, swingAt } from "@/music/styles";
 import type { BarPlan, ChatMessage, CriticScore, Member, Motif, Score, TroopSettings } from "@/music/types";
 import { useDebug } from "@/state/debug";
 import { textureFeatures } from "./features";
@@ -321,7 +321,7 @@ export async function runComposer(settings: TroopSettings, members: Member[], ho
     frame,
     plan,
     motif: chosen.motif,
-    swing: style.swing,
+    swing: swingAt(style, frame.tempo),
     parts: res.parts,
     chat,
     engine: "ai",

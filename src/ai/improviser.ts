@@ -5,7 +5,7 @@ import { motifForFrame, newScoreId } from "@/music/local";
 import { planLocal } from "@/music/planner";
 import { isFeaturedRole, realize } from "@/music/realize";
 import { makeRng } from "@/music/rng";
-import { STYLES } from "@/music/styles";
+import { STYLES, swingAt } from "@/music/styles";
 import type { BarPlan, ChatMessage, Frame, Member, Motif, NoteEvent, Score, TroopSettings } from "@/music/types";
 import { useDebug } from "@/state/debug";
 import { chatMsg, type PipelineHooks } from "./composer";
@@ -99,7 +99,7 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
     frame,
     plan,
     motif,
-    swing: style.swing,
+    swing: swingAt(style, frame.tempo),
     parts: Object.fromEntries(Object.entries(parts).map(([k, v]) => [k, [...v].sort((a, b) => a.start - b.start)])),
     chat: [...chat],
     engine: "ai",

@@ -29,6 +29,7 @@ export interface StyleDef {
   blurb: string;
   /** Concrete description of each function's texture — what prompts quote. */
   texture: string;
+  /** Swing ratio at 120 bpm (0.5 = straight); see swingAt for other tempos. */
   swing: number;
   tempo: { min: number; max: number; default: number };
   key: { tonic: string; mode: "major" | "minor" };
@@ -58,7 +59,7 @@ export const STYLES: Record<StyleId, StyleDef> = {
     blurb: "Walking bass, ride cymbal, bebop lines",
     texture:
       "Swung 8ths. Bass walks quarter notes, chord tones on 1 and chromatic approach notes into each new chord. Drums: ride cymbal spang-a-lang (1, 2, &2, 3, 4, &4), hi-hat foot on 2 and 4, feathered kick, sparse snare comping. Piano/guitar/vibes comp short syncopated rootless voicings (Charleston: 1 and &2, anticipations into the next chord). Melody/solo lines are 8th-note bebop phrases that start off the beat, land on 3rds and 7ths on strong beats, use enclosures, and breathe between phrases.",
-    swing: 0.64,
+    swing: 0.66,
     tempo: { min: 90, max: 240, default: 160 },
     key: { tonic: "Bb", mode: "major" },
     progressions: {
@@ -418,3 +419,13 @@ export const CELLO_TEXTURE: Record<StyleId, Partial<Record<SectionKind, string>>
   baroque: { intro: "@rest", head: "@canon", solo: "@counter", trade: "@canon", vamp: "@counter", out: "@canon", tag: "@end" },
   ambient: { intro: "@pad", head: "@pad", solo: "@pad", trade: "@pad", vamp: "@pad", out: "@pad", tag: "@end" },
 };
+
+/**
+ * The style's swing ratio at a tempo. Swing flattens as it speeds up: near a triplet at a
+ * ballad, close to even 8ths at a burning tempo. `swing` in the style is its ratio at 120 bpm.
+ */
+export function swingAt(style: StyleDef, tempo: number): number {
+  if (style.swing <= 0.5) return style.swing;
+  const r = style.swing - (tempo - 120) * 0.0006;
+  return Math.round(Math.min(0.68, Math.max(0.55, r)) * 1000) / 1000;
+}

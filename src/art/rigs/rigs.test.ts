@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyFeel } from "@/audio/feel";
+import { applyFeel, pocketOf } from "@/audio/feel";
 import { FrameComputer } from "@/components/stage/frames";
 import { DRUM, defaultMembers } from "@/music/instruments";
 import { defaultSettings, generateLocal } from "@/music/local";
@@ -36,7 +36,9 @@ function perform(inst: InstrumentId, style: StyleId, seed = 3) {
   const st = STYLES[style];
   const { score } = generateLocal({ ...defaultSettings(band), style, tempo: st.tempo.default, key: { ...st.key }, seed }, band);
   const spb = 60 / score.frame.tempo;
-  const onsets = [...score.parts[id]].sort((a, b) => a.start - b.start).map((n) => ({ t: applyFeel(n.start, score.swing) * spb, pitch: n.pitch }));
+  const pocket = pocketOf(score, id);
+  // heard time: swing plus the player's pocket, as the audio engine schedules it
+  const onsets = [...score.parts[id]].map((n) => ({ t: applyFeel(n.start, score.swing) * spb + pocket(n), pitch: n.pitch })).sort((a, b) => a.t - b.t);
   const fc = new FrameComputer(score);
   const { bag, store } = recordingBag();
   const ctx: RigCtx = { bag, animal: "cat", ink: "#000", fill: "#fff", light: "#fff", feet: "#000", seed: 1, mouth: { x: 120, y: 100 }, mem: {} };

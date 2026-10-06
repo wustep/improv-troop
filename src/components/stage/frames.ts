@@ -1,4 +1,4 @@
-import { applyFeel } from "@/audio/feel";
+import { applyFeel, pocketOf } from "@/audio/feel";
 import { DYNAMIC_ENERGY } from "@/music/context";
 import { INSTRUMENTS } from "@/music/instruments";
 import { isFeaturedRole } from "@/music/realize";
@@ -25,21 +25,14 @@ export class FrameComputer {
   private tracks = new Map<string, Track>();
   constructor(public score: Score) {
     for (const m of score.members) {
-      const notes = [...(score.parts[m.id] ?? [])].sort((a, b) => a.start - b.start);
-      const n = notes.length;
-      const t: Track = {
-        start: new Float64Array(n),
-        end: new Float64Array(n),
-        pitch: new Int16Array(n),
-        vel: new Float32Array(n),
-        art: new Array(n),
-        maxDur: 0,
-      };
       const spb = 60 / (score.frame.tempo || 120);
       const range = m.instrument === "drums" ? null : INSTRUMENTS[m.instrument]?.range;
-      notes.forEach((x, i) => {
-        const s = applyFeel(x.start, score.swing);
-        let e = Math.max(s + 0.05, applyFeel(x.start + x.dur, score.swing));
+      const pocket = pocketOf(score, m.id);
+      const felt = (score.parts[m.id] ?? []).map((x) => {
+        // the same swing and pocket the audio engine plays
+        const shift = pocket(x) / spb;
+        const s = applyFeel(x.start, score.swing) + shift;
+        let e = Math.max(s + 0.05, applyFeel(x.start + x.dur, score.swing) + shift);
         // mirror the audio engine's articulation lengths
         if (x.art === "staccato") e = s + Math.max(0.05, (e - s) * 0.5);
         if (x.art === "pizz") e = Math.min(e, s + 0.9 / spb);
@@ -48,6 +41,20 @@ export class FrameComputer {
           while (p < range[0] - 12) p += 12;
           while (p > range[1] + 12) p -= 12;
         }
+        return { s, e, p, x };
+      });
+      // sorted by when they're heard (a late backbeat can land after a hat struck on the same beat)
+      felt.sort((a, b) => a.s - b.s);
+      const n = felt.length;
+      const t: Track = {
+        start: new Float64Array(n),
+        end: new Float64Array(n),
+        pitch: new Int16Array(n),
+        vel: new Float32Array(n),
+        art: new Array(n),
+        maxDur: 0,
+      };
+      felt.forEach(({ s, e, p, x }, i) => {
         t.start[i] = s;
         t.end[i] = e;
         t.pitch[i] = p;

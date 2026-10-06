@@ -1,7 +1,7 @@
 import { DrumMachine, Reverb, Scheduler, type Smplr } from "smplr";
 import type { InstrumentId, Member, NoteEvent, Score } from "@/music/types";
 import { INSTRUMENTS } from "@/music/instruments";
-import { applyFeel, beatToSeconds, jitter } from "./feel";
+import { applyFeel, beatToSeconds, jitter, pocketOf } from "./feel";
 import {
   DECAYING,
   DEFAULT_VOLUME,
@@ -67,6 +67,8 @@ interface Track {
   /** Start beat of the last scheduled note (for updateScore re-sync). */
   lastStart: number;
   lastOpenHat: number;
+  /** Where this player sits against the beat, per note (seconds; see pocketOf). */
+  pocket: (n: NoteEvent) => number;
 }
 
 type SmplrNote = Exclude<Parameters<Smplr["start"]>[0], string | number>;
@@ -561,6 +563,7 @@ export class TroopAudio {
         cursor: lowerBound(notes, fromBeat),
         lastStart: -Infinity,
         lastOpenHat: -Infinity,
+        pocket: pocketOf(score, m.id),
       };
     });
   }
@@ -588,6 +591,7 @@ export class TroopAudio {
         cursor,
         lastStart,
         lastOpenHat: old?.lastOpenHat ?? -Infinity,
+        pocket: pocketOf(score, m.id),
       };
     });
   }
@@ -803,7 +807,7 @@ export class TroopAudio {
     // Humanise (deterministic per note).
     const tight = isDrum && (note.pitch === 36 || note.pitch === 38 || note.pitch === 37);
     const timingAmt = isDrum ? (tight ? 0.002 : 0.005) : 0.008;
-    let time = when + jitter(timingAmt, id, note.start, note.pitch, "t");
+    let time = when + track.pocket(note) + jitter(timingAmt, id, note.start, note.pitch, "t");
     if (time < now) {
       if (now - time > 0.08) {
         this.stats.late++;

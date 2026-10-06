@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { applyFeel, beatToSeconds, feelSpan, hash01, jitter, removeFeel, secondsToBeats } from "./feel";
+import { STYLES, swingAt } from "@/music/styles";
+import { applyFeel, beatToSeconds, feelSpan, hash01, jitter, pocketSec, removeFeel, secondsToBeats } from "./feel";
 
 describe("beatToSeconds", () => {
   it("converts at tempo", () => {
@@ -84,5 +85,29 @@ describe("hash01 / jitter", () => {
       const j = jitter(0.008, "m", i);
       expect(Math.abs(j)).toBeLessThanOrEqual(0.008);
     }
+  });
+});
+
+describe("swingAt", () => {
+  it("swings harder slow and flattens fast; straight styles stay straight", () => {
+    const sw = STYLES.swing;
+    expect(swingAt(sw, 90)).toBeGreaterThan(swingAt(sw, 160));
+    expect(swingAt(sw, 160)).toBeGreaterThan(swingAt(sw, 240));
+    expect(swingAt(sw, 300)).toBeGreaterThanOrEqual(0.55);
+    expect(swingAt(sw, 40)).toBeLessThanOrEqual(0.68);
+    expect(swingAt(STYLES.funk, 100)).toBe(0.5);
+  });
+});
+
+describe("pocketSec", () => {
+  it("lays a swing soloist back, puts the bass on top, drags the funk backbeat", () => {
+    expect(pocketSec("swing", "melodic", 70, undefined, true, 160)).toBeGreaterThan(pocketSec("swing", "melodic", 70, undefined, false, 160));
+    expect(pocketSec("swing", "bass", 40, undefined, false, 160)).toBeLessThan(0);
+    expect(pocketSec("swing", "rhythm", 51, undefined, false, 160)).toBe(0);
+    expect(pocketSec("funk", "rhythm", 38, "accent", false, 100)).toBeGreaterThan(0);
+    expect(pocketSec("funk", "rhythm", 38, "ghost", false, 100)).toBe(0);
+    expect(pocketSec("baroque", "melodic", 70, undefined, true, 96)).toBe(0);
+    // less room to lay back at a fast tempo
+    expect(pocketSec("swing", "melodic", 70, undefined, true, 240)).toBeLessThan(pocketSec("swing", "melodic", 70, undefined, true, 120));
   });
 });

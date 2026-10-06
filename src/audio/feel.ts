@@ -1,3 +1,6 @@
+import { INSTRUMENTS } from "@/music/instruments";
+import type { NoteEvent, Score } from "@/music/types";
+
 // Pure timing helpers. Charts are written on a straight grid; swing is applied here at
 // playback time so notation and timing stay independent.
 
@@ -87,4 +90,55 @@ export function hash01(...parts: Array<string | number>): number {
 /** Symmetric deterministic jitter in [-amount, amount]. */
 export function jitter(amount: number, ...parts: Array<string | number>): number {
   return (hash01(...parts) * 2 - 1) * amount;
+}
+
+// ─── Pocket: where each player sits against the beat ────────────────────────
+// A band doesn't play dead on the grid. In swing the bass sits a hair on top of the beat and
+// a soloist lays back; in funk the backbeat comes a touch late; baroque and minimalism are
+// played straight down the middle. Offsets in seconds, shared by audio and animation so the
+// motion still lands with the sound.
+
+type PocketRole = "bass" | "chordal" | "lead" | "support";
+const POCKET: Record<string, Partial<Record<PocketRole, number>>> = {
+  swing: { bass: -0.006, chordal: 0.006, lead: 0.016, support: 0.008 },
+  neworleans: { chordal: 0.004, lead: 0.012, support: 0.006 },
+  funk: { bass: -0.002, lead: 0.008 },
+  bossa: { chordal: 0.006, lead: 0.014, support: 0.006 },
+  ambient: { chordal: 0.01, lead: 0.02, support: 0.012 },
+};
+
+/** Seconds a note sits behind (+) or ahead of (−) the grid, for this style and player. */
+export function pocketSec(
+  style: string,
+  fn: "rhythm" | "bass" | "chordal" | "melodic",
+  pitch: number,
+  art: string | undefined,
+  featured: boolean,
+  tempo: number,
+): number {
+  const p = POCKET[style];
+  if (!p) return 0;
+  // the funk backbeat drags a little; the rest of the kit is the clock
+  if (fn === "rhythm") return style === "funk" && pitch === 38 && art !== "ghost" ? 0.012 * tempoScale(tempo) : 0;
+  const role: PocketRole = fn === "bass" ? "bass" : featured ? "lead" : fn === "chordal" ? "chordal" : "support";
+  return (p[role] ?? 0) * tempoScale(tempo);
+}
+
+/** A player's pocket for every note of theirs in a chart (their role can change bar to bar). */
+export function pocketOf(score: Score, memberId: string): (n: NoteEvent) => number {
+  const m = score.members.find((x) => x.id === memberId);
+  const fn = m ? INSTRUMENTS[m.instrument]?.fn : undefined;
+  const style = score.frame?.style;
+  const beats = score.frame?.meter?.beats || 4;
+  if (!fn || !style || !POCKET[style]) return () => 0;
+  return (n) => {
+    const role = score.plan?.[Math.floor(n.start / beats + 1e-9)]?.roles[memberId];
+    const featured = role === "lead" || role === "solo" || role === "trade";
+    return pocketSec(style, role === "bass" ? "bass" : fn, n.pitch, n.art, featured, score.frame.tempo);
+  };
+}
+
+/** Lay-back shrinks at fast tempos (there's less room behind the beat). */
+function tempoScale(tempo: number) {
+  return Math.min(1.2, Math.max(0.6, 120 / Math.max(40, tempo)));
 }

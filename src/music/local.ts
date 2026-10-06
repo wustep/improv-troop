@@ -6,7 +6,7 @@ import { planLocal } from "./planner";
 import { realize, type RealizeIssue } from "./realize";
 import { makeRng } from "./rng";
 import { getStandard } from "./standards";
-import { STYLES } from "./styles";
+import { STYLES, swingAt } from "./styles";
 import { mod, pcOf } from "./theory";
 import type { Frame, Member, Motif, Score, TroopSettings } from "./types";
 
@@ -83,7 +83,7 @@ export function generateLocal(settings: TroopSettings, members: Member[]): Local
     frame,
     plan,
     motif,
-    swing: style.swing,
+    swing: swingAt(style, frame.tempo),
     parts: res.parts,
     chat: [],
     engine: "local",
