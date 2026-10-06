@@ -95,15 +95,20 @@ function tunePlace(frame: Frame, bar: number): { letter: string; offset: number 
 
 /**
  * The earlier bar whose melody this lead bar repeats: same letter, same place in it, same
- * chord at the top of the bar. That's how a tune comes back — the second A, the out head.
+ * changes through the bar. That's how a tune comes back — the second A, the out head. (A bar
+ * whose changes moved, like a cadence bar that adds its V7, gets its own line instead.)
  */
+function sameChords(a: Frame["chords"][number], b: Frame["chords"][number]): boolean {
+  return a.length === b.length && a.every((c, i) => c.symbol === b[i].symbol && Math.abs(c.beat - b[i].beat) < 1e-6);
+}
+
 export function melodySource(frame: Frame, bar: number): number | null {
   const here = tunePlace(frame, bar);
   if (!here) return null;
   for (let b = 0; b < bar; b++) {
     const there = tunePlace(frame, b);
     if (!there || there.letter !== here.letter || there.offset !== here.offset) continue;
-    if (frame.chords[b][0].symbol !== frame.chords[bar][0].symbol) continue;
+    if (!sameChords(frame.chords[b], frame.chords[bar])) continue;
     if (frame.slots[b]?.[frame.leaderId] !== "lead") continue;
     return b;
   }

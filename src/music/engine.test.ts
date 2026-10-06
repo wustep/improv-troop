@@ -498,6 +498,29 @@ describe("arrangement textures", () => {
   });
 });
 
+describe("the tune coming back", () => {
+  it("replays a head bar only over the same changes, so a cadence bar that moved gets its own line", () => {
+    let heads = 0;
+    let moved = 0;
+    for (const style of STYLE_LIST)
+      for (const seed of [1, 2, 3, 4]) {
+        const { score } = generateLocal({ ...defaultSettings(band), style, bars: 16, seed }, band);
+        const chordsOf = (b: number) => score.frame.chords[b].map((c) => `${c.symbol}@${c.beat}`).join(" ");
+        score.plan.forEach((bp, bar) => {
+          const m = /^@head (\d+)/.exec(bp.directives?.[score.settings.leaderId] ?? "");
+          if (!m) return;
+          heads++;
+          expect(chordsOf(+m[1] - 1), `${style} seed ${seed} bar ${bar + 1}`).toBe(chordsOf(bar));
+        });
+        // the free chart's cadence bar (V7 added) is out-head material over new changes
+        const cadence = score.frame.bars - 2;
+        if (score.frame.chords[cadence].length > 1 && !score.plan[cadence].directives?.[score.settings.leaderId]?.startsWith("@head")) moved++;
+      }
+    expect(heads).toBeGreaterThan(10);
+    expect(moved).toBeGreaterThan(0);
+  });
+});
+
 describe("accents", () => {
   it("are marked, not pre-boosted: the audio engine lifts each accent once", async () => {
     const { realize } = await import("./realize");
