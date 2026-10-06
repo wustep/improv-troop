@@ -190,9 +190,10 @@ export function Stage() {
       } else if (lastBar !== -2) {
         lastBar = -2;
         setBar(-1);
-        if (labelRef.current) labelRef.current.textContent = "";
+        // stopped: the stage says what's loaded, so you know what Play will play
+        if (labelRef.current) labelRef.current.textContent = score?.title ?? "";
         if (chordRef.current) chordRef.current.textContent = "";
-        if (nextChordRef.current) nextChordRef.current.textContent = "";
+        if (nextChordRef.current) nextChordRef.current.textContent = score ? `${score.frame.key.tonic} ${score.frame.key.mode} · ${score.frame.tempo} bpm` : "";
       }
       raf = requestAnimationFrame(loop);
     };
