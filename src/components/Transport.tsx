@@ -44,12 +44,12 @@ export function Transport() {
   }, []);
 
   return (
-    <div className="flex flex-wrap items-center gap-3">
+    <div className="flex flex-wrap items-center gap-s">
       <RoughButton
         seed="play"
         shape="ellipse"
         tone="go"
-        className="h-14 w-14 text-2xl text-white"
+        className="h-14 w-14 text-xl text-on-accent"
         onClick={() => (playing ? stop() : void play())}
         disabled={!current}
         aria-label={playing ? "Stop" : "Play"}
@@ -59,14 +59,14 @@ export function Transport() {
       </RoughButton>
 
       {gen.running ? (
-        <RoughButton seed="cancel" tone="quiet" className="px-4 py-2 font-[family-name:var(--font-script)] text-2xl font-bold" onClick={cancel}>
+        <RoughButton seed="cancel" tone="quiet" className="px-m py-xs font-brand text-xl font-heavy" onClick={cancel}>
           stop thinking
         </RoughButton>
       ) : (
         <RoughButton
           seed="go"
           tone="primary"
-          className="px-5 py-2 font-[family-name:var(--font-script)] text-2xl font-bold text-white"
+          className="px-l py-xs font-brand text-xl font-heavy text-on-accent"
           onClick={() => void generate()}
           title={hasKey ? "Ask the band (calls the model)" : "Add an AI Gateway key in “Brains & sounds” to let the animals think — until then they play from their sketchbook."}
         >
@@ -75,23 +75,23 @@ export function Transport() {
       )}
 
       {mode === "composer" && (
-        <label className="flex cursor-pointer items-center gap-1.5 text-[15px]" title="Write 4 candidate charts and let a judge pick the most distinctive">
+        <label className="flex cursor-pointer items-center gap-xs text-m" title="Write 4 candidate charts and let a judge pick the most distinctive">
           <input type="checkbox" className="sketch-check" checked={bestOf > 1} onChange={(e) => set({ bestOf: e.target.checked ? 4 : 1 })} />
           best of 4
         </label>
       )}
 
-      <div className="min-w-0 flex-1 text-[15px] leading-snug text-ink-soft" aria-live="polite">
+      <div className="min-w-0 flex-1 text-m text-ink-soft" aria-live="polite">
         {gen.running ? (
           <span>{gen.status}</span>
         ) : gen.error ? (
-          <span className="text-[var(--pencil-red)]">{gen.error}</span>
+          <span className="text-(--error)">{gen.error}</span>
         ) : loading.length ? (
-          <span className="flex items-center gap-2">
+          <span className="flex items-center gap-xs">
             <span>unpacking instruments…</span>
-            <span className="relative inline-block h-2.5 w-28 overflow-hidden rounded-full border-[1.5px] border-[var(--ink)]" aria-hidden>
+            <span className="relative inline-block h-2.5 w-28 overflow-hidden rounded-full shadow-[inset_0_0_0_var(--border-m)_var(--border-default-color)]" aria-hidden>
               <span
-                className="absolute inset-y-0 left-0 bg-[var(--pencil-yellow)]"
+                className="absolute inset-y-0 left-0 bg-(--color-2)"
                 style={{ width: `${Math.round((loading.reduce((s, l) => s + (l.total ? l.loaded / l.total : 0), 0) / loading.length) * 100)}%` }}
               />
             </span>
@@ -121,18 +121,20 @@ export function Takes() {
   if (!takes.length) return null;
   return (
     <div>
-      <div className="mb-1 font-[family-name:var(--font-script)] text-xl font-bold">Takes</div>
-      <ol className="space-y-1">
+      <h2 className="type-section mb-xs">Takes</h2>
+      <ol className="space-y-xxs">
         {takes.map((t, i) => (
-          <li key={t.id} className="group flex items-start gap-1">
+          <li key={t.id} className="group flex items-start gap-xxs">
             <button
               type="button"
               onClick={() => select(t.id)}
-              className={`min-w-0 flex-1 rounded px-2 py-1 text-left text-[15px] hover:bg-[rgba(226,169,59,0.25)] ${current?.id === t.id ? "bg-[rgba(226,169,59,0.4)]" : ""}`}
+              aria-current={current?.id === t.id}
+              data-selected={current?.id === t.id}
+              className="pick min-w-0 flex-1 px-xs py-xxs text-left text-m"
             >
-              <span className="mr-1 text-ink-soft">#{takes.length - i}</span>
+              <span className="mr-xxs text-ink-soft">#{takes.length - i}</span>
               {t.label}
-              <span className="ml-1 text-xs text-ink-soft">
+              <span className="ml-xxs text-xs text-ink-soft">
                 {new Date(t.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
                 {t.score.critic?.scores.length ? ` · judge ${t.score.critic.scores.find((x) => x.candidate === t.score.critic!.chosen)?.score ?? ""}` : ""}
               </span>
@@ -140,7 +142,7 @@ export function Takes() {
             <button
               type="button"
               onClick={() => remove(t.id)}
-              className="px-1 pt-1 text-ink-soft opacity-0 hover:text-[var(--pencil-red)] focus:opacity-100 group-hover:opacity-100"
+              className="px-xxs pt-xxs text-ink-soft opacity-0 transition-colors duration-(--motion-duration) hover:text-(--color-1) focus:opacity-100 group-hover:opacity-100"
               aria-label={`Delete take ${takes.length - i}`}
               title="Delete this take"
             >

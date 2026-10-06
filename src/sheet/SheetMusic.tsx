@@ -425,7 +425,7 @@ export function SheetMusic({ score, getBeat, playing, playToken, onSeekBar, onSt
           }}
         >
           {model.staffs.length === 0 ? (
-            <div style={{ padding: 24, fontFamily: "var(--font-hand), cursive", color: "#6a6474" }}>No players on the chart yet.</div>
+            <div style={{ padding: "var(--space-l)", fontFamily: "var(--font-ui)", color: "var(--cte-text-muted)" }}>No players on the chart yet.</div>
           ) : (
             Array.from({ length: model.rows }, (_, r) => (
               <div
@@ -448,9 +448,9 @@ export function SheetMusic({ score, getBeat, playing, playToken, onSeekBar, onSt
               top: 0,
               opacity: 0,
               pointerEvents: "none",
-              borderRadius: 10,
-              background: "rgba(242, 196, 70, 0.26)",
-              boxShadow: "inset 0 0 0 1.5px rgba(214, 160, 40, 0.35)",
+              borderRadius: "var(--radius-m)",
+              background: "var(--color-2-transparent)",
+              boxShadow: "inset 0 0 0 var(--border-m) var(--color-2-transparent)",
               mixBlendMode: "multiply",
               transition: "width 120ms ease, transform 120ms ease, opacity 200ms",
               willChange: "transform",
@@ -466,14 +466,14 @@ export function SheetMusic({ score, getBeat, playing, playToken, onSeekBar, onSt
               width: 2,
               opacity: 0,
               pointerEvents: "none",
-              borderRadius: 2,
-              background: "rgba(200, 70, 60, 0.75)",
+              borderRadius: "var(--radius-full)",
+              background: "var(--color-1)",
               willChange: "transform",
             }}
           />
         </div>
       </div>
-      <style>{`.sheet-row:empty::before{content:"✎ inking the chart…";position:absolute;left:${LABEL_W}px;top:40px;font-family:var(--font-hand),cursive;color:#a49c8c;font-size:15px}`}</style>
+      <style>{`.sheet-row:empty::before{content:"✎ inking the chart…";position:absolute;left:${LABEL_W}px;top:40px;font-family:var(--font-ui);color:var(--neutral-6);font-size:var(--size-m);line-height:var(--line-m)}`}</style>
     </div>
   );
 }

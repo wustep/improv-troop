@@ -18,7 +18,7 @@ type Tab = (typeof TABS)[number];
 
 function Pre({ children, max = "18rem" }: { children: string; max?: string }) {
   return (
-    <pre className="overflow-auto whitespace-pre-wrap break-words rounded bg-[rgba(44,42,53,0.06)] p-2 font-mono text-[11.5px] leading-snug" style={{ maxHeight: max }}>
+    <pre className="overflow-auto whitespace-pre-wrap break-words rounded-xs bg-(--neutral-9-transparent) p-xs font-data text-xxs" style={{ maxHeight: max }}>
       {children}
     </pre>
   );
@@ -29,19 +29,19 @@ function CallRow({ c }: { c: LlmCall }) {
   const tok = c.usage ? `${c.usage.inputTokens ?? "?"}→${c.usage.outputTokens ?? "?"}` : "";
   return (
     <>
-      <tr className="cursor-pointer border-t border-[rgba(44,42,53,0.12)] hover:bg-[rgba(226,169,59,0.15)]" onClick={() => setOpen((o) => !o)}>
-        <td className="py-0.5 pr-2">{open ? "▾" : "▸"}</td>
-        <td className="pr-2">{fmtMs(c.startedAt)}</td>
-        <td className="pr-2 font-bold">{c.agent}</td>
-        <td className="pr-2">{c.label}</td>
-        <td className="pr-2 text-ink-soft">{c.model.split("/")[1]}</td>
-        <td className="pr-2">{c.status === "pending" ? "…" : fmtMs(c.ms)}</td>
-        <td className="pr-2 text-ink-soft">{fmtMs(c.serverMs)}</td>
-        <td className="pr-2 text-ink-soft">{tok}</td>
-        <td className="pr-2 text-ink-soft" title={c.params ? JSON.stringify(c.params) : undefined}>
+      <tr className="rule-top cursor-pointer hover:bg-(--neutral-9-transparent)" onClick={() => setOpen((o) => !o)}>
+        <td className="py-xxs pr-xs">{open ? "▾" : "▸"}</td>
+        <td className="pr-xs">{fmtMs(c.startedAt)}</td>
+        <td className="pr-xs font-heavy">{c.agent}</td>
+        <td className="pr-xs">{c.label}</td>
+        <td className="pr-xs text-ink-soft">{c.model.split("/")[1]}</td>
+        <td className="pr-xs">{c.status === "pending" ? "…" : fmtMs(c.ms)}</td>
+        <td className="pr-xs text-ink-soft">{fmtMs(c.serverMs)}</td>
+        <td className="pr-xs text-ink-soft">{tok}</td>
+        <td className="pr-xs text-ink-soft" title={c.params ? JSON.stringify(c.params) : undefined}>
           {c.status === "ok" ? (c.structured ? "schema" : "text") : ""}
         </td>
-        <td className={c.status === "error" ? "text-[var(--pencil-red)]" : c.repairs.length ? "text-[var(--pencil-yellow)]" : "text-[var(--pencil-green)]"}>
+        <td className={c.status === "error" ? "text-(--error)" : c.repairs.length ? "text-(--warning)" : "text-(--success)"}>
           {c.status === "error" ? c.error : c.status === "ok" ? (c.repairs.length ? `${c.repairs.length} repairs` : "ok") : "pending"}
           {c.attempt > 1 ? ` (try ${c.attempt})` : ""}
         </td>
@@ -49,36 +49,36 @@ function CallRow({ c }: { c: LlmCall }) {
       {open && (
         <tr>
           <td />
-          <td colSpan={9} className="pb-3">
+          <td colSpan={9} className="pb-s">
             {c.params && (
-              <div className="mb-1 text-ink-soft">
+              <div className="mb-xxs text-ink-soft">
                 sent: {c.params.reasoning ? `reasoning ${c.params.reasoning}` : "provider default reasoning"}
                 {c.params.temperature !== undefined ? `, temperature ${c.params.temperature}` : ", no temperature"}
               </div>
             )}
             {c.repairs.length > 0 && (
-              <div className="mb-2">
-                <div className="font-bold">Validation & repairs</div>
-                <ul className="list-disc pl-5">
+              <div className="mb-xs">
+                <div className="font-heavy">Validation & repairs</div>
+                <ul className="list-disc pl-l">
                   {c.repairs.map((r, i) => (
                     <li key={i}>{r}</li>
                   ))}
                 </ul>
               </div>
             )}
-            <div className="grid gap-2 lg:grid-cols-2">
+            <div className="grid gap-xs lg:grid-cols-2">
               <div>
-                <div className="font-bold">System</div>
+                <div className="font-heavy">System</div>
                 <Pre max="10rem">{c.system}</Pre>
-                <div className="mt-1 font-bold">Prompt</div>
+                <div className="mt-xxs font-heavy">Prompt</div>
                 <Pre>{c.prompt}</Pre>
               </div>
               <div>
-                <div className="font-bold">Raw reply</div>
+                <div className="font-heavy">Raw reply</div>
                 <Pre>{c.text ?? c.error ?? "(waiting)"}</Pre>
                 {c.parsed !== undefined && (
                   <>
-                    <div className="mt-1 font-bold">Parsed</div>
+                    <div className="mt-xxs font-heavy">Parsed</div>
                     <Pre max="12rem">{JSON.stringify(c.parsed, null, 1)}</Pre>
                   </>
                 )}
@@ -108,7 +108,7 @@ function PipelineTab() {
   const tokens = runCalls.reduce((s, c) => s + (c.usage?.inputTokens ?? 0) + (c.usage?.outputTokens ?? 0), 0);
   return (
     <div>
-      <div className="mb-2 flex flex-wrap items-center gap-2">
+      <div className="mb-xs flex flex-wrap items-center gap-xs">
         <select className="sketch-select" value={run.id} onChange={(e) => setSel(e.target.value)} aria-label="Run">
           {runs.map((r) => (
             <option key={r.id} value={r.id}>
@@ -121,7 +121,7 @@ function PipelineTab() {
         </span>
       </div>
       {Object.keys(run.timings).length > 0 && (
-        <div className="mb-2 flex flex-wrap gap-x-4 gap-y-1">
+        <div className="mb-xs flex flex-wrap gap-x-m gap-y-xxs">
           {Object.entries(run.timings).map(([k, v]) => (
             <span key={k}>
               {k}: <b>{fmtMs(v)}</b>
@@ -130,7 +130,7 @@ function PipelineTab() {
         </div>
       )}
       {run.steps.length > 0 && (
-        <ol className="mb-3 max-h-40 overflow-auto">
+        <ol className="mb-s max-h-40 overflow-auto">
           {run.steps.map((s, i) => (
             <li key={i}>
               <span className="inline-block w-20 text-ink-soft">{fmtMs(s.t)}</span>
@@ -174,7 +174,7 @@ function PlanTab() {
   if (!score) return <p>No chart.</p>;
   return (
     <div>
-      <label className="mb-2 flex items-center gap-1.5">
+      <label className="mb-xs flex items-center gap-xs">
         <input type="checkbox" className="sketch-check" checked={json} onChange={(e) => setJson(e.target.checked)} /> show plan JSON
       </label>
       {json ? (
@@ -184,28 +184,28 @@ function PlanTab() {
           <table className="text-left">
             <thead>
               <tr className="text-ink-soft">
-                <th className="pr-2">bar</th>
-                <th className="pr-2">chords</th>
-                <th className="pr-2">section</th>
-                <th className="pr-2">dyn / texture</th>
+                <th className="pr-xs">bar</th>
+                <th className="pr-xs">chords</th>
+                <th className="pr-xs">section</th>
+                <th className="pr-xs">dyn / texture</th>
                 {score.members.map((m) => (
-                  <th key={m.id} className="pr-3">
-                    {m.name} <span className="font-normal">({INSTRUMENTS[m.instrument].name})</span>
+                  <th key={m.id} className="pr-s">
+                    {m.name} <span className="font-regular">({INSTRUMENTS[m.instrument].name})</span>
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {score.plan.map((bp) => (
-                <tr key={bp.index} className="border-t border-[rgba(44,42,53,0.12)] align-top">
-                  <td className="pr-2">{bp.index + 1}</td>
-                  <td className="whitespace-nowrap pr-2">{bp.chords.map((c) => c.symbol).join(" ")}</td>
-                  <td className="whitespace-nowrap pr-2">{bp.section}</td>
-                  <td className="whitespace-nowrap pr-2">
+                <tr key={bp.index} className="rule-top align-top">
+                  <td className="pr-xs">{bp.index + 1}</td>
+                  <td className="whitespace-nowrap pr-xs">{bp.chords.map((c) => c.symbol).join(" ")}</td>
+                  <td className="whitespace-nowrap pr-xs">{bp.section}</td>
+                  <td className="whitespace-nowrap pr-xs">
                     {bp.dynamic} / {bp.texture}
                   </td>
                   {score.members.map((m) => (
-                    <td key={m.id} className="max-w-[16rem] pr-3 font-mono text-[11px]">
+                    <td key={m.id} className="max-w-[16rem] pr-s font-data text-xxs">
                       <span className="text-ink-soft">{bp.roles[m.id]}</span> {bp.directives?.[m.id]}
                     </td>
                   ))}
@@ -224,25 +224,25 @@ function ChartTab() {
   if (!score) return <p>No chart.</p>;
   const { frame, motif } = score;
   return (
-    <div className="grid gap-3 lg:grid-cols-2">
+    <div className="grid gap-s lg:grid-cols-2">
       <div>
-        <div className="font-bold">Locked frame</div>
+        <div className="font-heavy">Locked frame</div>
         <p>
           {frame.bars} bars · {frame.meter.beats}/4 · {frame.key.tonic} {frame.key.mode} · {frame.tempo} bpm · swing {score.swing.toFixed(2)} · seed {score.settings.seed}
           {frame.standard ? ` · standard: ${frame.standard}` : ""}
         </p>
-        <ul className="mt-1">
+        <ul className="mt-xxs">
           {frame.sections.map((s) => (
             <li key={s.start}>
               bars {s.start + 1}–{s.start + s.length}: {s.name} <span className="text-ink-soft">({s.kind})</span>
             </li>
           ))}
         </ul>
-        <div className="mt-2 font-bold">Motif</div>
-        <p className="font-mono text-[12px]">{motif.text}</p>
+        <div className="mt-xs font-heavy">Motif</div>
+        <p className="font-data text-xs">{motif.text}</p>
         {motif.description && <p className="text-ink-soft">{motif.description}</p>}
-        <div className="mt-2 font-bold">Notes</div>
-        <ul className="list-disc pl-5">
+        <div className="mt-xs font-heavy">Notes</div>
+        <ul className="list-disc pl-l">
           {score.notes.map((n, i) => (
             <li key={i}>{n}</li>
           ))}
@@ -251,33 +251,33 @@ function ChartTab() {
       <div>
         {score.critic && (
           <>
-            <div className="font-bold">Judge (best of {score.critic.scores.length})</div>
+            <div className="font-heavy">Judge (best of {score.critic.scores.length})</div>
             <table className="text-left">
               <thead>
                 <tr className="text-ink-soft">
-                  <th className="pr-2">#</th>
-                  <th className="pr-2">distinct</th>
-                  <th className="pr-2">coherent</th>
-                  <th className="pr-2">score</th>
+                  <th className="pr-xs">#</th>
+                  <th className="pr-xs">distinct</th>
+                  <th className="pr-xs">coherent</th>
+                  <th className="pr-xs">score</th>
                   <th>note</th>
                 </tr>
               </thead>
               <tbody>
                 {score.critic.scores.map((s) => (
-                  <tr key={s.candidate} className={s.candidate === score.critic!.chosen ? "font-bold" : ""}>
-                    <td className="pr-2">{s.candidate}</td>
-                    <td className="pr-2">{s.distinctiveness}</td>
-                    <td className="pr-2">{s.coherence}</td>
-                    <td className="pr-2">{s.score}</td>
+                  <tr key={s.candidate} className={s.candidate === score.critic!.chosen ? "font-heavy" : ""}>
+                    <td className="pr-xs">{s.candidate}</td>
+                    <td className="pr-xs">{s.distinctiveness}</td>
+                    <td className="pr-xs">{s.coherence}</td>
+                    <td className="pr-xs">{s.score}</td>
                     <td>{s.notes}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            <p className="mt-1">{score.critic.summary}</p>
+            <p className="mt-xxs">{score.critic.summary}</p>
           </>
         )}
-        <div className="mt-2 font-bold">Notes per player</div>
+        <div className="mt-xs font-heavy">Notes per player</div>
         <ul>
           {score.members.map((m) => (
             <li key={m.id}>
@@ -299,26 +299,26 @@ function AudioTab({ sheetStats }: { sheetStats: { rows: number; renderMs: number
     return () => clearInterval(t);
   }, []);
   return (
-    <div className="grid gap-3 lg:grid-cols-2">
+    <div className="grid gap-s lg:grid-cols-2">
       <div>
-        <div className="font-bold">Instruments</div>
+        <div className="font-heavy">Instruments</div>
         <ul>
           {loads.map((l) => (
             <li key={l.memberId}>
-              {l.memberId}: {l.instrument} — {l.pack} — {l.ready ? "ready" : l.error ? <span className="text-[var(--pencil-red)]">{l.error}</span> : `${l.loaded}/${l.total}`}
+              {l.memberId}: {l.instrument} — {l.pack} — {l.ready ? "ready" : l.error ? <span className="text-(--error)">{l.error}</span> : `${l.loaded}/${l.total}`}
             </li>
           ))}
         </ul>
       </div>
       <div>
-        <div className="font-bold">Playback</div>
+        <div className="font-heavy">Playback</div>
         {stats && (
           <p>
             scheduled {stats.scheduled} · late {stats.late} · dropped {stats.dropped}
             {stats.failedInstruments.length ? ` · failed: ${stats.failedInstruments.join(", ")}` : ""}
           </p>
         )}
-        <div className="mt-2 font-bold">Sheet render</div>
+        <div className="mt-xs font-heavy">Sheet render</div>
         {sheetStats ? (
           <p>
             {sheetStats.rows} rows · VexFlow {fmtMs(sheetStats.renderMs)} · note expansion {fmtMs(sheetStats.expandMs)}
@@ -367,15 +367,17 @@ export function DebugPanel({ sheetStats }: { sheetStats: { rows: number; renderM
     }
   }, [tab, sheetStats]);
   return (
-    <section className="debug-panel mt-4 rounded-md p-3 text-[13px]" aria-label="Debug">
-      <div className="mb-2 flex flex-wrap items-center gap-1">
-        <span className="mr-2 font-[family-name:var(--font-script)] text-xl font-bold">Under the hood</span>
+    <section className="debug-panel mt-m p-s text-s" aria-label="Debug">
+      <div className="mb-xs flex flex-wrap items-center gap-xxs">
+        <h2 className="type-label mr-xs">Under the hood</h2>
         {TABS.map((t) => (
           <button
             key={t}
             type="button"
             onClick={() => setTab(t)}
-            className={`rounded px-2 py-0.5 ${tab === t ? "bg-[rgba(44,42,53,0.85)] text-[var(--paper)]" : "hover:bg-[rgba(44,42,53,0.1)]"}`}
+            aria-pressed={tab === t}
+            data-selected={tab === t}
+            className="pick px-xs py-xxs"
           >
             {t}
             {t === "Pipeline" && runs[0]?.status === "running" ? " •" : ""}
