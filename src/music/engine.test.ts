@@ -756,11 +756,23 @@ describe("standards with a written melody", () => {
         let pitches: number[] = [];
         for (const sec of sections)
           for (let b = sec.start; b < sec.start + sec.length - (sec.kind === "out" ? 1 : 0); b++) {
-            const want = parseNotes(std.melody![(b - (score.frame.intro ?? 0)) % std.bars.length], beats).notes;
+            let want = parseNotes(std.melody![(b - (score.frame.intro ?? 0)) % std.bars.length], beats).notes;
+            // the head's last bar going into a solo leaves its pickup off
+            const intoSolo = b === sec.start + sec.length - 1 && !["head", "out"].includes(score.frame.sections.find((x) => x.start === b + 1)?.kind ?? "");
+            const cut = std.pickup ? parseNotes(std.pickup, beats).notes[0].start : null;
+            if (intoSolo && cut !== null) want = want.filter((n) => n.start < cut - 1e-6);
             const got = score.parts[lead].filter((n) => Math.floor(n.start / beats + 1e-9) === b);
             expect(got.map((n) => +(n.start - b * beats).toFixed(3)), `${id} in ${tonic} bar ${b + 1} rhythm`).toEqual(want.map((n) => +n.start.toFixed(3)));
             expect(got.map((n) => mod(n.pitch, 12)), `${id} in ${tonic} bar ${b + 1}`).toEqual(want.map((n) => mod(n.pitch + semis, 12)));
             pitches = [...pitches, ...got.map((n) => n.pitch)];
+          }
+        // the pickup ("Oh when the…") leads into each head from the bar before it
+        if (std.pickup)
+          for (const sec of sections.filter((x) => x.start > 0)) {
+            const want = parseNotes(std.pickup, beats).notes;
+            const got = score.parts[lead].filter((n) => Math.floor(n.start / beats + 1e-9) === sec.start - 1);
+            expect(got.map((n) => +(n.start - (sec.start - 1) * beats).toFixed(3)), `${id} pickup into bar ${sec.start + 1}`).toEqual(want.map((n) => +n.start.toFixed(3)));
+            expect(got.map((n) => mod(n.pitch, 12))).toEqual(want.map((n) => mod(n.pitch + semis, 12)));
           }
         // one register for the whole tune, inside the leader's range
         const inst = INSTRUMENTS[band.find((m) => m.id === lead)!.instrument];
@@ -768,6 +780,15 @@ describe("standards with a written melody", () => {
         expect(Math.max(...pitches)).toBeLessThanOrEqual(inst.range[1]);
       }
     }
+  });
+  it("around the song: the leader sits out the intro, and the tag sings the song's own cadence", () => {
+    const std = STANDARDS.find((s) => s.id === "jingle-bells")!;
+    const { score } = generateLocal({ ...defaultSettings(band), standard: std.id, key: std.key, style: std.style, bars: 48, soloists: ["bear"], seed: 1 }, band);
+    const lead = score.frame.leaderId;
+    for (let b = 0; b < (score.frame.intro ?? 0); b++) expect(score.plan[b].directives?.[lead]).toBe("@rest");
+    const tag = score.frame.sections.find((s) => s.kind === "tag")!;
+    expect(score.plan[tag.start].directives?.[lead]).toBe("@tune 15"); // "G G F D" over the ii–V
+    expect(score.plan[tag.start + 2].directives?.[lead]).toBe("@tune 15");
   });
   it("each written melody bar fills its bar and sits on its chord's downbeat", () => {
     for (const std of STANDARDS.filter((s) => s.melody)) {

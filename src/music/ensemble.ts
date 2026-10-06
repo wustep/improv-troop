@@ -204,6 +204,7 @@ export function ensemble(o: EnsembleInput): EnsembleFix[] {
           break;
         }
       }
+      if (n.written) continue; // the tune as written stays as written
       if (found !== null && found !== n.pitch) {
         note(bar, m.id, `moved ${pitchName(n.pitch, flats)} under the melody to ${pitchName(found, flats)}`);
         n.pitch = found;
@@ -227,7 +228,7 @@ export function ensemble(o: EnsembleInput): EnsembleFix[] {
         const roleB = plan[bar]?.roles[B.id];
         if (!roleB || !SUPPORT.includes(roleB) || (leadIds.has(B.id) && o.lead.get(bar)?.id === B.id)) continue;
         const twin = (parts[A.id] ?? []).find((x) => x.pitch === n.pitch && x.dur >= 1 && Math.min(x.start + x.dur, n.start + n.dur) - Math.max(x.start, n.start) >= 1);
-        if (!twin) continue;
+        if (!twin || n.written) continue;
         const home = homeOf(harmony, n);
         const others = [...sustainedAgainst(parts, support.map((x) => x.id).filter((id) => id !== B.id), n), ...melodyAgainst(n, B.id).map((L) => L.pitch)];
         const alt = freePitch(n.pitch, others, home, style, INSTRUMENTS[B.instrument].range[0], ceilingFor(B, n), true);
@@ -255,7 +256,7 @@ export function ensemble(o: EnsembleInput): EnsembleFix[] {
         if (!roleB || !SUPPORT.includes(roleB)) continue;
         const sounding = (parts[A.id] ?? []).filter((x) => x.dur >= 1 && Math.min(x.start + x.dur, n.start + n.dur) - Math.max(x.start, n.start) >= 1);
         const rubs = (p: number) => sounding.some((x) => Math.abs(x.pitch - p) === 1 || Math.abs(x.pitch - p) === 13);
-        if (!rubs(n.pitch)) continue;
+        if (!rubs(n.pitch) || n.written) continue;
         const home = homeOf(harmony, n);
         const others = [...sustainedAgainst(parts, voices.map((x) => x.id).filter((id) => id !== B.id), n), ...melodyAgainst(n, B.id).map((L) => L.pitch)];
         const fixed = freePitch(n.pitch, others, home, style, instB.range[0], ceilingFor(B, n));

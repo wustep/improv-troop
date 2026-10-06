@@ -3,6 +3,7 @@ import { sectionAt } from "./form";
 import { ANIMALS, INSTRUMENTS, SOLO_OPENERS } from "./instruments";
 import type { Rng } from "./rng";
 import { getStandard } from "./standards";
+import { mod, parseChord, pcOf } from "./theory";
 import { CELLO_TEXTURE, STYLES, type StyleDef } from "./styles";
 import type { BarPlan, Dynamic, Frame, Member, Motif, Role, Section, Texture } from "./types";
 
@@ -295,5 +296,46 @@ export function planLocal(frame: Frame, members: Member[], motif: Motif, rng: Rn
       directives,
     });
   }
+  if (std?.melody) songLeader(frame, plan, std);
   return plan;
+}
+
+/**
+ * The leader on a song with a written melody, around the head:
+ * - sits out the intro, and plays the song's pickup ("Oh when the…") at the end of the bar
+ *   before each head, whether that's the intro or the last bar of the solos;
+ * - leaves the pickup off the head's last bar when a solo comes next, not the head again;
+ * - on a tag, sings the song's own cadence bar over each ii–V, with short fills between.
+ */
+function songLeader(frame: Frame, plan: BarPlan[], std: NonNullable<ReturnType<typeof getStandard>>): void {
+  const lead = frame.leaderId;
+  const set = (b: number, d: string, role?: Role) => {
+    plan[b].directives = { ...plan[b].directives, [lead]: d };
+    if (role) plan[b].roles[lead] = role;
+  };
+  const free = (b: number) => b >= 0 && b < frame.bars - 1 && !["lead", "solo", "trade"].includes(plan[b].roles[lead] ?? "");
+  for (const sec of frame.sections) {
+    if (sec.kind === "intro") for (let b = sec.start; b < sec.start + sec.length; b++) if (free(b)) set(b, "@rest", "rest");
+  }
+  if (std.pickup) {
+    const melodic = (b: number) => b >= 0 && b < frame.bars && ["head", "out"].includes(sectionAt(frame, b).kind);
+    for (const sec of frame.sections) {
+      if (sec.kind !== "head" && sec.kind !== "out") continue;
+      const before = sec.start - 1;
+      if (!melodic(before) && free(before)) set(before, "@tune pickup");
+      const last = sec.start + sec.length - 1;
+      if (last < frame.bars - 1 && !melodic(last + 1) && plan[last].directives?.[lead]?.startsWith("@tune")) set(last, `${plan[last].directives![lead]} cut`);
+    }
+  }
+  const tag = frame.sections.find((x) => x.kind === "tag");
+  if (tag) {
+    // the song's cadence: its last bar that moves to the dominant
+    const v = mod(pcOf(std.key.tonic) + 7, 12);
+    let cadence = -1;
+    std.bars.forEach((bar, i) => {
+      if (bar.split(/\s+/).some((sym) => parseChord(sym).root === v && parseChord(sym).quality === "dom")) cadence = i;
+    });
+    if (cadence >= 0)
+      for (let b = tag.start; b < tag.start + tag.length && b < frame.bars - 1; b++) set(b, (b - tag.start) % 2 === 0 ? `@tune ${cadence + 1}` : "@line sparse");
+  }
 }

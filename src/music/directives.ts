@@ -2,7 +2,7 @@ import { chordSpans, dynamicLift, harmAt, velFor, type BarCtx } from "./context"
 import { holdable, nearestIn } from "./harmony";
 import { keyPrefersFlats, mod, pitchName } from "./theory";
 import { ENDINGS } from "./ending";
-import { getStandard, tuneBar } from "./standards";
+import { getStandard, pickupStart, tuneBar } from "./standards";
 import { DRUM } from "./instruments";
 import { parseMotifOps, realizeMotifBar } from "./motif";
 import { looksLikeDrumGrid, parseDrumGrid, parseNotes } from "./notation";
@@ -181,9 +181,15 @@ function realizeRaw(ctx: BarCtx, text: string): DirectiveResult {
     }
     case "tune": {
       // the standard's written melody, as written (in this key, in this player's register)
+      // "@tune N": bar N; "@tune N cut": bar N without the pickup at its end (the head going
+      // into a solo); "@tune pickup": just the pickup, in the bar before the head comes in
       const std = getStandard(ctx.standard);
       const [slo, shi] = ctx.inst.solo ?? ctx.inst.sweet;
-      const notes = std ? tuneBar(std, parseInt(args[0] ?? "", 10) - 1, ctx.key.tonic, ctx.beats, (slo + shi) / 2, ctx.inst.range) : null;
+      const which = args[0] === "pickup" ? "pickup" : parseInt(args[0] ?? "", 10) - 1;
+      let notes = std ? tuneBar(std, which, ctx.key.tonic, ctx.beats, (slo + shi) / 2, ctx.inst.range) : null;
+      const cutAt = std && args.includes("cut") ? pickupStart(std, ctx.beats) : null;
+      if (notes && cutAt !== null) notes = notes.filter((n) => n.start < cutAt - 1e-6).map((n) => ({ ...n, dur: Math.min(n.dur, cutAt - n.start) }));
+      if (notes && !notes.length && which !== "pickup") return done([]);
       if (!notes) {
         issues.push(`@tune ${args[0] ?? ""}: no written melody here; stating the motif`);
         return done(realizeMotifBar(c, []));

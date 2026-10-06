@@ -23,6 +23,12 @@ export interface Standard {
    * domain tunes only). The leader plays it as written on the head and the head out.
    */
   melody?: string[];
+  /**
+   * The pickup into the head ("Oh when the…"), as a full bar with rests before it. The melody's
+   * last bar already ends with it (for chorus after chorus); when the head comes in after an
+   * intro or a solo, the leader plays just this in the bar before.
+   */
+  pickup?: string;
   note: string;
 }
 
@@ -132,6 +138,7 @@ export const STANDARDS: Standard[] = [
     tempo: 150,
     motif: "r/4 F4/4 A4/4 Bb4/4 | C5/1",
     // "Oh when the saints | go marching in | ..." (the pickups end the bar before)
+    pickup: "r/4 F4/4 A4/4 Bb4/4",
     melody: [
       "C5/1",
       "r/4 F4/4 A4/4 Bb4/4",
@@ -175,6 +182,7 @@ export const STANDARDS: Standard[] = [
     style: "baroque",
     tempo: 104,
     motif: "C5/2 D5/4 | E5/4. F5/8 E5/4",
+    pickup: "r/2 A4/4",
     melody: [
       "C5/2 D5/4",
       "E5/4. F5/8 E5/4",
@@ -314,6 +322,7 @@ export const STANDARDS: Standard[] = [
     style: "neworleans",
     tempo: 76,
     motif: "G4/2 B4/8 G4/8 | B4/2 A4/4",
+    pickup: "r/2 D4/4",
     melody: [
       "G4/2 B4/8 G4/8",
       "B4/2 A4/4",
@@ -387,8 +396,8 @@ const tuneOctave = new Map<string, number>();
  * octaves so the tune as a whole sits around `center` and inside [lo, hi]. The octave is
  * decided once for the whole tune, so the melody never jumps register mid-phrase.
  */
-export function tuneBar(std: Standard, index: number, tonic: string, beats: number, center: number, [lo, hi]: [number, number]): NoteEvent[] | null {
-  const text = std.melody?.[mod(index, std.bars.length)];
+export function tuneBar(std: Standard, index: number | "pickup", tonic: string, beats: number, center: number, [lo, hi]: [number, number]): NoteEvent[] | null {
+  const text = index === "pickup" ? std.pickup : std.melody?.[mod(index, std.bars.length)];
   if (!text) return null;
   const semis = standardShift(std, tonic);
   const key = `${std.id}:${semis}:${center}:${lo}:${hi}`;
@@ -404,4 +413,11 @@ export function tuneBar(std: Standard, index: number, tonic: string, beats: numb
     tuneOctave.set(key, oct);
   }
   return parseNotes(text, beats).notes.map((n) => ({ ...n, pitch: n.pitch + semis + oct }));
+}
+
+/** Where a standard's pickup starts in its bar (beats), or null when it has none. */
+export function pickupStart(std: Standard, beats: number): number | null {
+  if (!std.pickup) return null;
+  const first = parseNotes(std.pickup, beats).notes[0];
+  return first ? first.start : null;
 }

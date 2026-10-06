@@ -525,7 +525,8 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
               const repairs: string[] = [];
               const clean = validateBarText(raw, m, frame.meter.beats, repairs, `bar ${b + 1}`, frame.slots[b]?.[id] ?? plan[b].roles[id]);
               repairs.forEach((x) => noteRepair(call.id, x));
-              if (clean) plan[b].directives = { ...plan[b].directives, [id]: clean };
+              // the song's pickup and written bars aren't the band's to rewrite
+              if (clean && !plan[b].directives?.[id]?.startsWith("@tune")) plan[b].directives = { ...plan[b].directives, [id]: clean };
             }
             const line = asString(o.say, 160)?.trim();
             if (line) say(chatMsg(id, line, "jam", bars[Math.min(1, bars.length - 1)]));
