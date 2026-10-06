@@ -48,6 +48,8 @@ export function extractJson(text: string): { value: unknown; error?: string } {
       else if (ch === "}" || ch === "]") opens.pop();
     }
     let closed = body + (s ? '"' : "");
+    // cut off at (or inside) a key: drop the key, it has no value
+    if (opens[opens.length - 1] === "{") closed = closed.replace(/([{,])\s*"(?:[^"\\]|\\.)*"\s*$/, "$1");
     closed = closed.replace(/,\s*$/, "").replace(/:\s*$/, ": null");
     for (let i = opens.length - 1; i >= 0; i--) closed += opens[i] === "{" ? "}" : "]";
     attempts.push(closed, closed.replace(/,\s*([}\]])/g, "$1"));
