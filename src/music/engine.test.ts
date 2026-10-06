@@ -706,6 +706,25 @@ describe("the tune at the bar's dynamic", () => {
   });
 });
 
+describe("endings", () => {
+  it("a style that slows down to end eases off through the ritardando instead of peaking", () => {
+    for (const style of ["bossa", "baroque", "ambient"] as StyleId[])
+      for (const seed of [1, 2, 3]) {
+        const { score } = generateLocal({ ...defaultSettings(band), style, seed, bars: 16 }, band);
+        const n = score.frame.bars;
+        const rit = score.plan.slice(n - 3, n - 1);
+        for (const bp of rit) expect(bp.texture, `${style} bar ${bp.index + 1}`).not.toBe("peak");
+        const loud = (d: string) => ["pp", "p", "mp", "mf", "f", "ff"].indexOf(d);
+        const dyn = score.plan.slice(n - 3).map((bp) => loud(bp.dynamic));
+        for (let i = 1; i < dyn.length; i++) expect(dyn[i], `${style} seed ${seed}`).toBeLessThanOrEqual(dyn[i - 1]);
+      }
+  });
+  it("swing still climbs into its big ending", () => {
+    const { score } = generateLocal({ ...defaultSettings(band), style: "swing", seed: 1, bars: 16 }, band);
+    expect(score.plan[score.frame.bars - 2].texture).toBe("peak");
+  });
+});
+
 describe("chord symbols", () => {
   it("read sus2, altered fifths and the usual qualities as written", () => {
     const tones = (sym: string) => parseChord(sym).tones;

@@ -17,12 +17,20 @@ function openerFor(m: Member, rng: Rng): string {
 
 const LOUDNESS: Dynamic[] = ["pp", "p", "mp", "mf", "f", "ff"];
 
+/** The bars a style's ending slows down over (the ritardando), not counting the final bar. */
+function inRit(style: StyleDef, frame: Frame, bar: number): boolean {
+  const e = ENDINGS[style.id];
+  return e.ritBars > 0 && e.slow > 1 && bar < frame.bars - 1 && bar >= frame.bars - 1 - e.ritBars;
+}
+
 function dynamicFor(style: StyleDef, frame: Frame, bar: number, s: Section): Dynamic {
-  // a fading ending is soft whatever came before it
-  if (bar === frame.bars - 1 && ENDINGS[style.id].kind === "fade") return "p";
+  const kind = ENDINGS[style.id].kind;
+  // a fading ending is soft whatever came before it, and eases down through the ritardando
+  if (bar === frame.bars - 1 && kind === "fade") return "p";
+  if (kind === "fade" && inRit(style, frame, bar)) return "mp";
   const d = arcDynamic(style, frame, bar, s);
   // bossa nova is intimate: it builds, but never past mezzo-forte
-  if (style.id === "bossa") return LOUDNESS[Math.min(LOUDNESS.indexOf(d) - 1, LOUDNESS.indexOf("mf"))] ?? "mp";
+  if (style.id === "bossa") return LOUDNESS[Math.max(0, Math.min(LOUDNESS.indexOf(d) - 1, LOUDNESS.indexOf("mf")))];
   return d;
 }
 
@@ -70,6 +78,10 @@ function textureFor(style: StyleDef, frame: Frame, bar: number, s: Section, isLa
     if (inSec >= s.length - 2) return "build";
     return "groove";
   }
+  // the out head climbs to the end, except where the style ends by slowing down: a fade
+  // thins out through its ritardando, a cadence broadens with everyone in
+  const ending = ENDINGS[style.id].kind;
+  if ((ending === "fade" || ending === "cadence") && inRit(style, frame, bar)) return ending === "fade" ? "sparse" : "tutti";
   if (s.kind === "out") return inSec >= s.length - 2 ? "peak" : "tutti";
   if (s.kind === "trade") return "groove";
   return "groove";
