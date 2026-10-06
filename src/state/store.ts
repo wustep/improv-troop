@@ -165,7 +165,16 @@ export const useTroop = create<TroopState>((set, get) => {
     else void troopAudio.prepare(members, { pianoPack: get().pianoPack, notesHint: notesHintFromScore(score) });
   };
 
-  const persist = () => save(get());
+  let persistTimer: ReturnType<typeof setTimeout> | null = null;
+  const persist = () => {
+    if (persistTimer) clearTimeout(persistTimer);
+    persistTimer = null;
+    save(get());
+  };
+  const persistSoon = () => {
+    if (persistTimer) clearTimeout(persistTimer);
+    persistTimer = setTimeout(persist, 300);
+  };
 
   return {
     hydrated: false,
@@ -225,7 +234,9 @@ export const useTroop = create<TroopState>((set, get) => {
       const structural = Object.keys(patch).some((k) => !["tempo", "bestOf", "directorModel", "playerModel", "mode", "phraseBars"].includes(k));
       const settings = reconcile({ ...get().settings, ...patch }, get().members);
       set({ settings });
-      persist();
+      // the tempo slider fires on every pixel of a drag: save once it settles
+      if (patch.tempo !== undefined && !structural) persistSoon();
+      else persist();
       if (structural) {
         sketch();
       } else if (patch.tempo !== undefined) {
@@ -234,7 +245,8 @@ export const useTroop = create<TroopState>((set, get) => {
         if (cur) {
           const next: Score = { ...cur, settings: { ...cur.settings, tempo: settings.tempo }, frame: { ...cur.frame, tempo: settings.tempo } };
           set({ current: next });
-          if (get().playing) {
+          // re-tempo in place; restart from this bar only if the transport can't (e.g. mid count-in)
+          if (get().playing && !troopAudio.setTempo(next)) {
             const beat = troopAudio.getBeat();
             const bar = Number.isFinite(beat) && beat > 0 ? Math.floor(beat / next.frame.meter.beats) : 0;
             troopAudio.play(next, { fromBar: bar, countIn: false });

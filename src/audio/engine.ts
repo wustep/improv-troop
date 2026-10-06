@@ -600,6 +600,25 @@ export class TroopAudio {
     });
   }
 
+  /**
+   * Change the tempo of the chart that's playing without stopping it: the beat under the
+   * playhead stays where it is and everything after it is scheduled at the new tempo. Notes
+   * already handed to the instruments (the lookahead) keep their old timing. Returns false
+   * when it can't (not playing yet, or still counting in); the caller restarts instead.
+   */
+  setTempo(score: Score): boolean {
+    const ctx = this.ctx;
+    if (!ctx || this.state !== "playing" || !this.score) return false;
+    const beat = this.currentRawBeat();
+    if (!Number.isFinite(beat) || beat < this.startBeat || this.clicks.length) return false;
+    this.score = score;
+    this.spb = beatToSeconds(1, tempoOf(score));
+    this.rit = score.rit;
+    this.t0 = ctx.currentTime - this.sec(beat);
+    this.prevT0 = this.t0;
+    return true;
+  }
+
   stop(): void {
     this.halt(false);
   }
