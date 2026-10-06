@@ -12,14 +12,7 @@ import { STYLES } from "@/music/styles";
 import type { ChatMessage, Member, Score, TroopSettings } from "@/music/types";
 import { useDebug } from "./debug";
 import { sharedFromHash, type SharedTake } from "./share";
-
-export interface Take {
-  id: string;
-  score: Score;
-  label: string;
-  engine: "local" | "ai";
-  createdAt: number;
-}
+import { addTake, loadTakes, saveTakes, type Take } from "./takes";
 
 interface GenState {
   running: boolean;
@@ -78,31 +71,7 @@ interface TroopState {
 }
 
 const LS = "improv-troop:v1";
-const LS_TAKES = "jamming:takes:v1";
 const LS_INTRO = "jamming:intro-seen";
-
-function loadTakes(): Take[] {
-  try {
-    const raw = localStorage.getItem(LS_TAKES);
-    const takes = raw ? (JSON.parse(raw) as Take[]) : [];
-    return takes.filter((t) => t?.score?.members?.every((m) => ANIMALS[m.animal] && INSTRUMENTS[m.instrument]));
-  } catch {
-    return [];
-  }
-}
-
-function saveTakes(takes: Take[]) {
-  try {
-    localStorage.setItem(LS_TAKES, JSON.stringify(takes.slice(0, 8)));
-  } catch {
-    // quota: keep fewer
-    try {
-      localStorage.setItem(LS_TAKES, JSON.stringify(takes.slice(0, 3)));
-    } catch {
-      /* give up quietly */
-    }
-  }
-}
 
 function load(): Partial<Pick<TroopState, "members" | "settings" | "apiKey" | "pianoPack">> {
   try {
@@ -193,7 +162,7 @@ export const useTroop = create<TroopState>((set, get) => {
     const settings = reconcile({ ...defaultSettings(shared.members), ...shared.settings }, shared.members);
     const { score } = generateLocal(settings, shared.members);
     const take: Take = { id: score.id, score, label: `Shared · ${STYLES[settings.style].name}`, engine: "local", createdAt: Date.now() };
-    set((s) => ({ current: score, isSketch: false, takes: [take, ...s.takes].slice(0, 12), chat: [], sharedArrival: { takeId: take.id } }));
+    set((s) => ({ current: score, isSketch: false, takes: addTake(s.takes, take), chat: [], sharedArrival: { takeId: take.id } }));
     saveTakes(get().takes);
     void troopAudio.prepare(score.members, { pianoPack: get().pianoPack, notesHint: notesHintFromScore(score) });
   };
@@ -336,7 +305,7 @@ export const useTroop = create<TroopState>((set, get) => {
       if (!st.apiKey) {
         const { score } = generateLocal(settings, members);
         const take: Take = { id: score.id, score, label: `${STYLES[settings.style].name} sketch`, engine: "local", createdAt: Date.now() };
-        set((s) => ({ current: score, isSketch: false, takes: [take, ...s.takes].slice(0, 12), chat: [], readyBars: null, autopilotBars: [] }));
+        set((s) => ({ current: score, isSketch: false, takes: addTake(s.takes, take), chat: [], readyBars: null, autopilotBars: [] }));
         saveTakes(get().takes);
         void get().play();
         return;
@@ -382,7 +351,7 @@ export const useTroop = create<TroopState>((set, get) => {
         set((s) => ({
           current: score,
           isSketch: false,
-          takes: [take, ...s.takes.filter((t) => t.id !== score.id)].slice(0, 12),
+          takes: addTake(s.takes, take),
           readyBars: null,
           gen: { running: false, status: "", runId, mode: settings.mode, error: null },
           chat: score.chat,
