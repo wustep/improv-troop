@@ -21,6 +21,7 @@ export const DIRECTIVE_HELP = `Each bar of each player's part is ONE of:
   @motif [up N|down N|seq N|invert|retro|aug|dim|frag N|displace 0.5|ornament|rhythm] [bar2]  — the shared motif or a transform of it ("bar2" = 2nd bar of a 2-bar statement)
   @head N  — play again exactly what the leader played in bar N (how a tune comes back: repeated A sections, the out head)
   @line [dense|sparse|run|long]  — improvise a line over the changes
+  @answer  — open a solo by answering the previous soloist's last phrase (its rhythm, your register), then carry on
   @walk @two @bossa @funk @baroque @pedal  — bass patterns
   @comp [sparse|busy] @stride @arp @prelude @continuo @pad @shimmer @hits  — chordal patterns
   @pizz [sparse|busy] @arco  — bowed strings: plucked double-stop comping / sustained bowed tones
@@ -140,6 +141,7 @@ function realizeRaw(ctx: BarCtx, text: string): DirectiveResult {
       case "trade":
       case "motif":
       case "line":
+      case "answer":
         return done(drums.drumSolo(c));
       case "end":
         return done(drums.endDrums(c));
@@ -176,6 +178,11 @@ function realizeRaw(ctx: BarCtx, text: string): DirectiveResult {
       const bar2 = args.find((a) => /^bar\d$/i.test(a));
       const offset = bar2 ? parseInt(bar2.slice(3), 10) - 1 : 0;
       const notes = realizeMotifBar(c, parseMotifOps(args.filter((a) => a !== bar2)), offset);
+      if (ctx.inst.id === "piano") notes.push(...pianoSoloLeftHand(c));
+      return done(notes);
+    }
+    case "answer": {
+      const notes = lines.answer(c);
       if (ctx.inst.id === "piano") notes.push(...pianoSoloLeftHand(c));
       return done(notes);
     }

@@ -441,3 +441,22 @@ describe("reharmonization", () => {
     for (const seed of [1, 2, 3]) for (const b of changes(seed, "minimal").bars) expect(b).not.toMatch(/dim|9|13|b9/);
   });
 });
+
+describe("call and response", () => {
+  it("a soloist taking over answers the last soloist's closing phrase", () => {
+    const b: Member[] = [...defaultMembers(), { id: "cat", animal: "cat", name: "Mochi", instrument: "sax" }];
+    let found = 0;
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      const { score } = generateLocal({ ...defaultSettings(b), style: "swing", seed, bars: 32 }, b);
+      const bar = score.plan.findIndex((bp) => Object.values(bp.directives ?? {}).includes("@answer"));
+      if (bar < 0) continue;
+      found++;
+      const id = Object.keys(score.plan[bar].directives!).find((k) => score.plan[bar].directives![k] === "@answer")!;
+      const notes = score.parts[id].filter((n) => Math.floor(n.start / 4 + 1e-9) === bar);
+      expect(notes.length).toBeGreaterThanOrEqual(2);
+      // on the grid
+      for (const n of notes) expect(Math.abs(n.start * 4 - Math.round(n.start * 4))).toBeLessThan(1e-6);
+    }
+    expect(found).toBeGreaterThan(2);
+  });
+});

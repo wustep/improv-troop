@@ -188,7 +188,10 @@ export function planLocal(frame: Frame, members: Member[], motif: Motif, rng: Rn
         const turnStart = s.kind === "trade" ? inSec % 4 === 0 : inSec === 0;
         // a solo is a story: state a transform, leave space, build, climax, hand off
         const last = inSec === s.length - 1;
-        if (turnStart) directives[m.id] = brng.pick(SOLO_OPENERS);
+        // taking over from another soloist: usually pick up what they just played and answer it
+        const prevSec = s.start > 0 ? sectionAt(frame, s.start - 1) : null;
+        const handoff = s.kind === "solo" && inSec === 0 && prevSec?.kind === "solo" && !prevSec.featured?.includes(m.id);
+        if (turnStart) directives[m.id] = handoff && brng.chance(0.7) ? "@answer" : brng.pick(SOLO_OPENERS);
         else if (s.kind === "trade") directives[m.id] = "@line";
         else if (last) directives[m.id] = isLastSolo ? "@line dense" : "@line long";
         else if (inSec === s.length - 2 && s.length >= 4) directives[m.id] = "@line dense";

@@ -55,7 +55,7 @@ export function harmonyOf(frame: Frame, plan: BarPlan[]): Harmony {
 }
 
 const directiveName = (d: string | undefined) => (d && d.startsWith("@") ? d.slice(1).split(/\s+/)[0].toLowerCase() : "");
-const LINE_LIKE = new Set(["line", "solo", "counter"]);
+const LINE_LIKE = new Set(["line", "solo", "counter", "answer"]);
 
 /**
  * Where a player's run of improvised-line bars ends (absolute beat): phrases may cross
@@ -71,7 +71,7 @@ export function lineRunEnd(frame: Frame, plan: BarPlan[], memberId: string, bar:
   // plan: a solo's lines flow across those bars, and each new phrase takes the density of the
   // bar it starts in, so a build reads as one breath getting longer rather than bar-sized bits.
   const norm = (x: string | undefined) =>
-    (x ?? "").trim().replace(/^@solo\b/, "@line").replace(/\b(sparse|dense)\b/g, "").replace(/\s+/g, " ").trim();
+    (x ?? "").trim().replace(/^@(solo|answer)\b/, "@line").replace(/\b(sparse|dense)\b/g, "").replace(/\s+/g, " ").trim();
   const sec = sectionAt(frame, bar);
   let b = bar;
   while (b + 1 < frame.bars && b + 1 < sec.start + sec.length && (b + 1 - sec.start) % 4 !== 0) {

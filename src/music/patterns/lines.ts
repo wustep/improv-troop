@@ -15,6 +15,55 @@ export function line(ctx: BarCtx, opts: LineOpts = {}): NoteEvent[] {
   return phraseLine(ctx, opts);
 }
 
+/**
+ * A new soloist answers the last thing the previous one played: that phrase's rhythm, in
+ * this player's register, its contour kept or turned upside down ("answered sideways"),
+ * every note bent to the chord it now sounds over. Then the solo carries on from there.
+ */
+export function answer(ctx: BarCtx): NoteEvent[] {
+  const prev = [...ctx.featuredPrev].sort((a, b) => a.start - b.start);
+  // the call: the last phrase, back to the previous rest of half a beat or more
+  let k = prev.length - 1;
+  while (k > 0 && prev[k].start - (prev[k - 1].start + prev[k - 1].dur) < 0.5 && prev.length - k < 6) k--;
+  // (a pianist's left-hand chords aren't the line: they're lower and softer than it)
+  const top = Math.max(...prev.slice(k).map((n) => n.pitch));
+  const loud = Math.max(...prev.slice(k).map((n) => n.vel));
+  const call = prev.slice(k).filter((n) => n.pitch >= top - 12 && n.vel >= loud * 0.7);
+  if (call.length < 2) return line(ctx);
+  // starts where the call did inside its beat (an offbeat call gets an offbeat answer), after a breath
+  const phase = call[0].start - Math.floor(call[0].start);
+  const at = (phase > 0 ? phase : 0.5) + (ctx.rng.chance(0.4) ? 1 : 0);
+  const room = ctx.beats - 0.5 - at;
+  const notes = call.filter((n) => n.start - call[0].start < room);
+  if (notes.length < 2) return line(ctx);
+  const mid = (ctx.inst.sweet[0] + ctx.inst.sweet[1]) / 2;
+  const start = harmAt(ctx, at);
+  const first = nearestIn(Math.round(ctx.mem.lastPitch ?? mid), start.stable);
+  const mirror = ctx.rng.chance(0.4);
+  const vel = velFor(ctx, 0.8);
+  const raw = notes.map((n, i) => {
+    const t = at + (n.start - call[0].start);
+    const h = harmAt(ctx, t);
+    const d = n.pitch - notes[0].pitch;
+    let p = first + (mirror ? -d : d);
+    // bend toward where the line is heading, so a step stays a step
+    const step = i === 0 ? 0 : (mirror ? -1 : 1) * Math.sign(n.pitch - notes[i - 1].pitch);
+    const dir = (step > 0 ? 1 : step < 0 ? -1 : 0) as 1 | -1 | 0;
+    const strong = i === notes.length - 1 || Math.abs(t - Math.round(t)) < 1e-6;
+    if ((strong || n.dur >= 0.75) && !holdable(h, mod(p, 12), ctx.style.id)) p = nearestIn(p, h.stable, dir);
+    else if (!h.scale.includes(mod(p, 12))) p = nearestIn(p, h.scale, dir);
+    return { pitch: p, start: t, dur: Math.min(n.dur, ctx.beats - t), vel: vel * (i === 0 ? 1.08 : 1), art: n.art };
+  });
+  const placed = fitOctave(raw, ctx.inst.solo?.[0] ?? ctx.inst.sweet[0], ctx.inst.solo?.[1] ?? ctx.inst.sweet[1], ctx.mem.lastPitch ?? mid);
+  // carry on improvising after the answer, as if it were the phrase in progress
+  const last = placed[placed.length - 1];
+  ctx.mem.lastPitch = last.pitch;
+  // (the breath after it ends on the 8th-note grid, where the next phrase can start)
+  const until = ctx.start + Math.ceil((last.start + last.dur + 0.5) * 2 - 1e-6) / 2;
+  ctx.mem.phrase = { notes: placed.map((n) => ({ ...n, start: n.start + ctx.start })), until, bar: ctx.bar - 1 };
+  return phraseLine(ctx);
+}
+
 /** Solo bar: opens with a motif transform, then improvises. */
 export function soloBar(ctx: BarCtx): NoteEvent[] {
   return line(ctx);

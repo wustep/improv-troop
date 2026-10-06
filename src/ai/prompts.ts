@@ -174,7 +174,10 @@ export function arcNote(frame: Frame, bar: number, role: Role | undefined): stri
   const i = bar - s.start;
   const lastSolo = !frame.sections.some((x) => x.start > s.start && (x.kind === "solo" || x.kind === "trade"));
   const x = s.length > 1 ? i / (s.length - 1) : 1;
-  if (i === 0) return "solo opening: a transform of the motif, then space";
+  if (i === 0) {
+    const before = s.start > 0 ? sectionAt(frame, s.start - 1) : null;
+    return before?.kind === "solo" ? "solo opening: answer the last soloist's closing phrase, then make it yours" : "solo opening: a transform of the motif, then space";
+  }
   if (i === s.length - 1) return lastSolo ? "solo climax: busiest, highest phrase, land hard on the last chord" : "solo hand-off: wind down and land so the next player can start";
   if (x < 0.4) return "solo early: short phrases, room to breathe";
   if (x < 0.7) return "solo middle: develop it with longer lines, climbing";
