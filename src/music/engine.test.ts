@@ -736,7 +736,7 @@ describe("pop", () => {
 
 describe("standards with a written melody", () => {
   it("the leader plays the tune as written on the head and the head out, in any key", () => {
-    for (const id of ["saints", "greensleeves", "ode-to-joy"]) {
+    for (const id of STANDARDS.filter((s) => s.melody).map((s) => s.id)) {
       const std = STANDARDS.find((s) => s.id === id)!;
       for (const tonic of [std.key.tonic, "Eb"]) {
         const bars = std.bars.length * 3;
