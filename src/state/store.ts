@@ -133,11 +133,11 @@ function reconcile(settings: TroopSettings, members: Member[]): TroopSettings {
 
 let controller: AbortController | null = null;
 let improv: ImprovController | null = null;
-let liveTimer: number | null = null;
+let liveTimer: ReturnType<typeof setInterval> | null = null;
 let endedUnsub: (() => void) | null = null;
 
 function stopLiveWatch() {
-  if (liveTimer !== null) cancelAnimationFrame(liveTimer);
+  if (liveTimer !== null) clearInterval(liveTimer);
   liveTimer = null;
 }
 
@@ -403,23 +403,24 @@ export const useTroop = create<TroopState>((set, get) => {
       if (!get().seenIntro) get().dismissIntro();
       // live improv watchdog: if playback catches up with the band's thinking, they vamp on autopilot
       stopLiveWatch();
+      // A timer, not rAF: rAF pauses in a background tab but the audio keeps playing, and the
+      // band has to keep up there too. Hidden tabs throttle timers to ~1s, so look further ahead.
       const tick = () => {
-        if (!get().playing) return;
-        if (improv) {
-          const beats = score.frame.meter.beats;
-          const beat = troopAudio.getBeat();
-          const ready = improv.readyBars();
-          if (Number.isFinite(beat) && ready < score.frame.bars && beat > ready * beats - beats * 0.75) {
-            if (improv.ensureReady(ready)) {
-              const cur = get().current;
-              if (cur) troopAudio.updateScore(cur);
-              set({ readyBars: improv.readyBars(), autopilotBars: improv.autopilotBars() });
-            }
+        if (!get().playing) return stopLiveWatch();
+        if (!improv) return;
+        const beats = score.frame.meter.beats;
+        const beat = troopAudio.getBeat();
+        const ready = improv.readyBars();
+        const margin = Math.max(beats * 0.75, document.hidden ? 1.6 / troopAudio.getSecondsPerBeat() : 0);
+        if (Number.isFinite(beat) && ready < score.frame.bars && beat > ready * beats - margin) {
+          if (improv.ensureReady(ready)) {
+            const cur = get().current;
+            if (cur) troopAudio.updateScore(cur);
+            set({ readyBars: improv.readyBars(), autopilotBars: improv.autopilotBars() });
           }
         }
-        liveTimer = requestAnimationFrame(tick);
       };
-      liveTimer = requestAnimationFrame(tick);
+      liveTimer = setInterval(tick, 100);
     },
 
     stop() {
