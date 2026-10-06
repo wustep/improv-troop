@@ -1,3 +1,4 @@
+import { reharmonize } from "./reharm";
 import { INSTRUMENTS } from "./instruments";
 import { makeRng } from "./rng";
 import { getStandard } from "./standards";
@@ -125,10 +126,17 @@ export function buildFrame(settings: TroopSettings, members: Member[]): Frame {
         .split(/\s+/)
         .map((tok) => romanToChord(tok, settings.key))
         .join(" ");
-    barTexts = Array.from({ length: total }, (_, i) => toText(prog[i % prog.length]));
+    // the tune: the progression with a light touch of the style's reharmonization, so each
+    // take has its own changes (read with the top of the tune after it, where it turns around)
+    const plain = prog.map(toText);
+    const tune = reharmonize([...plain, plain[0]], 0, plain.length, () => 0.3, settings.key, settings.style, rng.fork("tune")).slice(0, plain.length);
+    barTexts = Array.from({ length: total }, (_, i) => tune[i % tune.length]);
     const { head, out } = freeForm(total);
+    const outStart = out > 0 ? total - out : total;
+    // solo choruses open the tune up, more each time around
+    const soloEnd = out > 0 ? outStart - 1 : total - 2;
+    barTexts = reharmonize(barTexts, head, soloEnd, (i) => 0.5 + 0.25 * Math.floor((i - head) / tune.length), settings.key, settings.style, rng.fork("solos"));
     if (out > 0) {
-      const outStart = total - out;
       // the out head is the head again: the same changes under the same melody,
       // and the bar before it turns the progression around into the top
       for (let i = 0; i < out; i++) barTexts[outStart + i] = barTexts[i];

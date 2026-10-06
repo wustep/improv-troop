@@ -369,13 +369,16 @@ describe("playing like a band", () => {
     }
   });
 
-  it("reads harmony in the key: a D minor baroque bass never plays B natural over D minor", () => {
+  it("reads harmony in the key: a D minor baroque bass plays B natural over D minor only leading into a chord that has it", () => {
     for (const seed of [1, 2, 3, 4, 5]) {
       const { score } = generateLocal({ ...defaultSettings(band), style: "baroque", key: { tonic: "D", mode: "minor" }, seed }, band);
       const H = harmonyOf(score.frame, score.plan);
       for (const n of score.parts.frog) {
         const h = H.at(n.start);
-        if (h.chord.symbol === "Dm") expect(mod(n.pitch, 12)).not.toBe(11);
+        if (h.chord.symbol !== "Dm") continue;
+        // (a secondary dominant after it, like G7, tonicizes C: then B natural is the raised 6th leading in)
+        const next = H.spans.find((s) => s.start > h.start + 1e-6);
+        if (!next || !chordPcs(next.chord).includes(11)) expect(mod(n.pitch, 12)).not.toBe(11);
       }
     }
   });
@@ -413,5 +416,28 @@ describe("endings", () => {
   it("a baroque piece in minor ends on the major tonic", () => {
     const s = take("baroque", "minor");
     expect(s.frame.chords[s.frame.bars - 1][0].symbol).toBe("D");
+  });
+});
+
+describe("reharmonization", () => {
+  const changes = (seed: number, style: StyleId = "swing") => {
+    const f = buildFrame({ ...defaultSettings(band), style, key: { ...STYLES[style].key }, seed, bars: 32 }, band);
+    return { f, bars: f.chords.map((c) => c.map((x) => x.symbol).join(" ")) };
+  };
+  it("gives takes their own changes, opens up the solos, and brings the tune back", () => {
+    const tunes = new Set([1, 2, 3, 4, 5, 6].map((s) => changes(s).bars.slice(0, 8).join("|")));
+    expect(tunes.size).toBeGreaterThan(3);
+    for (const seed of [1, 2, 3]) {
+      const { f, bars } = changes(seed);
+      const head = f.sections.find((s) => s.kind === "head")!;
+      const out = f.sections.find((s) => s.kind === "out")!;
+      expect(bars.slice(out.start, out.start + out.length - 2)).toEqual(bars.slice(0, out.length - 2));
+      const solos = bars.slice(head.length, out.start - 1);
+      expect(solos.some((b, i) => b !== bars[i % head.length])).toBe(true);
+      expect(bars[bars.length - 1]).toBe("Bb6");
+    }
+  });
+  it("leaves modal styles alone", () => {
+    for (const seed of [1, 2, 3]) for (const b of changes(seed, "minimal").bars) expect(b).not.toMatch(/dim|9|13|b9/);
   });
 });
