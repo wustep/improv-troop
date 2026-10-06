@@ -341,7 +341,7 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
         priorFeatured: new Map(featuredByBar),
         filter: (mid, bar) => featuredIds.includes(mid) && isFeaturedRole(plan[bar]?.roles[mid]),
       });
-      const fCalls = featuredIds.map(async (id) => {
+      const callFor = async (id: string, answering: string) => {
         const m = members.find((x) => x.id === id)!;
         const myBars = bars.filter((b) => writes(id, b));
         try {
@@ -363,6 +363,7 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
               `WHAT THE BAND JUST PLAYED (bars ${prevBars.length ? `${prevBars[0] + 1}-${prevBars.at(-1)! + 1}` : "-"}):`,
               heard,
               "",
+              answering,
               "BAND TALK:",
               chatBlock(chat, members),
               "",
@@ -411,8 +412,38 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
           if (calledOff(e)) return; // autopilot already played these bars
           dbg.step(runId, `${m.name} blanked on bars ${bars[0] + 1}+ (${(e as Error).message}); engine improvised`);
         }
-      });
-      await Promise.all(fCalls);
+      };
+      // Players whose turn starts later in the phrase (a trade, a solo handed over mid-phrase)
+      // go after the ones before them and hear what they just wrote, so a trade is a
+      // conversation rather than two people talking at once.
+      const turnOf = (id: string) => Math.min(...bars.filter((b) => writes(id, b)));
+      const turns = [...new Set(featuredIds.map(turnOf))].sort((a, b) => a - b);
+      for (const [ti, turn] of turns.entries()) {
+        if (stage[pi] !== "none") break;
+        const before = featuredIds.filter((id) => turnOf(id) < turn);
+        let answering = "";
+        if (ti > 0 && before.length) {
+          const theirs = bars.filter((b) => b < turn);
+          const heardNow = realize({
+            frame,
+            members,
+            plan,
+            motif,
+            seed: settings.seed,
+            bars: theirs,
+            memories: new Map([...memories].map(([k, v]) => [k, structuredClone(v)])),
+            priorFeatured: new Map(featuredByBar),
+            filter: (mid, bar) => before.includes(mid) && isFeaturedRole(plan[bar]?.roles[mid]),
+          });
+          answering = [
+            `WHAT ${before.map(nameOf).join(" & ").toUpperCase()} JUST PLAYED, RIGHT BEFORE YOUR TURN (bars ${theirs[0] + 1}-${theirs.at(-1)! + 1}):`,
+            playedBlock(members, heardNow.parts, plan, frame, theirs[0], theirs.at(-1)!, before),
+            "Answer it: pick up its rhythm or its last idea and take it somewhere, in your own register.",
+            "",
+          ].join("\n");
+        }
+        await Promise.all(featuredIds.filter((id) => turnOf(id) === turn).map((id) => callFor(id, answering)));
+      }
       if (stage[pi] !== "none") return; // autopilot took this phrase
       realizeStage(pi, "featured");
       stage[pi] = "featured";

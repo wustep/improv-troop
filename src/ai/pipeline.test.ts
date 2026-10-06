@@ -158,6 +158,27 @@ describe("when the count-off call fails", () => {
   });
 });
 
+describe("trading inside a phrase", () => {
+  it("the later turn goes after the earlier one and hears what it wrote", async () => {
+    installFakeFetch(5);
+    const cat: Member = { id: "cat", animal: "cat", name: "Mochi", instrument: "sax" };
+    const band5 = [...band, cat];
+    const settings = { ...defaultSettings(band5), mode: "improviser" as const, standard: "f-blues", key: { tonic: "F", mode: "major" as const }, bars: 48, soloists: ["cat", "owl"], phraseBars: 8 };
+    const h = hooks("t-trade");
+    const score = await startImproviser(settings, band5, h).promise;
+    const trade = score.frame.sections.find((x) => x.kind === "trade")!;
+    expect(trade.turn).toBe(4);
+    const calls = useDebug.getState().calls.filter((c) => c.runId === "t-trade" && /^bars /.test(c.label));
+    // find a phrase where the drummer's turn and a horn's turn share the phrase
+    // a phrase holding the drummer's turn (bars 33-36) and then the horn's (37-40)
+    const drumTurn = calls.find((c) => c.agent === "owl" && c.label === "bars 33-36");
+    const after = calls.find((c) => c.agent === "cat" && c.label === "bars 37-40");
+    expect(drumTurn && after, "both turns of the phrase were asked").toBeTruthy();
+    expect(after!.startedAt).toBeGreaterThanOrEqual(drumTurn!.startedAt + (drumTurn!.ms ?? 0) - 1);
+    expect(after!.prompt).toContain("HOOT JUST PLAYED, RIGHT BEFORE YOUR TURN");
+  });
+});
+
 describe("improviser pacing", () => {
   it("pipelines phrases: the next soloist thinks while the band answers", async () => {
     installFakeFetch(20);
