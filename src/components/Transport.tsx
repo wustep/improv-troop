@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { troopAudio, type LoadState } from "@/audio/engine";
+import { canShare, shareUrl } from "@/state/share";
 import { useTroop } from "@/state/store";
 import { RoughButton } from "./ui/rough";
 
@@ -109,7 +110,43 @@ export function Transport() {
           </span>
         ) : null}
       </div>
+      <ShareLink />
     </div>
+  );
+}
+
+/** Copy a link that replays this take (local takes only: they're rebuilt from settings and seed). */
+function ShareLink() {
+  const current = useTroop((s) => s.current);
+  const running = useTroop((s) => s.gen.running);
+  // the note belongs to the take it was about, so switching takes clears it
+  const [note, setNote] = useState<{ id: string; text: string } | null>(null);
+  useEffect(() => {
+    if (!note) return;
+    const t = setTimeout(() => setNote(null), 2500);
+    return () => clearTimeout(t);
+  }, [note]);
+  if (running || !canShare(current)) return null;
+  const say = (text: string) => setNote({ id: current.id, text });
+
+  const share = async () => {
+    const url = shareUrl(current, location.href);
+    try {
+      if (navigator.share && matchMedia("(hover: none)").matches) {
+        await navigator.share({ title: `Jamming · ${current.title}`, url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      say("link copied");
+    } catch (e) {
+      if ((e as Error).name !== "AbortError") say("couldn't copy the link");
+    }
+  };
+
+  return (
+    <button type="button" className="text-action text-m" onClick={() => void share()} title="Copy a link that plays this take again">
+      <span aria-live="polite">{note?.id === current.id ? note.text : "share this take"}</span>
+    </button>
   );
 }
 

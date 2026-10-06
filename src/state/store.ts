@@ -11,6 +11,7 @@ import { getStandard } from "@/music/standards";
 import { STYLES } from "@/music/styles";
 import type { ChatMessage, Member, Score, TroopSettings } from "@/music/types";
 import { useDebug } from "./debug";
+import { sharedFromHash, type SharedTake } from "./share";
 
 export interface Take {
   id: string;
@@ -200,6 +201,22 @@ export const useTroop = create<TroopState>((set, get) => {
         set({ playing: false });
       });
       sketch();
+      // a shared link (#t=…): replay that take without touching the visitor's own band
+      let shared: SharedTake | null = null;
+      try {
+        shared = sharedFromHash(location.hash);
+        if (/[#&]t=/.test(location.hash)) history.replaceState(null, "", location.pathname + location.search);
+      } catch {
+        /* ignore */
+      }
+      if (shared) {
+        const settings = reconcile({ ...defaultSettings(shared.members), ...shared.settings }, shared.members);
+        const { score } = generateLocal(settings, shared.members);
+        const take: Take = { id: score.id, score, label: `Shared · ${STYLES[settings.style].name}`, engine: "local", createdAt: Date.now() };
+        set((s) => ({ current: score, isSketch: false, takes: [take, ...s.takes].slice(0, 12), chat: [] }));
+        saveTakes(get().takes);
+        void troopAudio.prepare(score.members, { pianoPack: get().pianoPack, notesHint: notesHintFromScore(score) });
+      }
     },
 
     setSettings(patch) {
