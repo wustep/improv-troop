@@ -3,7 +3,7 @@ import { motifFromText } from "@/music/motif";
 import { looksLikeDrumGrid, parseNotes } from "@/music/notation";
 import { isFeaturedRole } from "@/music/realize";
 import { fold } from "@/music/theory";
-import type { BarPlan, Dynamic, Frame, Member, Motif, Role, Texture } from "@/music/types";
+import type { BarPlan, Dynamic, Frame, InstrumentFunction, Member, Motif, Role, Texture } from "@/music/types";
 import { asRecord, asString, parseBarRange } from "./json";
 
 const TEXTURES: Texture[] = ["sparse", "groove", "build", "peak", "breakdown", "tutti", "stoptime", "ostinato"];
@@ -60,12 +60,45 @@ function movedWords(octaves: number): string {
   return `${octaves < 0 ? "down" : "up"} ${OCTAVE_WORDS[Math.abs(octaves)]}`;
 }
 
-/** Validate one bar's content for one member. Returns the cleaned text or null (fall back). */
-export function validateBarText(text: string, member: Member, beats: number, repairs: string[], where: string): string | null {
+// What each kind of player can be told to do while someone else is featured.
+const ACCOMPANIMENT: Record<InstrumentFunction, RegExp> = {
+  rhythm: /^@(groove)$/,
+  bass: /^@(walk|two|bossa|funk|baroque|pedal|groove)$/,
+  chordal: /^@(comp|stride|arp|prelude|continuo|pad|shimmer|bossa|funk|groove)$/,
+  melodic: /^@(guide|harmony|canon|riff|counter|pad|arp|comp|shimmer)$/,
+};
+// cellos also pluck and bow
+const CELLO_EXTRA = /^@(pizz|arco)$/;
+// anyone can rest, fill, hit with the band, end, or bring the tune back
+const ANYONE = /^@(rest|end|fill|hits|head)$/;
+
+/**
+ * Is this an accompaniment directive this player can play? A cello covering the bass chair
+ * speaks the bass vocabulary. Featured directives (@motif, @line, @solo...) never are.
+ */
+export function accompanimentFits(directive: string, member: Member, role?: Role): boolean {
+  const head = directive.trim().split(/\s+/)[0];
+  const inst = INSTRUMENTS[member.instrument];
+  const fn = role === "bass" && inst.bassCapable ? "bass" : inst.fn;
+  return ACCOMPANIMENT[fn].test(head) || (member.instrument === "cello" && CELLO_EXTRA.test(head));
+}
+
+/**
+ * Validate one bar's content for one member. Returns the cleaned text or null (fall back).
+ * With a role, a directive for an accompanying player must be one they can play.
+ */
+export function validateBarText(text: string, member: Member, beats: number, repairs: string[], where: string, role?: Role): string | null {
   const t = text.trim();
   if (!t) return null;
   const fn = INSTRUMENTS[member.instrument].fn;
-  if (t.startsWith("@")) return t.split("\n")[0].slice(0, 80);
+  if (t.startsWith("@")) {
+    const d = t.split("\n")[0].slice(0, 80);
+    if (role && !isFeaturedRole(role) && !ANYONE.test(d.split(/\s+/)[0]) && !accompanimentFits(d, member, role)) {
+      repairs.push(`${where}: ${d.split(/\s+/)[0]} isn't something ${member.name} plays while accompanying; kept the plan`);
+      return null;
+    }
+    return d;
+  }
   if (looksLikeDrumGrid(t)) {
     if (fn !== "rhythm") {
       repairs.push(`${where}: drum grid for ${member.name} ignored`);
@@ -199,7 +232,8 @@ export function mergePlan(
           repairs.push(`bar ${b1} ${m.name}: kept ${locked} (the tune comes back to the melody here)`);
           continue;
         }
-        const clean = validateBarText(text, m, frame.meter.beats, repairs, `bar ${b1} ${m.name}`);
+        const role = frame.slots[i]?.[m.id] ?? base[i]?.roles[m.id];
+        const clean = validateBarText(text, m, frame.meter.beats, repairs, `bar ${b1} ${m.name}`, role);
         if (clean) bp.directives[m.id] = clean;
       }
     }

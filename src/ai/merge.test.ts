@@ -3,7 +3,7 @@ import { defaultMembers, INSTRUMENTS } from "@/music/instruments";
 import { defaultSettings, generateLocal } from "@/music/local";
 import { isFeaturedRole } from "@/music/realize";
 import type { Member } from "@/music/types";
-import { enforceSlots, mergePlan, registerShift, resolveMember, shiftOctaves, validateBarText, validateMotif } from "./merge";
+import { accompanimentFits, enforceSlots, mergePlan, registerShift, resolveMember, shiftOctaves, validateBarText, validateMotif } from "./merge";
 
 // bear piano, frog bass, owl drums, fox trumpet (leader), cat sax (soloist)
 const band: Member[] = [...defaultMembers(), { id: "cat", animal: "cat", name: "Mochi", instrument: "sax" }];
@@ -70,6 +70,42 @@ describe("validateBarText", () => {
     expect(check("C5/4 D5/4 E5/4 G5/4", fox).repairs).toEqual([]);
     // one stray low note: shifting the rest up would push them out instead
     expect(check("F#3/4 C5/4 D5/4 E5/4", fox).out).toBe("F#3/4 C5/4 D5/4 E5/4");
+  });
+});
+
+describe("directives that fit the player", () => {
+  const frog = band[1]; // bass
+  const olive: Member = { id: "sheep", animal: "sheep", name: "Olive", instrument: "cello" };
+  const accompany = (text: string, m: Member, role: Parameters<typeof validateBarText>[5]) => {
+    const repairs: string[] = [];
+    return { out: validateBarText(text, m, 4, repairs, "bar 1", role), repairs };
+  };
+  it("keeps a comping pianist off the bass line and out of the melody", () => {
+    const walk = accompany("@walk", bear, "comp");
+    expect(walk.out).toBeNull();
+    expect(walk.repairs.join()).toMatch(/@walk isn't something Bruno plays/);
+    expect(accompany("@motif invert", bear, "comp").out).toBeNull();
+    expect(accompany("@line dense", fox, "counter").out).toBeNull();
+    expect(accompany("@comp sparse", bear, "comp").out).toBe("@comp sparse");
+  });
+  it("lets anyone rest, fill, hit, end or bring the head back", () => {
+    for (const d of ["@rest", "@fill", "@hits", "@end", "@head 3"]) expect(accompany(d, frog, "bass").out).toBe(d);
+  });
+  it("lets a cello in the bass chair walk, and pluck anywhere", () => {
+    expect(accompany("@walk", olive, "bass").out).toBe("@walk");
+    expect(accompany("@walk", olive, "counter").out).toBeNull();
+    expect(accompany("@pizz busy", olive, "counter").out).toBe("@pizz busy");
+    expect(accompanimentFits("@pizz", fox)).toBe(false);
+  });
+  it("leaves featured players' directives to the slot check", () => {
+    expect(accompany("@motif up 2", fox, "lead").out).toBe("@motif up 2");
+    expect(accompany("@walk", fox, undefined).out).toBe("@walk");
+  });
+  it("is applied when merging a plan", () => {
+    const repairs: string[] = [];
+    const merged = mergePlan(plan, [{ bar: free + 1, parts: { bear: "@walk" } }], frame, band, repairs, { onlyBars: [free] });
+    expect(merged[free].directives?.bear).toBe(plan[free].directives?.bear);
+    expect(repairs.join()).toMatch(/@walk isn't something/);
   });
 });
 

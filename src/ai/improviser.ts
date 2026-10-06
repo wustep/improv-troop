@@ -12,7 +12,7 @@ import { useDebug } from "@/state/debug";
 import { chatMsg, type PipelineHooks } from "./composer";
 import { asRecord, asString, extractJson, parseBarRange } from "./json";
 import { callLLM, noteRepair, setParsed } from "./llm";
-import { asDynamic, asTexture, enforceSlots, resolveMember, validateBarText, validateMotif } from "./merge";
+import { accompanimentFits, asDynamic, asTexture, enforceSlots, resolveMember, validateBarText, validateMotif } from "./merge";
 import { barsSchema, countOffSchema, replySchema } from "./schemas";
 import {
   arcNote,
@@ -272,20 +272,13 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
           const d = asString(o.default, 60)?.trim();
           if (d && d.startsWith("@")) {
             const head = d.split(/\s+/)[0];
-            const fn = INSTRUMENTS[m.instrument].fn;
-            const okFor: Record<string, RegExp> = {
-              rhythm: /^@(groove)$/,
-              bass: /^@(walk|two|bossa|funk|baroque|pedal)$/,
-              chordal: /^@(comp|stride|arp|prelude|continuo|pad|shimmer)$/,
-              melodic: m.instrument === "cello" ? /^@(guide|harmony|canon|riff|counter|pad|arp|pizz|arco)$/ : /^@(guide|harmony|canon|riff|counter|pad|arp)$/,
-            };
-            if (okFor[fn].test(head)) {
+            if (accompanimentFits(head, m)) {
               for (const bp of plan) {
                 const cur = bp.directives?.[m.id];
                 if (isFeaturedRole(bp.roles[m.id]) || !cur || cur === "@rest" || cur === "@end") continue;
                 bp.directives = { ...bp.directives, [m.id]: d };
               }
-            } else noteRepair(call.id, `"${d}" isn't an accompaniment directive for ${fn}; kept the style default`);
+            } else noteRepair(call.id, `"${d}" isn't an accompaniment directive for ${INSTRUMENTS[m.instrument].name.toLowerCase()}; kept the style default`);
           }
         } catch (e) {
           if ((e as Error).name === "AbortError") throw e;
@@ -483,7 +476,7 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
               const raw = asString(bmap[String(b + 1)], 600);
               if (!raw) continue;
               const repairs: string[] = [];
-              const clean = validateBarText(raw, m, frame.meter.beats, repairs, `bar ${b + 1}`);
+              const clean = validateBarText(raw, m, frame.meter.beats, repairs, `bar ${b + 1}`, frame.slots[b]?.[id] ?? plan[b].roles[id]);
               repairs.forEach((x) => noteRepair(call.id, x));
               if (clean) plan[b].directives = { ...plan[b].directives, [id]: clean };
             }
