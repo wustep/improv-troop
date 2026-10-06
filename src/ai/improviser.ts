@@ -14,6 +14,7 @@ import { callLLM, noteRepair, setParsed } from "./llm";
 import { asDynamic, asTexture, enforceSlots, resolveMember, validateBarText, validateMotif } from "./merge";
 import { barsSchema, countOffSchema, replySchema } from "./schemas";
 import {
+  arcNote,
   bandBlock,
   chartBlock,
   chatBlock,
@@ -48,7 +49,8 @@ function describeBars(bars: number[], frame: Frame, plan: BarPlan[], memberId: s
   return bars
     .map((b) => {
       const bp = plan[b];
-      return `  bar ${b + 1}: ${frame.chords[b].map((c) => c.symbol).join(" ")} · ${bp.section} · you: ${bp.roles[memberId]} (${bp.directives?.[memberId] ?? "@rest"}) · ${bp.dynamic}/${bp.texture}`;
+      const arc = arcNote(frame, b, bp.roles[memberId]);
+      return `  bar ${b + 1}: ${frame.chords[b].map((c) => c.symbol).join(" ")} · ${bp.section} · you: ${bp.roles[memberId]} (${bp.directives?.[memberId] ?? "@rest"}) · ${bp.dynamic}/${bp.texture}${arc ? ` · ${arc}` : ""}`;
     })
     .join("\n");
 }

@@ -66,8 +66,11 @@ export function lineRunEnd(frame: Frame, plan: BarPlan[], memberId: string, bar:
   const d = plan[bar]?.directives?.[memberId];
   const name = directiveName(d);
   if (!LINE_LIKE.has(name) || /\b(long|run)\b/.test(d ?? "")) return (bar + 1) * beats;
-  // a run is bars with the same instruction ("@line sparse" then "@line dense" is a change of plan)
-  const norm = (x: string | undefined) => (x ?? "").trim().replace(/^@solo\b/, "@line").replace(/\s+/g, " ");
+  // a run is bars with the same instruction. How busy it is ("sparse", "dense") isn't a change of
+  // plan: a solo's lines flow across those bars, and each new phrase takes the density of the
+  // bar it starts in, so a build reads as one breath getting longer rather than bar-sized bits.
+  const norm = (x: string | undefined) =>
+    (x ?? "").trim().replace(/^@solo\b/, "@line").replace(/\b(sparse|dense)\b/g, "").replace(/\s+/g, " ").trim();
   const sec = sectionAt(frame, bar);
   let b = bar;
   while (b + 1 < frame.bars && b + 1 < sec.start + sec.length && (b + 1 - sec.start) % 4 !== 0) {

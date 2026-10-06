@@ -13,6 +13,7 @@ import { callLLM, noteRepair, setParsed } from "./llm";
 import { mergePlan, validateBarText, validateMotif } from "./merge";
 import { barsSchema, criticSchema, planSchema } from "./schemas";
 import {
+  arcNote,
   bandBlock,
   chartBlock,
   CRITIC_SYSTEM,
@@ -88,7 +89,8 @@ function partsPrompt(member: Member, bars: number[], plan: BarPlan[], frame: Ret
     const bp = plan[b];
     const role = bp.roles[member.id];
     const backing = others.map((m) => `${m.name} ${bp.directives?.[m.id] ?? "@rest"}`).join(", ");
-    return `  bar ${b + 1}: ${frame.chords[b].map((c) => c.symbol).join(" ")} · ${bp.section} · ${role} · ${bp.dynamic}/${bp.texture} · director: ${bp.directives?.[member.id] ?? ""}${bp.cue ? ` ("${bp.cue}")` : ""}\n      under you: ${backing}`;
+    const arc = arcNote(frame, b, role);
+    return `  bar ${b + 1}: ${frame.chords[b].map((c) => c.symbol).join(" ")} · ${bp.section} · ${role}${arc ? ` (${arc})` : ""} · ${bp.dynamic}/${bp.texture} · director: ${bp.directives?.[member.id] ?? ""}${bp.cue ? ` ("${bp.cue}")` : ""}\n      under you: ${backing}`;
   });
   return [
     styleBlock(frame),

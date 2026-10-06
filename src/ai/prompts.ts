@@ -4,7 +4,8 @@ import { drumsToGrid, notesToText } from "@/music/notation";
 import { harmonyOf } from "@/music/realize";
 import { STYLES } from "@/music/styles";
 import { keyPrefersFlats, pcName, pitchName } from "@/music/theory";
-import type { BarPlan, ChatMessage, Frame, Member, Motif, NoteEvent } from "@/music/types";
+import { sectionAt } from "@/music/form";
+import type { BarPlan, ChatMessage, Frame, Member, Motif, NoteEvent, Role } from "@/music/types";
 
 export function styleBlock(frame: Frame): string {
   const s = STYLES[frame.style];
@@ -158,3 +159,20 @@ export const CRITIC_SYSTEM = [
   "Score each candidate 0-10 on distinctiveness (how unmistakably it embodies the requested style's TEXTURE — rhythm-section patterns, density, register, articulation — versus generic filler) and coherence (motif stated and developed, solo arc builds, dynamics shape the form).",
   "Reply with a single JSON object and nothing else.",
 ].join("\n");
+
+/**
+ * Where a bar sits in the player's solo, as a short instruction. A model writing four bars at
+ * a time can't tell the opening from the climax; this keeps the arc of the whole solo.
+ */
+export function arcNote(frame: Frame, bar: number, role: Role | undefined): string {
+  if (role !== "solo") return "";
+  const s = sectionAt(frame, bar);
+  const i = bar - s.start;
+  const lastSolo = !frame.sections.some((x) => x.start > s.start && (x.kind === "solo" || x.kind === "trade"));
+  const x = s.length > 1 ? i / (s.length - 1) : 1;
+  if (i === 0) return "solo opening: a transform of the motif, then space";
+  if (i === s.length - 1) return lastSolo ? "solo climax: busiest, highest phrase, land hard on the last chord" : "solo hand-off: wind down and land so the next player can start";
+  if (x < 0.4) return "solo early: short phrases, room to breathe";
+  if (x < 0.7) return "solo middle: develop it with longer lines, climbing";
+  return "solo build: denser and higher than anything so far";
+}
