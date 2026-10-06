@@ -63,6 +63,8 @@ interface TroopState {
   setPianoPack(p: PianoPack): void;
   generate(): Promise<void>;
   cancel(): void;
+  /** After a failed model run: drop the error and play the local band's take for these settings. */
+  playSketchInstead(): void;
   play(fromBar?: number): Promise<void>;
   stop(): void;
   selectTake(id: string): void;
@@ -370,6 +372,12 @@ export const useTroop = create<TroopState>((set, get) => {
     cancel() {
       controller?.abort();
       controller = null;
+    },
+
+    playSketchInstead() {
+      set((s) => ({ gen: { ...s.gen, error: null } }));
+      sketch();
+      if (!get().playing) void get().play();
     },
 
     async play(fromBar = 0) {

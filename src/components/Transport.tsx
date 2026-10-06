@@ -18,6 +18,7 @@ export function Transport() {
   const stop = useTroop((s) => s.stop);
   const generate = useTroop((s) => s.generate);
   const cancel = useTroop((s) => s.cancel);
+  const playSketchInstead = useTroop((s) => s.playSketchInstead);
   const gen = useTroop((s) => s.gen);
   const mode = useTroop((s) => s.settings.mode);
   const bestOf = useTroop((s) => s.settings.bestOf);
@@ -27,6 +28,7 @@ export function Transport() {
   const isSketch = useTroop((s) => s.isSketch);
   const loads = useLoadStates();
   const loading = loads.filter((l) => !l.ready && !l.error);
+  const loadPct = loading.length ? Math.round((loading.reduce((s, l) => s + (l.total ? l.loaded / l.total : 0), 0) / loading.length) * 100) : 100;
 
   const goLabel = hasKey ? (mode === "composer" ? "Compose!" : "Let them jam!") : "Sketch a new take";
 
@@ -86,17 +88,31 @@ export function Transport() {
         {gen.running ? (
           <span>{gen.status}</span>
         ) : gen.error ? (
-          <span className="text-(--error)">{gen.error}</span>
+          <span role="alert" className="flex flex-wrap items-baseline gap-x-s">
+            <span className="text-(--error)">The band lost the thread: {gen.error}</span>
+            <button type="button" className="text-action" onClick={() => void generate()}>
+              try again
+            </button>
+            <button type="button" className="text-action" onClick={playSketchInstead}>
+              play the sketch instead
+            </button>
+          </span>
         ) : loading.length ? (
           <span className="flex items-center gap-xs">
             <span>unpacking instruments…</span>
-            <span className="relative inline-block h-2.5 w-28 overflow-hidden rounded-full shadow-[inset_0_0_0_var(--border-m)_var(--border-default-color)]" aria-hidden>
-              <span
-                className="absolute inset-y-0 left-0 bg-(--color-2)"
-                style={{ width: `${Math.round((loading.reduce((s, l) => s + (l.total ? l.loaded / l.total : 0), 0) / loading.length) * 100)}%` }}
-              />
+            <span
+              role="progressbar"
+              aria-label="Unpacking instruments"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={loadPct}
+              className="relative inline-block h-2.5 w-28 overflow-hidden rounded-full shadow-[inset_0_0_0_var(--border-m)_var(--border-default-color)]"
+            >
+              <span className="absolute inset-y-0 left-0 bg-(--color-2)" style={{ width: `${loadPct}%` }} />
             </span>
-            <span className="text-xs">{loading.map((l) => l.instrument).join(", ")}</span>
+            <span className="text-xs" title={loading.map((l) => l.instrument).join(", ")}>
+              {loads.length - loading.length} of {loads.length} ready
+            </span>
           </span>
         ) : current ? (
           <span>

@@ -76,10 +76,16 @@ export default function Home() {
           <section className="order-4 min-w-0 lg:order-none lg:mt-l" aria-label="Sheet music">
             <div className="mb-xs flex items-baseline gap-s">
               <h2 className="type-section">The chart</h2>
-              <button type="button" className="text-action text-s" onClick={() => setShowSheet((v) => !v)}>
-                {showSheet ? "fold it up" : "unfold"}
-              </button>
-              {score && <span className="text-s text-ink-soft">click a bar to play from there</span>}
+              {score ? (
+                <>
+                  <button type="button" className="text-action text-s" onClick={() => setShowSheet((v) => !v)}>
+                    {showSheet ? "fold it up" : "unfold"}
+                  </button>
+                  <span className="text-s text-ink-soft">click a bar to play from there</span>
+                </>
+              ) : (
+                <span className="text-s text-ink-soft">invite someone to the band to see their parts</span>
+              )}
             </div>
             {showSheet && score && (
               <RoughBox seed="sheet" rough={{ weight: "m" }} className="sheet-paper p-xs">

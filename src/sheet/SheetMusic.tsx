@@ -473,7 +473,7 @@ export function SheetMusic({ score, getBeat, playing, playToken, onSeekBar, onSt
           />
         </div>
       </div>
-      <style>{`.sheet-row:empty::before{content:"✎ inking the chart…";position:absolute;left:${LABEL_W}px;top:40px;font-family:var(--font-ui);color:var(--neutral-6);font-size:var(--size-m);line-height:var(--line-m)}`}</style>
+      <style>{`.sheet-row:empty::before{content:"✎ inking the chart…";position:absolute;left:${LABEL_W}px;top:40px;font-family:var(--font-ui);color:var(--cte-text-muted);font-size:var(--size-m);line-height:var(--line-m)}`}</style>
     </div>
   );
 }
