@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { defaultMembers, INSTRUMENTS } from "@/music/instruments";
 import { defaultSettings, generateLocal } from "@/music/local";
+import { motifFromText } from "@/music/motif";
 import { isFeaturedRole } from "@/music/realize";
 import type { Member } from "@/music/types";
 import { accompanimentFits, applyDefault, enforceSlots, mergePlan, registerShift, resolveMember, shiftOctaves, usualDirective, validateBarText, validateMotif } from "./merge";
@@ -138,6 +139,15 @@ describe("validateMotif", () => {
     // the contour survives: same intervals, two octaves up
     expect(m.notes.map((n) => n.pitch)).toEqual([60, 62, 64, 65, 67]);
     expect(repairs.join()).toMatch(/moved up two octaves/);
+    // the text everyone else reads says the same thing as the notes
+    expect(m.text).not.toMatch(/[A-G][#b]?2\//);
+    expect(m.text.split("|").length).toBe(2);
+    const again = motifFromText(m.text, 4, m.chord);
+    expect(again.notes.map((n) => [n.pitch, n.start, n.dur])).toEqual(m.notes.map((n) => [n.pitch, n.start, n.dur]));
+  });
+  it("leaves the model's text alone when nothing had to change", () => {
+    const m = validateMotif("Bb4/8 C5/8 D5/4 r/2", "", frame, fox, [])!;
+    expect(m.text).toBe("Bb4/8 C5/8 D5/4 r/2");
   });
   it("keeps a motif with a stray leap in range without bending its opening steps", () => {
     const repairs: string[] = [];
@@ -150,6 +160,8 @@ describe("validateMotif", () => {
   it("caps it at 16 notes", () => {
     const m = validateMotif(Array(20).fill("C5/16").join(" "), "", frame, fox, [])!;
     expect(m.notes.length).toBe(16);
+    expect(m.length).toBe(4);
+    expect(motifFromText(m.text, 4, m.chord).notes.length).toBe(16);
   });
 });
 

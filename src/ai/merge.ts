@@ -1,9 +1,9 @@
 import { INSTRUMENTS } from "@/music/instruments";
 import { motifFromText } from "@/music/motif";
-import { looksLikeDrumGrid, parseNotes } from "@/music/notation";
+import { looksLikeDrumGrid, notesToText, parseNotes } from "@/music/notation";
 import { isFeaturedRole } from "@/music/realize";
-import { fold } from "@/music/theory";
-import type { BarPlan, Dynamic, Frame, InstrumentFunction, Member, Motif, Role, Texture } from "@/music/types";
+import { fold, keyPrefersFlats } from "@/music/theory";
+import type { BarPlan, Dynamic, Frame, InstrumentFunction, Member, Motif, NoteEvent, Role, Texture } from "@/music/types";
 import { asRecord, asString, parseBarRange } from "./json";
 
 const TEXTURES: Texture[] = ["sparse", "groove", "build", "peak", "breakdown", "tutti", "stoptime", "ostinato"];
@@ -128,6 +128,19 @@ export function validateBarText(text: string, member: Member, beats: number, rep
   return first;
 }
 
+/** Write motif notes back as text, a bar per "|". */
+export function motifText(notes: NoteEvent[], length: number, beats: number, flats: boolean): string {
+  const bars = Math.max(1, Math.ceil(length / beats - 1e-6));
+  if (bars === 1) return notesToText(notes, Math.max(beats, length), flats);
+  return Array.from({ length: bars }, (_, b) =>
+    notesToText(
+      notes.filter((n) => n.start >= b * beats - 1e-6 && n.start < (b + 1) * beats - 1e-6).map((n) => ({ ...n, start: n.start - b * beats, dur: Math.min(n.dur, (b + 1) * beats - n.start) })),
+      beats,
+      flats,
+    ),
+  ).join(" | ");
+}
+
 /** Leader motif from model text; validated into the leader's range, 1–2 bars, 2–16 notes. */
 export function validateMotif(text: unknown, idea: unknown, frame: Frame, leader: Member | undefined, repairs: string[]): Motif | null {
   const t = asString(text, 300);
@@ -141,7 +154,13 @@ export function validateMotif(text: unknown, idea: unknown, frame: Frame, leader
     repairs.push(`motif "${t.slice(0, 40)}" has too few notes`);
     return null;
   }
-  if (m.notes.length > 16) m.notes = m.notes.slice(0, 16);
+  let changed = false;
+  if (m.notes.length > 16) {
+    m.notes = m.notes.slice(0, 16);
+    const end = m.notes.reduce((x, n) => Math.max(x, n.start + n.dur), 0);
+    m.length = Math.min(m.length, Math.max(1, Math.ceil(end)));
+    changed = true;
+  }
   if (leader) {
     const inst = INSTRUMENTS[leader.instrument];
     if (inst.fn !== "rhythm") {
@@ -149,14 +168,18 @@ export function validateMotif(text: unknown, idea: unknown, frame: Frame, leader
       if (k) {
         repairs.push(`motif moved ${movedWords(k)} into the leader's range`);
         m.notes = m.notes.map((n) => ({ ...n, pitch: n.pitch + 12 * k }));
+        changed = true;
       }
       const out = m.notes.some((n) => n.pitch < inst.range[0] || n.pitch > inst.range[1]);
       if (out) {
         repairs.push("motif folded into the leader's range");
         m.notes = m.notes.map((n) => ({ ...n, pitch: fold(n.pitch, inst.range[0], inst.range[1]) }));
+        changed = true;
       }
     }
   }
+  // everyone after the count-off reads the motif as text: it has to say what will be played
+  if (changed) m.text = motifText(m.notes, m.length, frame.meter.beats, keyPrefersFlats(frame.key));
   return m;
 }
 
