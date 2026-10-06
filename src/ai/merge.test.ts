@@ -3,7 +3,7 @@ import { defaultMembers, INSTRUMENTS } from "@/music/instruments";
 import { defaultSettings, generateLocal } from "@/music/local";
 import { isFeaturedRole } from "@/music/realize";
 import type { Member } from "@/music/types";
-import { enforceSlots, mergePlan, resolveMember, validateBarText, validateMotif } from "./merge";
+import { enforceSlots, mergePlan, registerShift, resolveMember, shiftOctaves, validateBarText, validateMotif } from "./merge";
 
 // bear piano, frog bass, owl drums, fox trumpet (leader), cat sax (soloist)
 const band: Member[] = [...defaultMembers(), { id: "cat", animal: "cat", name: "Mochi", instrument: "sax" }];
@@ -60,6 +60,30 @@ describe("validateBarText", () => {
   it("accepts a bar of rests", () => {
     expect(check("r/1", fox).out).toBe("r/1");
   });
+  it("moves a line written an octave high down as a whole, keeping its shape", () => {
+    // trumpet tops out at C6 (84): the top two notes would otherwise fold mid-phrase
+    const r = check("G5/8 A5/8 C6/8 D6/8 E6/4> r/4", fox);
+    expect(r.out).toBe("G4/8 A4/8 C5/8 D5/8 E5/4> r/4");
+    expect(r.repairs.join()).toMatch(/moved down an octave/);
+  });
+  it("leaves a line alone when moving it wouldn't fit more notes", () => {
+    expect(check("C5/4 D5/4 E5/4 G5/4", fox).repairs).toEqual([]);
+    // one stray low note: shifting the rest up would push them out instead
+    expect(check("F#3/4 C5/4 D5/4 E5/4", fox).out).toBe("F#3/4 C5/4 D5/4 E5/4");
+  });
+});
+
+describe("register shifting", () => {
+  it("picks the one octave move that fits the most notes, smallest on a tie", () => {
+    expect(registerShift([60, 62, 64], 54, 84)).toBe(0);
+    expect(registerShift([86, 88, 91], 54, 84)).toBe(-1);
+    expect(registerShift([36, 40, 43], 54, 84)).toBe(2);
+    expect(registerShift([], 54, 84)).toBe(0);
+  });
+  it("rewrites pitches only, in chords, ties and lowercase too", () => {
+    expect(shiftOctaves("[C4 E4 Bb4]/2 A4/4~ A4/8 r/8", 1)).toBe("[C5 E5 Bb5]/2 A5/4~ A5/8 r/8");
+    expect(shiftOctaves("eb5/8. f5/16' g5/4?", -1)).toBe("eb4/8. f4/16' g4/4?");
+  });
 });
 
 describe("validateMotif", () => {
@@ -69,13 +93,23 @@ describe("validateMotif", () => {
     expect(validateMotif("C5/1", "", frame, fox, repairs)).toBeNull();
     expect(repairs.join("|")).toMatch(/no motif given\|.*too few notes/);
   });
-  it("keeps two bars at most and folds into the leader's range", () => {
+  it("keeps two bars at most and moves it whole into the leader's range", () => {
     const repairs: string[] = [];
     const m = validateMotif("C2/4 D2/4 E2/4 F2/4 | G2/1 | A2/1", "low", frame, fox, repairs)!;
     const [lo, hi] = INSTRUMENTS.trumpet.range;
     expect(m.notes.length).toBe(5);
     expect(m.notes.every((n) => n.pitch >= lo && n.pitch <= hi)).toBe(true);
-    expect(repairs.join()).toMatch(/folded/);
+    // the contour survives: same intervals, two octaves up
+    expect(m.notes.map((n) => n.pitch)).toEqual([60, 62, 64, 65, 67]);
+    expect(repairs.join()).toMatch(/moved up two octaves/);
+  });
+  it("keeps a motif with a stray leap in range without bending its opening steps", () => {
+    const repairs: string[] = [];
+    const m = validateMotif("C5/4 D5/4 E5/4 C7/4", "", frame, fox, repairs)!;
+    const [lo, hi] = INSTRUMENTS.trumpet.range;
+    const p = m.notes.map((n) => n.pitch);
+    expect([p[1] - p[0], p[2] - p[1]]).toEqual([2, 2]);
+    expect(p.every((x) => x >= lo && x <= hi)).toBe(true);
   });
   it("caps it at 16 notes", () => {
     const m = validateMotif(Array(20).fill("C5/16").join(" "), "", frame, fox, [])!;

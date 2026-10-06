@@ -29,6 +29,37 @@ export function resolveMember(key: string, members: Member[]): Member | undefine
   );
 }
 
+const OCTAVE_WORDS = ["", "an octave", "two octaves"];
+
+/**
+ * The single octave shift (in octaves, -2..2) that puts the most pitches inside [lo, hi].
+ * Moving a whole line keeps its shape; folding note by note breaks it mid-phrase.
+ * Shifts only when that strictly fits more notes; ties go to the smaller move.
+ */
+export function registerShift(pitches: number[], lo: number, hi: number): number {
+  const fits = (k: number) => pitches.filter((p) => p + 12 * k >= lo && p + 12 * k <= hi).length;
+  let best = 0;
+  let bestFit = fits(0);
+  for (const k of [-1, 1, -2, 2]) {
+    const f = fits(k);
+    if (f > bestFit) {
+      best = k;
+      bestFit = f;
+    }
+  }
+  return best;
+}
+
+/** Move every pitch in note text by whole octaves, leaving durations, ties and accents alone. */
+export function shiftOctaves(text: string, octaves: number): string {
+  if (!octaves) return text;
+  return text.replace(/(^|[\s,[~])([A-Ga-g][#b]{0,2})(-?\d)(?=[/\s,\]~>'?]|$)/g, (_, pre, name, oct) => `${pre}${name}${parseInt(oct, 10) + octaves}`);
+}
+
+function movedWords(octaves: number): string {
+  return `${octaves < 0 ? "down" : "up"} ${OCTAVE_WORDS[Math.abs(octaves)]}`;
+}
+
 /** Validate one bar's content for one member. Returns the cleaned text or null (fall back). */
 export function validateBarText(text: string, member: Member, beats: number, repairs: string[], where: string): string | null {
   const t = text.trim();
@@ -55,6 +86,12 @@ export function validateBarText(text: string, member: Member, beats: number, rep
   }
   if (r.errors.length) repairs.push(`${where}: ${r.errors.slice(0, 2).join("; ")}`);
   if (r.covered < beats - 1e-6) repairs.push(`${where}: short bar padded with rest`);
+  const inst = INSTRUMENTS[member.instrument];
+  const k = registerShift(r.notes.map((n) => n.pitch), inst.range[0], inst.range[1]);
+  if (k) {
+    repairs.push(`${where}: moved ${movedWords(k)} to sit in the ${inst.name.toLowerCase()}'s range`);
+    return shiftOctaves(first, k);
+  }
   return first;
 }
 
@@ -75,6 +112,11 @@ export function validateMotif(text: unknown, idea: unknown, frame: Frame, leader
   if (leader) {
     const inst = INSTRUMENTS[leader.instrument];
     if (inst.fn !== "rhythm") {
+      const k = registerShift(m.notes.map((n) => n.pitch), inst.range[0], inst.range[1]);
+      if (k) {
+        repairs.push(`motif moved ${movedWords(k)} into the leader's range`);
+        m.notes = m.notes.map((n) => ({ ...n, pitch: n.pitch + 12 * k }));
+      }
       const out = m.notes.some((n) => n.pitch < inst.range[0] || n.pitch > inst.range[1]);
       if (out) {
         repairs.push("motif folded into the leader's range");
