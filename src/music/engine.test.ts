@@ -373,6 +373,24 @@ describe("drums by style", () => {
   });
 });
 
+describe("under a soloist", () => {
+  it("the comping is softer than under the head, not just sparser", () => {
+    const five: Member[] = [...defaultMembers(), { id: "cat", animal: "cat", name: "Mochi", instrument: "sax" }];
+    let head: number[] = [];
+    let solo: number[] = [];
+    for (const seed of [1, 2, 3, 4]) {
+      const { score } = generateLocal({ ...defaultSettings(five), style: "swing", seed, bars: 32, soloists: ["cat"] }, five);
+      for (const n of score.parts.bear) {
+        const kind = score.frame.sections.find((x) => n.start >= x.start * 4 && n.start < (x.start + x.length) * 4)?.kind;
+        if (kind === "head") head = [...head, n.vel];
+        if (kind === "solo") solo = [...solo, n.vel];
+      }
+    }
+    const avg = (x: number[]) => x.reduce((a, v) => a + v, 0) / x.length;
+    expect(avg(solo)).toBeLessThan(avg(head) * 0.95);
+  });
+});
+
 describe("loud bars", () => {
   it("keep their shape: a fortissimo out head stays under the ceiling, its accents still on top", async () => {
     const { softCeiling } = await import("./realize");
