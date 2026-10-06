@@ -78,3 +78,20 @@
 - **Comp voicing low-interval limits and top-voice leading** — LIL penalty and top-voice cost in voiceChord _(rejected 2026-10-06)_
 - **Baroque prelude under the tune, several figures** — voiceRange plus per-phrase figure _(rejected 2026-10-06)_
 - **Blues out-chorus is a whole chorus** — full-chorus out for blues forms _(rejected 2026-10-06)_
+- **Dynamics and solo cues on the sheet** — dynamic markings and solo/fill labels in render.ts _(rejected 2026-10-06)_
+- **Ghost notes and legato on the sheet** — parenthesised ghosts, tenuto legato _(rejected 2026-10-06)_
+- **Windups follow velocity** — vibes/bass/piano lift scaled by next onset velocity _(rejected 2026-10-06)_
+- **Debug Plan tab follows playback** — now-row, click to seek, issues filtered by run _(rejected 2026-10-06)_
+- **Tempo slider shows the style's home range** — highlighter band, default tick, out-of-range hint _(rejected 2026-10-06)_
+- **Opt out of forced dark mode** — color-scheme: only light _(rejected 2026-10-06)_
+- **Count-off motif quality gate** — motifQuality checks and richer count-off prompt _(rejected 2026-10-06)_
+- **Per-member reply directive enum** — accompanimentVocab in replySchema _(rejected 2026-10-06)_
+- **Cleaner say lines** — cleanSay: names, no notation, word cuts, no echoes _(rejected 2026-10-06)_
+- **Salvage gaps: truncated strings, bars shapes** — truncatedPath, finishReason, barText _(rejected 2026-10-06)_
+- **Call settings per role** — ROLE_PARAMS with thinking headroom _(rejected 2026-10-06)_
+- **Sloppy mock mode** — seeded faulty replies for pipeline tests _(rejected 2026-10-06)_
+- **Walking bass variety** — turnarounds, enclosures, register per chorus _(rejected 2026-10-06)_
+- **Funk comp riff per section** — section-hashed cell, clavinet ghost layer _(rejected 2026-10-06)_
+- **New Orleans riff refresh and tailgate trombone** — section-keyed riff, guide-tone smears _(rejected 2026-10-06)_
+- **Minimal additive process and phasing** — additive arp schedule, peer rotation, wrapping displace _(rejected 2026-10-06)_
+- **Motif transform fixes** — retrograde grid, empty rhythm cell guard, displaced accent _(rejected 2026-10-06)_
