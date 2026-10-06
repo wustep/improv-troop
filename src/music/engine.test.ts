@@ -460,3 +460,24 @@ describe("call and response", () => {
     expect(found).toBeGreaterThan(2);
   });
 });
+
+describe("arrangement textures", () => {
+  const b: Member[] = [...defaultMembers(), { id: "cat", animal: "cat", name: "Mochi", instrument: "sax" }];
+  it("stop-time: the rhythm section hits the one together; breakdown: bass and drums only", () => {
+    const sw = generateLocal({ ...defaultSettings(b), style: "swing", seed: 3, bars: 32 }, b).score;
+    const st = sw.plan.findIndex((bp) => bp.texture === "stoptime");
+    expect(st).toBeGreaterThan(0);
+    for (const m of sw.members) {
+      if (sw.plan[st].roles[m.id] === "solo") continue;
+      for (const n of sw.parts[m.id].filter((x) => Math.floor(x.start / 4 + 1e-9) === st)) {
+        if (n.pitch === DRUM.hatPedal) continue;
+        expect(n.start).toBeCloseTo(st * 4);
+      }
+    }
+    const fk = generateLocal({ ...defaultSettings(b), style: "funk", key: { tonic: "E", mode: "minor" }, tempo: 102, seed: 3, bars: 32 }, b).score;
+    const bd = fk.plan.findIndex((bp) => bp.texture === "breakdown");
+    expect(bd).toBeGreaterThan(0);
+    const piano = fk.members.find((m) => m.instrument === "piano")!;
+    expect(fk.parts[piano.id].some((n) => Math.floor(n.start / 4 + 1e-9) === bd)).toBe(false);
+  });
+});

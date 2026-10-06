@@ -4,7 +4,7 @@ import { styleDynamic } from "./ending";
 import { ensemble } from "./ensemble";
 import { sectionAt } from "./form";
 import { buildHarmony, type Harmony } from "./harmony";
-import { INSTRUMENTS } from "./instruments";
+import { DRUM, INSTRUMENTS } from "./instruments";
 import { makeRng } from "./rng";
 import { STYLES } from "./styles";
 import { keyScale, parseChord } from "./theory";
@@ -79,6 +79,30 @@ export function lineRunEnd(frame: Frame, plan: BarPlan[], memberId: string, bar:
     b++;
   }
   return (b + 1) * beats;
+}
+
+/**
+ * Arrangement textures that change who plays, not how: in stop-time the rhythm section hits
+ * the downbeat together and leaves the rest of the bar to the soloist (the hi-hat foot keeps
+ * time); in a breakdown the chords and backing lines drop out and bass and drums carry on.
+ */
+function arrange(notes: NoteEvent[], ctx: BarCtx): NoteEvent[] {
+  if (isFeaturedRole(ctx.role) || ctx.lastBar) return notes;
+  const fn = ctx.member.instrument === "drums" ? "rhythm" : ctx.role === "bass" ? "bass" : ctx.inst.fn;
+  if (ctx.texture === "breakdown") return fn === "chordal" || fn === "melodic" ? [] : notes;
+  if (ctx.texture !== "stoptime") return notes;
+  if (fn === "melodic") return [];
+  if (fn === "rhythm") {
+    return [
+      { pitch: DRUM.kick, start: 0, dur: 0.25, vel: 0.85, art: "accent" },
+      { pitch: DRUM.crash, start: 0, dur: 0.5, vel: 0.7 },
+      ...[1, 3].filter((b) => b < ctx.beats).map((b) => ({ pitch: DRUM.hatPedal, start: b, dur: 0.25, vel: 0.45 })),
+    ];
+  }
+  // the first thing this player struck, moved onto the one, short and together
+  const first = notes.length ? Math.min(...notes.map((n) => n.start)) : null;
+  if (first === null) return [];
+  return notes.filter((n) => Math.abs(n.start - first) < 1e-6).map((n) => ({ ...n, start: 0, dur: 0.5, vel: Math.min(1, n.vel * 1.15), art: "accent" as const }));
 }
 
 export interface RealizeOptions {
@@ -259,8 +283,9 @@ export function realize(o: RealizeOptions): RealizeResult {
       res = { notes: [], issues: [`engine error: ${(e as Error).message}`], kind: "rest" as const };
     }
     for (const i of res.issues) issues.push({ bar, member: m.id, detail: i });
-    const rel = res.notes.filter((n) => n.start >= -1e-6 && n.start < beats - 1e-6);
-    if (rel.length < res.notes.length) issues.push({ bar, member: m.id, detail: `${res.notes.length - rel.length} notes outside the bar dropped` });
+    const inside = res.notes.filter((n) => n.start >= -1e-6 && n.start < beats - 1e-6);
+    const rel = arrange(inside, ctx);
+    if (inside.length < res.notes.length) issues.push({ bar, member: m.id, detail: `${res.notes.length - inside.length} notes outside the bar dropped` });
     if (res.kind !== "rest" && rel.length === 0 && directive !== "@rest") {
       // silence where the plan asked for sound is fine for rests, suspicious otherwise
     }

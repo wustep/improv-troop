@@ -248,6 +248,8 @@ function tierOf(ctx: BarCtx, opts: LineOpts): number {
   // a solo is a story: each phrase gets busier the further into the solo it starts
   if (ctx.role === "solo" && ctx.section.length >= 4) d *= 0.75 + 0.6 * ((ctx.barInSection + 0.5) / ctx.section.length);
   if (ctx.texture === "build") d *= 1.1;
+  // stop-time and breakdowns clear the floor for the soloist: fill it
+  if ((ctx.texture === "stoptime" || ctx.texture === "breakdown") && ctx.role === "solo") d *= 1.3;
   if (ctx.texture === "peak") d *= 1.2;
   return d < 0.62 ? 0 : d < 1.12 ? 1 : 2;
 }
