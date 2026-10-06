@@ -293,7 +293,7 @@ export function pizz(ctx: BarCtx): NoteEvent[] {
     if (pair[1] <= pair[0]) pair[1] += 12;
     if (h.pos === 0 && ctx.rng.chance(0.25)) {
       const r = bassNote(c, 43, 55, null);
-      pair = [r, r + 7];
+      pair = [r, r + (c.tones[2] ?? 7)]; // the chord's own fifth (a b5 over m7b5 and dim)
     }
     pair = pair.map((p) => fold(p, 43, 69)).sort((a, b) => a - b);
     prev = pair;

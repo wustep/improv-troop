@@ -706,6 +706,27 @@ describe("the tune at the bar's dynamic", () => {
   });
 });
 
+describe("chord symbols", () => {
+  it("read sus2, altered fifths and the usual qualities as written", () => {
+    const tones = (sym: string) => parseChord(sym).tones;
+    expect(tones("Csus2")).toEqual([0, 2, 7]);
+    expect(tones("Csus")).toEqual([0, 5, 7]);
+    expect(tones("C7sus4")).toEqual([0, 5, 7, 10]);
+    expect(tones("C7#5")).toEqual([0, 4, 8, 10]);
+    expect(tones("C7+5")).toEqual([0, 4, 8, 10]);
+    expect(tones("C7b5")).toEqual([0, 4, 6, 10]);
+    expect(tones("Cm7b5")).toEqual([0, 3, 6, 10]);
+    expect(tones("C7b9")).toEqual([0, 4, 7, 10]);
+    expect(parseChord("C7#5").scale).toEqual([0, 2, 4, 6, 8, 10]);
+    expect(parseChord("C7#5#9").scale).toContain(3);
+  });
+  it("a standard keeps its own mode in any key", () => {
+    const std = STANDARDS.find((s) => s.id === "autumn")!;
+    const f = buildFrame({ ...defaultSettings(band), standard: "autumn", key: { tonic: "E", mode: "major" }, style: std.style, bars: 32 }, band);
+    expect(f.key).toEqual({ tonic: "E", mode: "minor" });
+  });
+});
+
 describe("standards", () => {
   it("every chart fills its form, and every chord and head reads", () => {
     for (const std of STANDARDS) {

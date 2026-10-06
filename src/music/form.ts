@@ -147,8 +147,10 @@ function assignChorusSolos(start: number, length: number, soloists: string[], fo
   return out;
 }
 
-export function buildFrame(settings: TroopSettings, members: Member[]): Frame {
-  const std = getStandard(settings.standard);
+export function buildFrame(input: TroopSettings, members: Member[]): Frame {
+  const std = getStandard(input.standard);
+  // a standard keeps its own mode (Autumn Leaves is minor in any key); only the tonic moves
+  const settings = std ? { ...input, key: { ...input.key, mode: std.key.mode } } : input;
   const style = STYLES[settings.style];
   const beats = std ? std.meter : settings.meter.beats;
   const rng = makeRng(settings.seed).fork("frame");

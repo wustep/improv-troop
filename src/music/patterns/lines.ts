@@ -220,7 +220,7 @@ export function celloPad(ctx: BarCtx): NoteEvent[] {
     for (const s of chordSpans(ctx)) {
       const r = fold(nearestPc(s.chord.root, 43), 36, 50);
       out.push({ pitch: r, start: s.start, dur: s.end - s.start, vel: velFor(ctx, 0.42), art: "legato" });
-      out.push({ pitch: r + 7, start: s.start, dur: s.end - s.start, vel: velFor(ctx, 0.38), art: "legato" });
+      out.push({ pitch: r + (s.chord.tones[2] ?? 7), start: s.start, dur: s.end - s.start, vel: velFor(ctx, 0.38), art: "legato" });
     }
   }
   return out;

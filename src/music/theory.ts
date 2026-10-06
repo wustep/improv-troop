@@ -191,7 +191,9 @@ export function parseChord(symbol: string): Chord {
     scale = [...SCALES.wholeTone];
   } else if (/^sus|^7sus|^9sus|^13sus/.test(q)) {
     quality = "sus";
-    tones = has("7") || has("9") || has("13") ? [0, 5, 7, 10] : [0, 5, 7];
+    // sus2 replaces the 3rd with the 2nd, sus/sus4 with the 4th
+    const fourth = has("sus2") ? 2 : 5;
+    tones = has("7") || has("9") || has("13") ? [0, fourth, 7, 10] : [0, fourth, 7];
     scale = [...SCALES.mixolydian];
   } else if (/^6|^69/.test(q)) {
     quality = "6";
@@ -222,9 +224,17 @@ export function parseChord(symbol: string): Chord {
       if (has("9") || has("13")) tensions.push(14);
       if (has("13")) tensions.push(21);
     }
+    // altered fifths: 7#5 / 7+5 / 7aug (whole tone, or altered with a b9/#9), 7b5 (lydian dominant)
+    if (/#5|\+5|\+$|aug/.test(q)) {
+      tones = [0, 4, 8, 10];
+      scale = has("b9") || has("#9") ? [...SCALES.altered] : [...SCALES.wholeTone];
+    } else if (/b5|-5/.test(q)) {
+      tones = [0, 4, 6, 10];
+      scale = [...SCALES.lydianDominant];
+    }
     if (has("sus")) {
       quality = "sus";
-      tones = [0, 5, 7, 10];
+      tones = [0, has("sus2") ? 2 : 5, 7, 10];
     }
   } else if (has("sus")) {
     quality = "sus";

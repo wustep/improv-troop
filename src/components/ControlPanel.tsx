@@ -246,6 +246,8 @@ export function ControlPanel() {
               value={s.key.mode}
               onChange={(e) => set({ key: { ...s.key, mode: e.target.value as "major" | "minor" } })}
               aria-label="Mode"
+              disabled={!!s.standard}
+              title={s.standard ? "A standard keeps its own mode; pick any key for it" : undefined}
             >
               <option value="major">major</option>
               <option value="minor">minor</option>
