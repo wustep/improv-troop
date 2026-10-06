@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildFrame, lengthOptions } from "./form";
+import { buildFrame, defaultStandardLength, lengthOptions } from "./form";
 import { DRUM, INSTRUMENTS, defaultMembers } from "./instruments";
 import { defaultSettings, generateLocal } from "./local";
 import { parseDrumGrid, parseNotes } from "./notation";
@@ -64,7 +64,7 @@ describe("frame", () => {
   });
   it("snaps standards to whole choruses", () => {
     expect(lengthOptions("f-blues")).toEqual([12, 24, 36, 48, 60, 72]);
-    expect(lengthOptions("autumn")).toEqual([32, 64, 96, 128]);
+    expect(lengthOptions("autumn")).toEqual([32, 64, 96, 128, 160]);
   });
 });
 
@@ -492,6 +492,14 @@ describe("standards in choruses", () => {
     // twice through has no tag, and a minor tune keeps its plain ending
     expect(frameFor("f-blues", 24, ["cat"]).sections.at(-1)!.kind).not.toBe("tag");
     expect(frameFor("autumn", 96, ["cat"]).sections.at(-1)!.kind).not.toBe("tag");
+  });
+  it("with the drummer in the solo order, every horn still gets a whole chorus", () => {
+    const owl3 = ["cat", "bear", "owl"];
+    // room for a trading chorus: chorus, chorus, trade, by default
+    expect(defaultStandardLength("autumn", 3)).toBe(160);
+    expect(layout(frameFor("autumn", 160, owl3))).toEqual(["head:0+32:fox", "solo:32+32:cat", "solo:64+32:bear", "trade:96+32:cat,bear,owl", "out:128+32:fox"]);
+    // no room: the horns keep their choruses and the trade takes the back half of the last
+    expect(layout(frameFor("autumn", 128, owl3))).toEqual(["head:0+32:fox", "solo:32+32:cat", "solo:64+16:bear", "trade:80+16:cat,bear,owl", "out:96+32:fox"]);
   });
   it("a 32-bar tune: head, a whole chorus solo, head out", () => {
     expect(layout(frameFor("autumn", 96, ["cat"]))).toEqual(["head:0+32:fox", "solo:32+32:cat", "out:64+32:fox"]);

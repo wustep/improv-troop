@@ -21,7 +21,7 @@ const FLAT_NAMES = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", 
 
 /** A standard is played in whole choruses: up to six of them, and at most this many bars. */
 const MAX_CHORUSES = 6;
-const MAX_STANDARD_BARS = 128;
+const MAX_STANDARD_BARS = 160;
 
 export function lengthOptions(standardId: string | null): number[] {
   const std = getStandard(standardId);
@@ -115,6 +115,17 @@ function assignSolos(start: number, length: number, soloists: string[], unit: nu
  * choruses (the first soloists get any extra). With more soloists than choruses, choruses
  * split where the form does (the bridge, the second half) so nobody starts mid-phrase.
  */
+/** Where a chorus splits in two: the form's section boundary nearest its middle. */
+function formSplit(form: [string, number][], formLen: number): number {
+  let acc = 0;
+  let split = formLen / 2;
+  for (const [, n] of form.slice(0, -1)) {
+    acc += n;
+    if (Math.abs(acc - formLen / 2) < Math.abs(split - formLen / 2) || split % 1) split = acc;
+  }
+  return split;
+}
+
 function assignChorusSolos(start: number, length: number, soloists: string[], formLen: number, form: [string, number][]): SoloPlan[] | null {
   if (!soloists.length || length <= 0 || length % formLen) return null;
   const choruses = length / formLen;
@@ -130,12 +141,7 @@ function assignChorusSolos(start: number, length: number, soloists: string[], fo
     return out;
   }
   // split each chorus at the form's section boundary nearest its middle
-  let acc = 0;
-  let split = formLen / 2;
-  for (const [, n] of form.slice(0, -1)) {
-    acc += n;
-    if (Math.abs(acc - formLen / 2) < Math.abs(split - formLen / 2) || split % 1) split = acc;
-  }
+  const split = formSplit(form, formLen);
   if (split <= 0 || split >= formLen || split % 1) return null;
   const halves: [number, number][] = [];
   for (let c = 0; c < choruses; c++) halves.push([start + c * formLen, split], [start + c * formLen + split, formLen - split]);
@@ -252,15 +258,29 @@ export function buildFrame(input: TroopSettings, members: Member[]): Frame {
     // trading with the drummer: the last stretch of the solos, a chorus on a standard
     // when there's room for one (trading 4s), else the last few bars (2s)
     let tradeLen = 0;
+    // a whole trading chorus only once every horn has a chorus of their own
+    const wholeChorus = !!std && length % formLen === 0 && (length / formLen >= melodicSoloists.length + 1 || !melodicSoloists.length);
     if (drumsSolo) {
-      const wholeChorus = std && length % formLen === 0 && (length / formLen >= 2 || !melodicSoloists.length);
       tradeLen = wholeChorus ? formLen : Math.min(length, Math.max(4, Math.floor(length / (melodicSoloists.length + 1) / 2) * 2 || 4));
       if (!melodicSoloists.length) tradeLen = length;
     }
+    // no room for a trading chorus on a standard: the horns keep whole choruses and the trade
+    // takes the back half of the last one (where the form splits)
+    const halfTrade = drumsSolo && !wholeChorus && !!std && melodicSoloists.length > 0 && length % formLen === 0;
+    if (halfTrade) tradeLen = 0;
     const soloLen = length - tradeLen;
     if (soloLen > 0) {
       const who = melodicSoloists.length ? melodicSoloists : [leaderId];
       const plans = (std && assignChorusSolos(start, soloLen, who, formLen, std.form)) || assignSolos(start, soloLen, who, soloLen >= 8 ? 4 : 2);
+      if (halfTrade && plans.length) {
+        const last = plans[plans.length - 1];
+        const split = formSplit(std!.form, formLen);
+        const half = Math.min(last.length - 4, formLen - split);
+        if (half >= 4) {
+          last.length -= half;
+          tradeLen = half;
+        }
+      }
       for (const p of plans) sections.push({ name: `${words.solo} · ${nameOf(p.soloist)}`, kind: "solo", start: p.start, length: p.length, featured: [p.soloist] });
     }
     if (tradeLen > 0) {
