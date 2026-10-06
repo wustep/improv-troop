@@ -32,6 +32,10 @@ interface Body {
 
 type CallError = { message?: string; statusCode?: number; status?: number; name?: string };
 
+// The client cancelled (Cancel in the UI aborts the browser fetch, which closes the request).
+// Nobody is listening for the body, so the status is only for logs.
+const CANCELLED = () => new Response(null, { status: 499 });
+
 function isAuthError(e: CallError) {
   const status = e.statusCode ?? e.status ?? 0;
   return status === 401 || status === 403 || /unauthenticated|invalid api key|authentication/i.test(e.message ?? "");
@@ -50,7 +54,11 @@ export async function POST(req: Request) {
   const mock = process.env.NODE_ENV !== "production" ? /^mock(?::(\d+))?$/.exec(body.key ?? "") : null;
   if (mock) {
     const ms = mock[1] ? +mock[1] : 400 + Math.random() * 900;
-    await new Promise((r) => setTimeout(r, ms * (0.8 + Math.random() * 0.4)));
+    await new Promise<void>((r) => {
+      const t = setTimeout(r, ms * (0.8 + Math.random() * 0.4));
+      req.signal.addEventListener("abort", () => (clearTimeout(t), r()), { once: true });
+    });
+    if (req.signal.aborted) return CANCELLED();
     return Response.json({ text: fakeModel(body), structured: false, usage: { inputTokens: 0, outputTokens: 0 }, serverMs: performance.now() - t0 });
   }
   const apiKey = body.key?.trim() || process.env.IMPROV_TROOP_SERVER_KEY;
@@ -71,6 +79,9 @@ export async function POST(req: Request) {
     maxRetries: 1,
     ...params,
   };
+  // Stop the model call when the browser goes away, so a cancelled run doesn't keep
+  // spending the user's key until the timeout.
+  const abortSignal = () => AbortSignal.any([req.signal, AbortSignal.timeout(100_000)]);
   const usage = (u: { inputTokens?: number; outputTokens?: number } | undefined) => ({
     inputTokens: u?.inputTokens ?? null,
     outputTokens: u?.outputTokens ?? null,
@@ -81,7 +92,7 @@ export async function POST(req: Request) {
     try {
       const result = await generateText({
         ...base,
-        abortSignal: AbortSignal.timeout(100_000),
+        abortSignal: abortSignal(),
         output: Output.object({ schema: jsonSchema(body.schema), name: body.schemaName }),
       });
       return Response.json({
@@ -93,6 +104,7 @@ export async function POST(req: Request) {
         serverMs: performance.now() - t0,
       });
     } catch (e) {
+      if (req.signal.aborted) return CANCELLED();
       const err = e as CallError;
       if (isAuthError(err)) return Response.json({ error: KEY_REJECTED }, { status: 401 });
       if ((err.statusCode ?? err.status) === 429) {
@@ -103,7 +115,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const result = await generateText({ ...base, abortSignal: AbortSignal.timeout(100_000) });
+    const result = await generateText({ ...base, abortSignal: abortSignal() });
     return Response.json({
       text: result.text,
       structured: false,
@@ -114,6 +126,7 @@ export async function POST(req: Request) {
       serverMs: performance.now() - t0,
     });
   } catch (e) {
+    if (req.signal.aborted) return CANCELLED();
     const err = e as CallError;
     if (isAuthError(err)) return Response.json({ error: KEY_REJECTED }, { status: 401 });
     const status = err.statusCode ?? err.status ?? 502;
