@@ -1,4 +1,5 @@
 import { newMemory, type PlayerMemory } from "@/music/context";
+import { ritFor } from "@/music/ending";
 import { buildFrame, sectionAt } from "@/music/form";
 import { INSTRUMENTS } from "@/music/instruments";
 import { motifForFrame, newScoreId } from "@/music/local";
@@ -100,6 +101,7 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
     plan,
     motif,
     swing: swingAt(style, frame.tempo),
+    rit: ritFor(frame),
     parts: Object.fromEntries(Object.entries(parts).map(([k, v]) => [k, [...v].sort((a, b) => a.start - b.start)])),
     chat: [...chat],
     engine: "ai",

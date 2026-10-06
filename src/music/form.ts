@@ -51,6 +51,8 @@ function tonicChord(settings: TroopSettings): string {
   if (style === "bossa") return minor ? `${t}m7` : `${t}maj7`;
   if (style === "funk") return minor ? `${t}m7` : `${t}7`;
   if (style === "ambient") return minor ? `${t}m9` : `${t}maj7`;
+  // a baroque piece in minor ends on the major tonic (a Picardy third)
+  if (style === "baroque") return t;
   return minor ? `${t}m` : t;
 }
 

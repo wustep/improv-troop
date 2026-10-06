@@ -1,4 +1,5 @@
 import { DEFAULT_DIRECTOR_MODEL, DEFAULT_PLAYER_MODEL } from "@/ai/models";
+import { ritFor } from "./ending";
 import { buildFrame } from "./form";
 import { INSTRUMENTS } from "./instruments";
 import { generateMotif, motifFromText, transposeMotif } from "./motif";
@@ -84,6 +85,7 @@ export function generateLocal(settings: TroopSettings, members: Member[]): Local
     plan,
     motif,
     swing: swingAt(style, frame.tempo),
+    rit: ritFor(frame),
     parts: res.parts,
     chat: [],
     engine: "local",

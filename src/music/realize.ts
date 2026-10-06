@@ -1,5 +1,6 @@
 import { DYNAMIC_ENERGY, newMemory, type BarCtx, type PlayerMemory } from "./context";
 import { realizeDirective } from "./directives";
+import { styleDynamic } from "./ending";
 import { ensemble } from "./ensemble";
 import { sectionAt } from "./form";
 import { buildHarmony, type Harmony } from "./harmony";
@@ -115,6 +116,7 @@ export function makeBarCtx(
   const nextBar = frame.chords[Math.min(bar + 1, frame.bars - 1)];
   const prevBar = frame.chords[Math.max(bar - 1, 0)];
   const barInSection = bar - section.start;
+  const dynamic = styleDynamic(frame.style, bp?.dynamic ?? "mf", bar === frame.bars - 1);
   const has = (fn: string) => members.some((m) => INSTRUMENTS[m.instrument].fn === fn && m.id !== member.id);
   const someoneOnBass = members.some((m) => m.id !== member.id && (INSTRUMENTS[m.instrument].fn === "bass" || bp?.roles[m.id] === "bass"));
   // players of the same kind given the same directive this bar split the voices / interlock instead of doubling
@@ -139,8 +141,8 @@ export function makeBarCtx(
     sectionEnd: bar === section.start + section.length - 1,
     firstBar: bar === 0,
     lastBar: bar === frame.bars - 1,
-    dynamic: bp?.dynamic ?? "mf",
-    energy: DYNAMIC_ENERGY[bp?.dynamic ?? "mf"],
+    dynamic,
+    energy: DYNAMIC_ENERGY[dynamic],
     texture: bp?.texture ?? "groove",
     role: bp?.roles[member.id] ?? "comp",
     member,

@@ -64,6 +64,8 @@ export interface SheetModel {
   staffs: StaffSpec[];
   chords: ChordChange[][];
   sectionStarts: Map<number, string>;
+  /** Bar where the ritardando into the ending starts (marked "rit."), if there is one. */
+  ritBar: number | null;
   tempo: number;
   feel: string;
   /** First bar of each system. Systems hold as many bars as fit (see layout in SheetMusic). */
@@ -213,6 +215,7 @@ export function buildModel(score: Score, rowStart?: number[]): SheetModel {
     staffs,
     chords,
     sectionStarts,
+    ritBar: score.rit ? Math.floor(score.rit.from / bpb + 1e-9) : null,
     tempo: Math.round(score.frame?.tempo ?? score.settings?.tempo ?? 120),
     feel,
     rowStart: starts,

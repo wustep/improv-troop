@@ -1,6 +1,7 @@
 import { chordSpans, harmAt, velFor, type BarCtx } from "./context";
 import { holdable, nearestIn } from "./harmony";
 import { keyPrefersFlats, mod, pitchName } from "./theory";
+import { ENDINGS } from "./ending";
 import { DRUM } from "./instruments";
 import { parseMotifOps, realizeMotifBar } from "./motif";
 import { looksLikeDrumGrid, parseDrumGrid, parseNotes } from "./notation";
@@ -241,10 +242,14 @@ function realizeRaw(ctx: BarCtx, text: string): DirectiveResult {
       return done(ctx.inst.id === "cello" ? lines.celloCounter(c) : lines.counter(c));
     case "fill":
       return done(lines.melodicFill(c));
-    case "end":
-      if (fn === "chordal") return done(comp.endChord(c));
-      if (fn === "bass") return done(bass.pedal({ ...c, style: { ...c.style, id: "ambient" } }));
-      return done(lines.endNote(c));
+    case "end": {
+      const held = fn === "chordal" ? comp.endChord(c) : fn === "bass" ? bass.pedal({ ...c, style: { ...c.style, id: "ambient" } }) : lines.endNote(c);
+      // a button ending: everyone hits the downbeat together, short and accented, and stops
+      if (ENDINGS[c.style.id]?.kind === "button") {
+        return done(held.filter((n) => n.start < 1e-6).map((n) => ({ ...n, dur: Math.min(n.dur, 0.5), vel: Math.min(1, n.vel * 1.1), art: "accent" as const })));
+      }
+      return done(held);
+    }
     default:
       issues.push(`unknown directive @${name}; using the style default`);
       if (fn === "bass") return realizeDirective(ctx, ctx.style.section.head.bass ?? "@walk");

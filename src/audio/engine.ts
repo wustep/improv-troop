@@ -1,7 +1,7 @@
 import { DrumMachine, Reverb, Scheduler, type Smplr } from "smplr";
 import type { InstrumentId, Member, NoteEvent, Score } from "@/music/types";
 import { INSTRUMENTS } from "@/music/instruments";
-import { applyFeel, beatToSeconds, jitter, pocketOf } from "./feel";
+import { applyFeel, beatAt, beatToSeconds, jitter, pocketOf, secAt, spbAt, type TempoMap } from "./feel";
 import {
   DECAYING,
   DEFAULT_VOLUME,
@@ -184,6 +184,8 @@ export class TroopAudio {
   private score: Score | null = null;
   private tracks: Track[] = [];
   private spb = 0.5;
+  /** Ritardando into the ending, from the score (beats). */
+  private rit: Score["rit"] = undefined;
   private t0 = 0; // ctx time of beat 0 (current loop iteration)
   private prevT0 = 0; // previous iteration (for getBeat right at a loop seam)
   private startBeat = 0;
@@ -526,16 +528,17 @@ export class TroopAudio {
     const fromBar = clamp(Math.floor(opts.fromBar ?? 0), 0, Math.max(0, (score.frame?.bars ?? 1) - 1));
     const countIn = opts.countIn ?? fromBar === 0;
     this.spb = beatToSeconds(1, tempoOf(score));
+    this.rit = score.rit;
     this.startBeat = fromBar * bpb;
     this.endBeat = endBeatOf(score);
     this.loop = !!opts.loop;
     const leadIn = START_DELAY_SEC + (countIn ? bpb * this.spb : 0);
-    this.t0 = ctx.currentTime + leadIn - this.startBeat * this.spb;
+    this.t0 = ctx.currentTime + leadIn - this.sec(this.startBeat);
     this.prevT0 = this.t0;
     this.clicks = [];
     if (countIn) {
       for (let i = 0; i < bpb; i++) {
-        this.clicks.push({ time: this.t0 + (this.startBeat - bpb + i) * this.spb, accent: i === 0 });
+        this.clicks.push({ time: this.t0 + this.sec(this.startBeat) - (bpb - i) * this.spb, accent: i === 0 });
       }
     }
     this.buildTracks(score, this.startBeat);
@@ -573,6 +576,7 @@ export class TroopAudio {
     this.score = score;
     if (this.state !== "playing" || !prev) return;
     this.endBeat = endBeatOf(score);
+    this.rit = score.rit;
     const byId = new Map(this.tracks.map((t) => [t.memberId, t]));
     this.tracks = (score.members ?? []).map((m) => {
       const old = byId.get(m.id);
@@ -644,7 +648,16 @@ export class TroopAudio {
     if (!ctx) return -Infinity;
     const now = ctx.currentTime;
     const base = now >= this.t0 || this.t0 === this.prevT0 ? this.t0 : this.prevT0;
-    return (now - base) / this.spb;
+    return beatAt(this.tempoMap(), now - base);
+  }
+
+  private tempoMap(): TempoMap {
+    return { spb: this.spb, rit: this.rit };
+  }
+
+  /** Seconds from beat 0 to a beat, through the ritardando. */
+  private sec(beat: number): number {
+    return secAt(this.tempoMap(), beat);
   }
 
   getBeat(): number {
@@ -653,11 +666,13 @@ export class TroopAudio {
     const latency = (ctx as AudioContext & { outputLatency?: number }).outputLatency || ctx.baseLatency || 0;
     const now = ctx.currentTime - latency;
     const base = now >= this.t0 || this.t0 === this.prevT0 ? this.t0 : this.prevT0;
-    return (now - base) / this.spb;
+    return beatAt(this.tempoMap(), now - base);
   }
 
+  /** Seconds per beat right now (longer through the ritardando). */
   getSecondsPerBeat(): number {
-    return this.spb;
+    const b = this.getBeat();
+    return Number.isFinite(b) ? spbAt(this.tempoMap(), b) : this.spb;
   }
 
   onEnded(cb: () => void): () => void {
@@ -757,7 +772,7 @@ export class TroopAudio {
           break;
         }
         // Decide on the un-humanised time so chords are never split across ticks.
-        const when = this.t0 + applyFeel(note.start, swing) * this.spb;
+        const when = this.t0 + this.sec(applyFeel(note.start, swing));
         if (when >= horizon) break;
         track.cursor++;
         track.lastStart = note.start;
@@ -767,9 +782,9 @@ export class TroopAudio {
 
     // Loop: once every track has handed over the last iteration, queue the next one.
     if (this.loop) {
-      const loopEnd = this.t0 + this.loopEndBeat() * this.spb;
+      const loopEnd = this.t0 + this.sec(this.loopEndBeat());
       if (horizon >= loopEnd && this.tracks.every((t) => t.cursor >= t.notes.length || t.notes[t.cursor].start >= this.loopEndBeat())) {
-        const span = (this.loopEndBeat() - this.startBeat) * this.spb;
+        const span = this.sec(this.loopEndBeat()) - this.sec(this.startBeat);
         this.prevT0 = this.t0;
         this.t0 += span;
         for (const t of this.tracks) {
@@ -780,7 +795,7 @@ export class TroopAudio {
       return;
     }
 
-    const endTime = this.t0 + this.endBeat * this.spb + END_TAIL_SEC;
+    const endTime = this.t0 + this.sec(this.endBeat) + END_TAIL_SEC;
     if (now >= endTime) this.halt(true);
   }
 
@@ -838,8 +853,8 @@ export class TroopAudio {
         if (note.pitch === 46) track.lastOpenHat = time;
         inst.start({ note: sample, velocity: Math.round(1 + vel * 126), time });
       } else {
-        const span = applyFeel(note.start + Math.max(0.01, note.dur), swing) - applyFeel(note.start, swing);
-        let dur = Math.max(0.03, span * this.spb);
+        const span = this.sec(applyFeel(note.start + Math.max(0.01, note.dur), swing)) - this.sec(applyFeel(note.start, swing));
+        let dur = Math.max(0.03, span);
         if (note.art === "staccato") dur *= 0.5;
         if (note.art === "pizz") dur = Math.min(dur, 0.9);
         if (note.art === "legato") dur *= 1.06;

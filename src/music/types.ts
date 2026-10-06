@@ -220,6 +220,11 @@ export interface Score {
   critic?: { scores: CriticScore[]; chosen: number; summary: string };
   /** Free-form generation notes visible in debug. */
   notes: string[];
+  /**
+   * Ritardando into the ending (beats): the beat gets longer from `from` until it's `slow`
+   * times its length at `to`, and stays there. Absent = in tempo throughout.
+   */
+  rit?: { from: number; to: number; slow: number };
 }
 
 // ─── Animation contract ──────────────────────────────────────────────────────

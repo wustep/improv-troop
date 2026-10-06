@@ -1,3 +1,4 @@
+import { ENDINGS } from "./ending";
 import { sectionAt } from "./form";
 import { INSTRUMENTS } from "./instruments";
 import type { Rng } from "./rng";
@@ -10,7 +11,18 @@ import type { BarPlan, Dynamic, Frame, Member, Motif, Role, Section, Texture } f
 
 const SOLO_OPENERS = ["@motif invert", "@motif up 2", "@motif rhythm", "@motif displace 0.5", "@motif frag 3", "@motif retro", "@motif aug"];
 
+const LOUDNESS: Dynamic[] = ["pp", "p", "mp", "mf", "f", "ff"];
+
 function dynamicFor(style: StyleDef, frame: Frame, bar: number, s: Section): Dynamic {
+  // a fading ending is soft whatever came before it
+  if (bar === frame.bars - 1 && ENDINGS[style.id].kind === "fade") return "p";
+  const d = arcDynamic(style, frame, bar, s);
+  // bossa nova is intimate: it builds, but never past mezzo-forte
+  if (style.id === "bossa") return LOUDNESS[Math.min(LOUDNESS.indexOf(d) - 1, LOUDNESS.indexOf("mf"))] ?? "mp";
+  return d;
+}
+
+function arcDynamic(style: StyleDef, frame: Frame, bar: number, s: Section): Dynamic {
   const prog = frame.bars > 1 ? bar / (frame.bars - 1) : 0;
   const inSec = s.length > 1 ? (bar - s.start) / (s.length - 1) : 0;
   if (style.id === "minimal") {

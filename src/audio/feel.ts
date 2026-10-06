@@ -142,3 +142,46 @@ export function pocketOf(score: Score, memberId: string): (n: NoteEvent) => numb
 function tempoScale(tempo: number) {
   return Math.min(1.2, Math.max(0.6, 120 / Math.max(40, tempo)));
 }
+
+// ─── Tempo map: a ritardando into the ending ────────────────────────────────
+
+export interface TempoMap {
+  /** Seconds per beat in tempo. */
+  spb: number;
+  rit?: { from: number; to: number; slow: number };
+}
+
+/** Seconds per beat at a beat. */
+export function spbAt(m: TempoMap, beat: number): number {
+  const r = m.rit;
+  if (!r || beat <= r.from) return m.spb;
+  const x = Math.min(1, (beat - r.from) / Math.max(1e-6, r.to - r.from));
+  return m.spb * (1 + (r.slow - 1) * x);
+}
+
+/** Seconds from beat 0 to `beat` (negative beats, the count-in, are in tempo). */
+export function secAt(m: TempoMap, beat: number): number {
+  const r = m.rit;
+  if (!r || beat <= r.from) return beat * m.spb;
+  const L = Math.max(1e-6, r.to - r.from);
+  const k = r.slow - 1;
+  const inRit = Math.min(beat, r.to) - r.from;
+  let s = r.from * m.spb + m.spb * (inRit + (k * inRit * inRit) / (2 * L));
+  if (beat > r.to) s += (beat - r.to) * m.spb * r.slow;
+  return s;
+}
+
+/** The beat at `sec` seconds from beat 0 (inverse of secAt). */
+export function beatAt(m: TempoMap, sec: number): number {
+  const r = m.rit;
+  if (!r || sec <= r.from * m.spb) return sec / m.spb;
+  const L = Math.max(1e-6, r.to - r.from);
+  const k = r.slow - 1;
+  const atTo = secAt(m, r.to);
+  if (sec >= atTo) return r.to + (sec - atTo) / (m.spb * r.slow);
+  // spb·(u + k·u²/2L) = sec − from·spb, solved for u ≥ 0
+  const c = sec / m.spb - r.from;
+  if (k <= 1e-9) return r.from + c;
+  const a = k / (2 * L);
+  return r.from + (-1 + Math.sqrt(1 + 4 * a * c)) / (2 * a);
+}

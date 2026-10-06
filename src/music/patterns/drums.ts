@@ -1,4 +1,5 @@
 import { velFor, type BarCtx } from "../context";
+import { ENDINGS } from "../ending";
 import { DRUM } from "../instruments";
 import { parseDrumGrid } from "../notation";
 import { hashString } from "../rng";
@@ -215,15 +216,35 @@ export function drumSolo(ctx: BarCtx): NoteEvent[] {
 
 export function endDrums(ctx: BarCtx): NoteEvent[] {
   const v = velFor(ctx, 0.9);
-  const out: NoteEvent[] = [
-    { pitch: DRUM.crash, start: 0, dur: ctx.beats, vel: v, art: "accent" },
-    { pitch: DRUM.kick, start: 0, dur: 0.5, vel: v },
-  ];
-  if (ctx.style.id !== "baroque" && ctx.style.id !== "minimal") {
-    // soft cymbal roll swelling into the release
-    for (let t = 1; t < ctx.beats - 0.5; t += 0.25) out.push({ pitch: DRUM.ride, start: t, dur: 0.25, vel: 0.15 + (t / ctx.beats) * 0.3, art: "ghost" });
-  } else {
-    out[0] = { pitch: DRUM.lowTom, start: 0, dur: 0.5, vel: v };
+  switch (ENDINGS[ctx.style.id]?.kind ?? "ring") {
+    case "button":
+      // the whole kit on the one, then silence (a minimalist just stops: one click and the kick)
+      if (ctx.style.id === "minimal") return [{ pitch: DRUM.stick, start: 0, dur: 0.5, vel: v }, { pitch: DRUM.kick, start: 0, dur: 0.5, vel: v * 0.8 }];
+      return [
+        { pitch: DRUM.crash, start: 0, dur: 0.5, vel: v, art: "accent" },
+        { pitch: DRUM.kick, start: 0, dur: 0.5, vel: v },
+        { pitch: DRUM.snare, start: 0, dur: 0.5, vel: v, art: "accent" },
+      ];
+    case "fade": {
+      // no crash: a soft cymbal touch on the chord, then a whisper of a roll as it dies away
+      const out: NoteEvent[] = [
+        { pitch: DRUM.ride, start: 0, dur: 1, vel: v * 0.45 },
+        { pitch: DRUM.kick, start: 0, dur: 0.5, vel: v * 0.4 },
+      ];
+      for (let t = 1; t < ctx.beats - 0.5; t += 0.25) out.push({ pitch: DRUM.ride, start: t, dur: 0.25, vel: 0.12 * (1 - t / ctx.beats), art: "ghost" });
+      return out;
+    }
+    case "cadence":
+      // a single low drum under the final chord
+      return [{ pitch: DRUM.lowTom, start: 0, dur: 0.5, vel: v }];
+    default: {
+      // a big ending: crash and kick, cymbal roll swelling under the held chord
+      const out: NoteEvent[] = [
+        { pitch: DRUM.crash, start: 0, dur: ctx.beats, vel: v, art: "accent" },
+        { pitch: DRUM.kick, start: 0, dur: 0.5, vel: v },
+      ];
+      for (let t = 1; t < ctx.beats - 0.5; t += 0.25) out.push({ pitch: DRUM.ride, start: t, dur: 0.25, vel: 0.15 + (t / ctx.beats) * 0.3, art: "ghost" });
+      return out;
+    }
   }
-  return out;
 }

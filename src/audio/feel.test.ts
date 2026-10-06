@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { STYLES, swingAt } from "@/music/styles";
-import { applyFeel, beatToSeconds, feelSpan, hash01, jitter, pocketSec, removeFeel, secondsToBeats } from "./feel";
+import { applyFeel, beatAt, beatToSeconds, feelSpan, hash01, jitter, pocketSec, removeFeel, secAt, secondsToBeats, spbAt } from "./feel";
 
 describe("beatToSeconds", () => {
   it("converts at tempo", () => {
@@ -109,5 +109,30 @@ describe("pocketSec", () => {
     expect(pocketSec("baroque", "melodic", 70, undefined, true, 96)).toBe(0);
     // less room to lay back at a fast tempo
     expect(pocketSec("swing", "melodic", 70, undefined, true, 240)).toBeLessThan(pocketSec("swing", "melodic", 70, undefined, true, 120));
+  });
+});
+
+describe("tempo map", () => {
+  const m = { spb: 0.5, rit: { from: 56, to: 60, slow: 1.3 } };
+  it("is in tempo before the ritardando and slows through it", () => {
+    expect(secAt(m, 40)).toBeCloseTo(20);
+    expect(secAt(m, -4)).toBeCloseTo(-2);
+    expect(spbAt(m, 56)).toBeCloseTo(0.5);
+    expect(spbAt(m, 58)).toBeCloseTo(0.575);
+    expect(spbAt(m, 64)).toBeCloseTo(0.65);
+    // four beats of rit take longer than four in tempo, but less than four at the slowest
+    const span = secAt(m, 60) - secAt(m, 56);
+    expect(span).toBeGreaterThan(2);
+    expect(span).toBeLessThan(2.6);
+  });
+  it("maps time back to the beat", () => {
+    for (const b of [-3, 0, 12.5, 55.9, 56, 57.3, 59.99, 60, 63.2]) expect(beatAt(m, secAt(m, b))).toBeCloseTo(b, 6);
+    let prev = -Infinity;
+    for (let b = 50; b < 66; b += 0.25) {
+      const t = secAt(m, b);
+      expect(t).toBeGreaterThan(prev);
+      prev = t;
+    }
+    expect(beatAt({ spb: 0.5 }, 3)).toBeCloseTo(6);
   });
 });

@@ -1,4 +1,5 @@
 import { buildFrame, frameSummary } from "@/music/form";
+import { ritFor } from "@/music/ending";
 import { INSTRUMENTS } from "@/music/instruments";
 import { motifForFrame, newScoreId } from "@/music/local";
 import { planLocal } from "@/music/planner";
@@ -322,6 +323,7 @@ export async function runComposer(settings: TroopSettings, members: Member[], ho
     plan,
     motif: chosen.motif,
     swing: swingAt(style, frame.tempo),
+    rit: ritFor(frame),
     parts: res.parts,
     chat,
     engine: "ai",

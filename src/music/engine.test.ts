@@ -4,12 +4,12 @@ import { DRUM, INSTRUMENTS, defaultMembers } from "./instruments";
 import { defaultSettings, generateLocal } from "./local";
 import { parseDrumGrid, parseNotes } from "./notation";
 import { STANDARDS } from "./standards";
-import { STYLE_LIST } from "./styles";
+import { STYLES, STYLE_LIST } from "./styles";
 import { homeOf } from "./ensemble";
 import { holdable } from "./harmony";
 import { harmonyOf, topLine } from "./realize";
 import { chordPcs, mod, parseChord, parsePitch } from "./theory";
-import type { Member } from "./types";
+import type { Member, StyleId } from "./types";
 
 const band: Member[] = [
   ...defaultMembers(),
@@ -386,5 +386,32 @@ describe("playing like a band", () => {
     expect(bar).toBeGreaterThanOrEqual(0);
     const sig = (id: string) => inBar(score.parts[id], bar).map((n) => `${n.start - bar * 4}`).join();
     expect(sig("bear")).not.toBe(sig("penguin"));
+  });
+});
+
+describe("endings", () => {
+  const bandE: Member[] = [...defaultMembers(), { id: "cat", animal: "cat", name: "Mochi", instrument: "sax" }];
+  const take = (style: StyleId, mode: "major" | "minor" = "major") =>
+    generateLocal({ ...defaultSettings(bandE), style, key: { tonic: "D", mode }, tempo: STYLES[style].tempo.default, seed: 2 }, bandE).score;
+  it("funk stops dead on the one", () => {
+    const s = take("funk");
+    const last = (s.frame.bars - 1) * s.frame.meter.beats;
+    for (const m of s.members) for (const n of s.parts[m.id].filter((x) => x.start >= last)) {
+      expect(n.start).toBeCloseTo(last);
+      expect(n.dur).toBeLessThanOrEqual(0.5);
+    }
+    expect(s.rit).toBeUndefined();
+  });
+  it("bossa stays intimate and slows into a soft ending", () => {
+    const s = take("bossa");
+    expect(s.plan.every((b) => ["pp", "p", "mp", "mf"].includes(b.dynamic))).toBe(true);
+    expect(s.plan[s.plan.length - 1].dynamic).toBe("p");
+    expect(s.rit && s.rit.slow).toBeGreaterThan(1);
+    const drums = s.members.find((m) => m.instrument === "drums")!;
+    expect(s.parts[drums.id].some((n) => n.pitch === DRUM.crash && n.start >= (s.frame.bars - 1) * 4)).toBe(false);
+  });
+  it("a baroque piece in minor ends on the major tonic", () => {
+    const s = take("baroque", "minor");
+    expect(s.frame.chords[s.frame.bars - 1][0].symbol).toBe("D");
   });
 });

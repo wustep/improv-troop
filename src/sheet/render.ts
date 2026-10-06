@@ -479,6 +479,7 @@ export function renderRow(vf: VF, host: HTMLElement, model: SheetModel, row: num
     const section = model.sectionStarts.get(g.bar);
     if (section) addSection(svg, g.x + (i === 0 ? 2 : 4), 6, section);
     if (i === 0 && g.bar > 0) addText(svg, g.x + 3, topY - 20, String(g.bar + 1), { size: 12, fill: INK_SOFT });
+    if (g.bar === model.ritBar) addText(svg, g.x + g.w * 0.45, chordY - 18, "rit.", { size: 15 }).style.fontStyle = "italic";
     for (const ch of model.chords[g.bar] ?? []) {
       const tick = Math.max(0, Math.min(bpb * TPB - 1, Math.round(ch.beat * TPB)));
       addChord(svg, interpolate(g.anchors, tick), chordY, ch.symbol);
