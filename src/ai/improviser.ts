@@ -382,7 +382,7 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
               continue;
             }
             const repairs: string[] = [];
-            const clean = validateBarText(raw, m, frame.meter.beats, repairs, `bar ${b + 1}`);
+            const clean = validateBarText(raw, m, frame.meter.beats, repairs, `bar ${b + 1}`, frame.slots[b]?.[id] ?? plan[b].roles[id]);
             repairs.forEach((x) => noteRepair(call.id, x));
             if (clean && clean !== "@rest") plan[b].directives = { ...plan[b].directives, [id]: clean };
           }

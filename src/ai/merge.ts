@@ -71,6 +71,8 @@ const ACCOMPANIMENT: Record<InstrumentFunction, RegExp> = {
 const CELLO_EXTRA = /^@(pizz|arco)$/;
 // anyone can rest, fill, hit with the band, end, or bring the tune back
 const ANYONE = /^@(rest|end|fill|hits|head)$/;
+// what a featured player can play in their own bars (the last bar can also @end)
+const FEATURED_VOCAB = /^@(motif|line|answer|solo|trade|head|fill|rest|end)$/;
 
 /**
  * Is this an accompaniment directive this player can play? A cello covering the bass chair
@@ -85,7 +87,8 @@ export function accompanimentFits(directive: string, member: Member, role?: Role
 
 /**
  * Validate one bar's content for one member. Returns the cleaned text or null (fall back).
- * With a role, a directive for an accompanying player must be one they can play.
+ * With a role, a directive for an accompanying player must be one they can play, and a
+ * featured player's must be a featured part (not comping or a pattern under someone else).
  */
 export function validateBarText(text: string, member: Member, beats: number, repairs: string[], where: string, role?: Role): string | null {
   const t = text.trim();
@@ -95,6 +98,10 @@ export function validateBarText(text: string, member: Member, beats: number, rep
     const d = t.split("\n")[0].slice(0, 80);
     if (role && !isFeaturedRole(role) && !ANYONE.test(d.split(/\s+/)[0]) && !accompanimentFits(d, member, role)) {
       repairs.push(`${where}: ${d.split(/\s+/)[0]} isn't something ${member.name} plays while accompanying; kept the plan`);
+      return null;
+    }
+    if (isFeaturedRole(role) && !FEATURED_VOCAB.test(d.split(/\s+/)[0])) {
+      repairs.push(`${where}: ${d.split(/\s+/)[0]} isn't a featured part; ${member.name} keeps the plan`);
       return null;
     }
     return d;
@@ -306,7 +313,9 @@ export function enforceSlots(plan: BarPlan[], frame: Frame, members: Member[], r
       const locked = slots[m.id];
       let d = bp.directives?.[m.id] ?? "@rest";
       if (isFeaturedRole(locked)) {
-        const accompaniment = /^@(walk|two|bossa|funk|baroque|pedal|comp|pizz|arco|stride|arp|prelude|continuo|pad|shimmer|groove|guide|harmony|canon|riff|counter|rest)\b/.test(d);
+        // an ending or a band hit in the middle of a solo isn't a solo either
+        const ending = /^@(end|hits)\b/.test(d) && bp.index !== frame.bars - 1;
+        const accompaniment = ending || /^@(walk|two|bossa|funk|baroque|pedal|comp|pizz|arco|stride|arp|prelude|continuo|pad|shimmer|groove|guide|harmony|canon|riff|counter|rest)\b/.test(d);
         if (accompaniment && !(m.instrument === "drums" && locked === "groove")) {
           const fix = defaultFeaturedDirective(locked!, m);
           repairs.push(`bar ${bp.index + 1}: ${m.name} is featured (${locked}) but was given ${d}; playing ${fix}`);

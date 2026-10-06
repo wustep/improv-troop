@@ -220,6 +220,26 @@ describe("mergePlan", () => {
   });
 });
 
+describe("a featured player's own bars", () => {
+  const solo = (text: string, m: Member = band[4], role: Parameters<typeof validateBarText>[5] = "solo") => {
+    const repairs: string[] = [];
+    return { out: validateBarText(text, m, 4, repairs, "bar 9", role), repairs };
+  };
+  it("can't be turned into comping, a pattern or a groove", () => {
+    for (const d of ["@comp", "@pad", "@riff", "@walk", "@hits"]) {
+      const r = solo(d);
+      expect(r.out).toBeNull();
+      expect(r.repairs.join()).toMatch(/isn't a featured part; Mochi keeps the plan/);
+    }
+    expect(solo("@groove", owl, "trade").out).toBeNull();
+  });
+  it("keeps the solo vocabulary, written notes and a drum break", () => {
+    for (const d of ["@line dense", "@motif invert", "@answer", "@fill", "@head 3", "@rest"]) expect(solo(d).out).toBe(d);
+    expect(solo("@solo", owl, "trade").out).toBe("@solo");
+    expect(solo("C4/4 D4/4 E4/2").out).toBe("C4/4 D4/4 E4/2");
+  });
+});
+
 describe("enforceSlots", () => {
   it("a featured player can't be handed accompaniment", () => {
     const i = frame.slots.findIndex((s) => s.cat === "solo");
@@ -231,6 +251,13 @@ describe("enforceSlots", () => {
     expect(out[i].directives?.cat).toBe("@line");
     expect(out[i].roles.cat).toBe("solo");
     expect(repairs.join()).toMatch(/Mochi is featured/);
+  });
+  it("an ending or a band hit mid-solo becomes the solo again", () => {
+    const i = frame.slots.findIndex((s) => s.cat === "solo");
+    const p = structuredClone(plan);
+    p[i].directives = { ...p[i].directives, cat: "@end" };
+    const out = enforceSlots(p, frame, band, []);
+    expect(out[i].directives?.cat).toBe("@line");
   });
   it("roles follow the directives", () => {
     const p = structuredClone(plan);
