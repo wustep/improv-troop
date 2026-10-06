@@ -56,7 +56,8 @@ function windCommon(c: RigCtx, f: Frame): Wind {
   const { s } = f;
   const m = c.mem;
   const blowing = s.active.length > 0;
-  const pitch = blowing ? s.active[s.active.length - 1].pitch : s.nextOnsetIn < 0.06 ? s.nextPitch : null;
+  // the newest sounding note (active is newest first) is the one being fingered
+  const pitch = blowing ? s.active[0].pitch : s.nextOnsetIn < 0.06 ? s.nextPitch : null;
   const quiet = !blowing && s.nextOnsetIn > 1.4 && (s.recent[0]?.age ?? Infinity) > 0.8;
   const lowerTarget = !s.playing ? (quiet ? 0.75 : 0) : quiet && (s.role === "rest" || s.nextOnsetIn > 3) ? 1 : 0;
   m.lower = (m.lower ?? 0.75) + (lowerTarget - (m.lower ?? 0.75)) * approach(f.dt, lowerTarget > (m.lower ?? 0) ? 0.35 : 0.12);

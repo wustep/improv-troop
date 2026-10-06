@@ -81,6 +81,7 @@ export function Stage() {
 
   // per-frame animation: read the audio clock, hand each sprite its state
   useEffect(() => {
+    const mutedSet = new Set(muted);
     let raf = 0;
     let lastBar = -2;
     const loop = () => {
@@ -90,7 +91,9 @@ export function Stage() {
       for (const m of band) {
         const h = sprites.current.get(m.id);
         if (!h) continue;
-        const st = computer && Number.isFinite(beat) ? computer.compute(m.id, beat, true, spb) : { ...IDLE_STATE, bpm: score?.frame.tempo ?? 100 };
+        let st = computer && Number.isFinite(beat) ? computer.compute(m.id, beat, true, spb) : { ...IDLE_STATE, bpm: score?.frame.tempo ?? 100 };
+        // a muted player makes no sound, so they sit out and listen instead of miming
+        if (mutedSet.has(m.id)) st = { ...st, role: "rest", featured: false, active: [], recent: [], upcoming: [], nextOnsetIn: Infinity, nextPitch: null };
         h.update(st);
         const spot = spots.current.get(m.id);
         if (spot) spot.style.opacity = st.featured && Number.isFinite(beat) && beat >= 0 ? "1" : "0";
@@ -123,7 +126,7 @@ export function Stage() {
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [band, computer, playing, score]);
+  }, [band, computer, playing, score, muted]);
 
   // speech bubbles: during the count-off show the latest line per player; while playing, lines appear at their bar
   const bubbles = useMemo(() => {

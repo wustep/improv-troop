@@ -305,7 +305,9 @@ export const cello: Rig = {
     // What's sounding: the newest onset group (double-stops share an onset).
     const newestAge = s.active.length ? Math.min(...s.active.map((a) => a.age)) : Infinity;
     const group = s.active.filter((a) => a.age - newestAge < 0.03);
-    const upcoming = s.nextOnsetIn < 0.12 && s.nextPitch !== null ? [s.nextPitch] : [];
+    // or, just before it, the next one (a whole double-stop, both strings)
+    const soon = (s.upcoming ?? (s.nextPitch !== null ? [{ pitch: s.nextPitch, inSec: s.nextOnsetIn, vel: 0.7 }] : [])).filter((u) => u.inSec < 0.12);
+    const upcoming = soon.filter((u) => u.inSec - soon[0].inSec < 0.03).map((u) => u.pitch);
     const pitches = group.length ? group.map((a) => a.pitch) : upcoming;
     const stops = vcStops(pitches);
     if (stops.length) {
