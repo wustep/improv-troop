@@ -43,6 +43,8 @@ interface TroopState {
   chat: ChatMessage[];
   playing: boolean;
   playToken: number;
+  /** Why the last press of play didn't start the sound (cleared on the next play or stop). */
+  audioError: string | null;
   /** Members silenced in the mix (tap a name tag on stage). */
   muted: string[];
   /** While the band is still improvising: bars ready from the top (null when the chart is complete). */
@@ -146,6 +148,7 @@ let controller: AbortController | null = null;
 let improv: ImprovController | null = null;
 let liveTimer: ReturnType<typeof setInterval> | null = null;
 let endedUnsub: (() => void) | null = null;
+let failedUnsub: (() => void) | null = null;
 
 function stopLiveWatch() {
   if (liveTimer !== null) clearInterval(liveTimer);
@@ -219,6 +222,7 @@ export const useTroop = create<TroopState>((set, get) => {
     chat: [],
     playing: false,
     playToken: 0,
+    audioError: null,
     muted: [],
     readyBars: null,
     autopilotBars: [],
@@ -241,6 +245,11 @@ export const useTroop = create<TroopState>((set, get) => {
       endedUnsub = troopAudio.onEnded(() => {
         stopLiveWatch();
         set({ playing: false });
+      });
+      failedUnsub?.();
+      failedUnsub = troopAudio.onFailed((audioError) => {
+        stopLiveWatch();
+        set({ playing: false, audioError });
       });
       sketch();
       openSharedLink();
@@ -416,10 +425,22 @@ export const useTroop = create<TroopState>((set, get) => {
     async play(fromBar = 0) {
       const score = get().current;
       if (!score) return;
-      await troopAudio.unlock();
-      void troopAudio.prepare(score.members, { pianoPack: get().pianoPack, notesHint: notesHintFromScore(score) });
-      for (const m of score.members) troopAudio.setMute(m.id, get().muted.includes(m.id));
-      troopAudio.play(score, { fromBar, countIn: fromBar === 0 });
+      if (get().audioError) set({ audioError: null });
+      let started = false;
+      try {
+        await troopAudio.unlock();
+        void troopAudio.prepare(score.members, { pianoPack: get().pianoPack, notesHint: notesHintFromScore(score) });
+        for (const m of score.members) troopAudio.setMute(m.id, get().muted.includes(m.id));
+        started = troopAudio.play(score, { fromBar, countIn: fromBar === 0 });
+      } catch (e) {
+        console.error("[troop] play failed", e);
+      }
+      if (!started) {
+        troopAudio.stop();
+        stopLiveWatch();
+        set({ playing: false, audioError: "this browser won't play sound here" });
+        return;
+      }
       set((s) => ({ playing: true, playToken: s.playToken + 1 }));
       if (!get().seenIntro) get().dismissIntro();
       if (get().sharedArrival) set({ sharedArrival: null });
@@ -448,7 +469,7 @@ export const useTroop = create<TroopState>((set, get) => {
     stop() {
       troopAudio.stop();
       stopLiveWatch();
-      set({ playing: false });
+      set({ playing: false, audioError: null });
     },
 
     toggleMute(id) {

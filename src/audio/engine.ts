@@ -87,6 +87,8 @@ const LOOKAHEAD_HIDDEN_SEC = 1.5;
 const TICK_MS = 25;
 const START_DELAY_SEC = 0.12;
 const READY_WAIT_MS = 8000;
+/** How long to wait for a suspended AudioContext to resume (browsers leave the promise pending without a gesture). */
+const RESUME_WAIT_MS = 1500;
 const END_TAIL_SEC = 0.8;
 const PAN_WIDTH = 0.65;
 
@@ -181,6 +183,7 @@ export class TroopAudio {
   private currentMembers: Member[] = [];
   private loadListeners = new Set<(s: LoadState[]) => void>();
   private endListeners = new Set<() => void>();
+  private failListeners = new Set<(message: string) => void>();
   private muted = new Set<string>();
   private masterVolume = 0.85;
   private pianoPack: PianoPack = "salamander";
@@ -247,7 +250,7 @@ export class TroopAudio {
     const ctx = this.ensureContext();
     if (!ctx) return;
     try {
-      if (ctx.state !== "running") await ctx.resume();
+      if (ctx.state !== "running") await this.resume(ctx);
       // iOS: play a silent buffer inside the gesture.
       const buf = ctx.createBuffer(1, 1, ctx.sampleRate);
       const src = ctx.createBufferSource();
@@ -258,6 +261,16 @@ export class TroopAudio {
       console.warn("[audio] unlock failed", err);
     }
     this.ensureClick();
+  }
+
+  /** Resume the context, giving up after a moment rather than waiting on a gesture forever. */
+  private async resume(ctx: AudioContext): Promise<boolean> {
+    try {
+      await Promise.race([ctx.resume(), new Promise((r) => setTimeout(r, RESUME_WAIT_MS))]);
+    } catch {
+      /* needs a gesture */
+    }
+    return ctx.state === "running";
   }
 
   getContext(): AudioContext | null {
@@ -528,17 +541,37 @@ export class TroopAudio {
 
   // ─── Transport ─────────────────────────────────────────────────────────────
 
-  play(score: Score, opts?: { fromBar?: number; countIn?: boolean; loop?: boolean }): void {
-    const ctx = this.ensureContext();
-    if (!ctx) return;
+  /**
+   * Start a chart. Returns false when there's no audio at all; a start that fails later
+   * (the browser won't let sound play, an instrument blew up) is reported to onFailed.
+   */
+  play(score: Score, opts?: { fromBar?: number; countIn?: boolean; loop?: boolean }): boolean {
+    let ctx: AudioContext | null;
+    try {
+      ctx = this.ensureContext();
+    } catch (err) {
+      console.error("[audio] no AudioContext", err);
+      ctx = null;
+    }
+    if (!ctx) return false;
     this.halt(false);
     const token = ++this.playToken;
     this.state = "loading";
     this.score = score;
     void this.startWhenReady(score, opts ?? {}, token).catch((err) => {
       console.error("[audio] play failed", err);
-      if (token === this.playToken) this.halt(false);
+      if (token !== this.playToken) return;
+      this.halt(false);
+      const message = err instanceof Error && err.message ? err.message : "the sound wouldn't start";
+      for (const cb of this.failListeners) {
+        try {
+          cb(message);
+        } catch (e) {
+          console.warn("[audio] onFailed listener failed", e);
+        }
+      }
     });
+    return true;
   }
 
   private async startWhenReady(
@@ -548,12 +581,10 @@ export class TroopAudio {
   ) {
     const ctx = this.ctx;
     if (!ctx) return;
-    if (ctx.state !== "running") {
-      try {
-        await ctx.resume();
-      } catch {
-        /* needs a gesture; we'll still schedule */
-      }
+    // a context that won't run never moves the playhead: fail rather than "play" in silence forever
+    if (ctx.state !== "running" && !(await this.resume(ctx))) {
+      if (token !== this.playToken) return;
+      throw new Error("the browser is holding the sound back");
     }
     // Make sure the members' instruments exist (reuses cache), then wait a bounded time.
     const members = score.members ?? [];
@@ -738,6 +769,14 @@ export class TroopAudio {
   getSecondsPerBeat(): number {
     const b = this.getBeat();
     return Number.isFinite(b) ? spbAt(this.tempoMap(), b) : this.spb;
+  }
+
+  /** A start that failed: the transport is stopped again. */
+  onFailed(cb: (message: string) => void): () => void {
+    this.failListeners.add(cb);
+    return () => {
+      this.failListeners.delete(cb);
+    };
   }
 
   onEnded(cb: () => void): () => void {

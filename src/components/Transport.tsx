@@ -27,6 +27,7 @@ export function Transport() {
   const hasKey = useTroop((s) => !!s.apiKey);
   const current = useTroop((s) => s.current);
   const isSketch = useTroop((s) => s.isSketch);
+  const audioError = useTroop((s) => s.audioError);
   const loads = useLoadStates();
   const loading = loads.filter((l) => !l.ready && !l.error);
   const loadPct = loading.length ? Math.round((loading.reduce((s, l) => s + (l.total ? l.loaded / l.total : 0), 0) / loading.length) * 100) : 100;
@@ -108,6 +109,13 @@ export function Transport() {
             )}
             <button type="button" className="text-action" onClick={playSketchInstead}>
               play the sketch instead
+            </button>
+          </span>
+        ) : audioError ? (
+          <span role="alert" className="flex flex-wrap items-baseline gap-x-s">
+            <span className="text-(--error)">No sound: {audioError}.</span>
+            <button type="button" className="text-action" onClick={() => void play()}>
+              press play again
             </button>
           </span>
         ) : loading.length ? (
