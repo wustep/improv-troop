@@ -114,6 +114,7 @@ export function Stage() {
   const spots = useRef(new Map<string, HTMLDivElement | null>());
   const labelRef = useRef<HTMLDivElement>(null);
   const chordRef = useRef<HTMLDivElement>(null);
+  const nextChordRef = useRef<HTMLSpanElement>(null);
   const [bar, setBar] = useState(-1);
   const muted = useTroop((s) => s.muted);
   const toggleMute = useTroop((s) => s.toggleMute);
@@ -140,7 +141,8 @@ export function Stage() {
   useEffect(() => {
     const mutedSet = new Set(muted);
     let raf = 0;
-    let lastBar = -2;
+    // -3: not drawn yet, so a stop (which restarts this effect) clears the header on its first frame
+    let lastBar = -3;
     const loop = () => {
       const isPlaying = troopAudio.isPlaying() && playing;
       const beat = isPlaying ? troopAudio.getBeat() : -Infinity;
@@ -172,12 +174,24 @@ export function Stage() {
           let sym = chords[0]?.symbol ?? "";
           for (const c of chords) if (c.beat <= inBar + 1e-6) sym = c.symbol;
           if (chordRef.current.textContent !== sym) chordRef.current.textContent = sym;
+          // read ahead, like the band does: the next change in this bar or the next two
+          let next = "";
+          for (let k = b; k < Math.min(score.frame.bars, b + 3) && !next; k++) {
+            for (const c of score.frame.chords[k] ?? []) {
+              if ((k > b || c.beat > inBar + 1e-6) && c.symbol !== sym) {
+                next = `→ ${c.symbol}`;
+                break;
+              }
+            }
+          }
+          if (nextChordRef.current && nextChordRef.current.textContent !== next) nextChordRef.current.textContent = next;
         }
       } else if (lastBar !== -2) {
         lastBar = -2;
         setBar(-1);
         if (labelRef.current) labelRef.current.textContent = "";
         if (chordRef.current) chordRef.current.textContent = "";
+        if (nextChordRef.current) nextChordRef.current.textContent = "";
       }
       raf = requestAnimationFrame(loop);
     };
@@ -215,7 +229,10 @@ export function Stage() {
         <Bunting />
         <div className="flex min-h-7 items-baseline justify-between gap-s px-xs pt-9 font-brand font-heavy text-ink-soft">
           <div ref={labelRef} className="truncate text-l" aria-live="off" />
-          <div ref={chordRef} className="text-xl text-(--color-3)" aria-label="current chord" />
+          <div className="flex shrink-0 items-baseline gap-xs">
+            <div ref={chordRef} className="text-xl text-(--color-3)" aria-label="current chord" />
+            <span ref={nextChordRef} className="text-m text-ink-soft" aria-hidden />
+          </div>
         </div>
 
         {(genMode === "composer" || score?.engine === "ai") && (directorNote || thinking.has("director") || thinking.has("critic")) && (
