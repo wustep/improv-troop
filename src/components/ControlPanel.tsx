@@ -210,11 +210,12 @@ export function ControlPanel() {
       </Field>
 
       <Field>
-        <Label hint={std ? `${std.bars.length}-bar choruses` : "locked — the band fills it"}>Length</Label>
+        <Label hint={std ? `times through the ${std.bars.length}-bar tune` : "bars in the take"}>Length</Label>
         <div className="flex flex-wrap gap-xs">
           {lengths.map((b) => (
-            <Chip key={b} seed={`len-${b}`} active={s.bars === b} onClick={() => set({ bars: b })}>
-              {b} bars
+            // a standard is played in choruses: once through, twice, three times...
+            <Chip key={b} seed={`len-${b}`} active={s.bars === b} onClick={() => set({ bars: b })} title={std ? `${b} bars` : undefined}>
+              {std ? (b === std.bars.length ? "once" : `${b / std.bars.length}×`) : `${b} bars`}
             </Chip>
           ))}
         </div>
