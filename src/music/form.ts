@@ -358,6 +358,8 @@ export function buildFrame(input: TroopSettings, members: Member[]): Frame {
         const hornUp = turn % 2 === 0 ? horns[(turn / 2) % horns.length] : null;
         for (const h of horns) slots[b][h] = h === hornUp ? "solo" : "rest";
         slots[b][drums] = hornUp ? "groove" : "trade";
+        // the drummer's turn is a drum break: the whole band lays out for it
+        if (!hornUp) for (const m of members) if (m.id !== drums) slots[b][m.id] = "rest";
       }
     }
   }

@@ -509,6 +509,13 @@ describe("standards in choruses", () => {
     expect(trade.turn).toBe(4);
     const who = (b: number) => Object.entries(f.slots[b]).filter(([, r]) => r === "solo" || r === "trade").map(([id]) => id).join();
     expect([48, 52, 56].map((b) => who(b + (f.intro ?? 0)))).toEqual(["cat", "owl", "bear"]);
+    // the drummer's turn is a break: everyone else lays out
+    const drumBar = 52 + (f.intro ?? 0);
+    expect(Object.entries(f.slots[drumBar]).filter(([id]) => id !== "owl").every(([, r]) => r === "rest")).toBe(true);
+    const std = STANDARDS.find((s) => s.id === "f-blues")!;
+    const { score } = generateLocal({ ...defaultSettings(band5), standard: "f-blues", key: std.key, style: std.style, bars: 72, soloists: ["cat", "bear", "owl"] }, band5);
+    const sounding = band5.filter((m) => m.id !== "owl" && score.parts[m.id].some((n) => Math.floor(n.start / 4 + 1e-9) === drumBar));
+    expect(sounding.map((m) => m.id)).toEqual([]);
   });
 });
 
