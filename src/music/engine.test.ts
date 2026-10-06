@@ -209,6 +209,36 @@ describe("melodic hygiene", () => {
   });
 });
 
+describe("comping voicings", () => {
+  const band6: Member[] = [...defaultMembers(), { id: "cat", animal: "cat", name: "Mochi", instrument: "sax" }, { id: "penguin", animal: "penguin", name: "Pip", instrument: "guitar" }];
+  it("keep clear of mud low down and of the bassist's register, even under a low tune", () => {
+    for (const style of STYLE_LIST) {
+      let onsets = 0;
+      let muddy = 0;
+      let underBass = 0;
+      for (const seed of [1, 2, 3])
+        for (const tonic of ["E", "Bb"]) {
+          const { score } = generateLocal({ ...defaultSettings(band6), style, seed, bars: 32, soloists: ["cat", "bear"], key: { tonic, mode: "major" } }, band6);
+          const last = (score.frame.bars - 1) * score.frame.meter.beats;
+          for (const id of ["bear", "penguin"]) {
+            const by = new Map<number, number[]>();
+            for (const n of score.parts[id]) if (n.start < last) by.set(Math.round(n.start * 48), [...(by.get(Math.round(n.start * 48)) ?? []), n.pitch]);
+            for (const [k, ps] of by) {
+              if (ps.length < 3) continue;
+              onsets++;
+              const v = [...ps].sort((a, b) => a - b);
+              if (v.some((p, i) => i > 0 && p - v[i - 1] <= 2 && v[i - 1] < 52)) muddy++;
+              const b = score.parts.frog.find((n) => n.start <= k / 48 + 1e-6 && n.start + n.dur > k / 48 + 1e-6);
+              if (b && v[0] < b.pitch) underBass++;
+            }
+          }
+        }
+      expect(muddy / onsets, `${style} muddy`).toBeLessThan(0.02);
+      if (style !== "neworleans") expect(underBass / onsets, `${style} under the bass`).toBeLessThan(0.05); // stride piano keeps its own left hand
+    }
+  });
+});
+
 describe("standards in choruses", () => {
   const cat: Member = { id: "cat", animal: "cat", name: "Mochi", instrument: "sax" };
   const band5 = [...defaultMembers(), cat];

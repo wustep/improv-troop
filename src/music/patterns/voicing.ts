@@ -159,6 +159,21 @@ function fitTensions(form: number[], c: Chord, harm?: Harm): number[] {
 }
 
 /**
+ * Low-interval limits: close intervals turn to mud low in the keyboard (a 2nd under about
+ * E3, a 3rd under about C3). The cost of each one that sits too low.
+ */
+function muddiness(v: number[]): number {
+  let cost = 0;
+  for (let i = 1; i < v.length; i++) {
+    const gap = v[i] - v[i - 1];
+    const low = v[i - 1];
+    if (gap <= 2 && low < 52) cost += 8 + (52 - low);
+    else if (gap <= 4 && low < 46) cost += 6 + (46 - low);
+  }
+  return cost;
+}
+
+/**
  * Pick a voicing for a chord inside [lo, hi] that moves least from `prev`.
  * Returns ascending MIDI pitches.
  */
@@ -193,6 +208,7 @@ export function voiceChord(
         score += Math.abs(mid - center) * 0.5 + Math.abs(mid - (lo + hi) / 2) * 0.25;
         // a fuller voicing wins when it fits (a bare 3rd-and-7th is the fallback, not the sound)
         score += Math.max(0, 3 - v.length) * 3;
+        score += muddiness(v);
         if (score < bestScore) {
           bestScore = score;
           best = v;
@@ -201,11 +217,11 @@ export function voiceChord(
     }
     if (best) return best;
   }
-  // nothing fits: a close triad as high as the room allows
+  // nothing fits: a close triad as high as the room allows, never below it
   const t = triadTones(c);
   let root = hi - mod(hi - c.root, 12);
-  while (root + t[t.length - 1] > hi && root - 12 >= lo - 12) root -= 12;
-  return t.map((i) => root + i);
+  while (root + t[t.length - 1] > hi && root - 12 + t[0] >= lo) root -= 12;
+  return t.map((i) => root + i).map((p) => (p < lo ? p + 12 : p)).sort((a, b) => a - b);
 }
 
 /** Root (or slash bass) of the chord in a bass register near `near`. */

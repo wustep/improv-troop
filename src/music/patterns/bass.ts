@@ -258,7 +258,8 @@ export function pedal(ctx: BarCtx): NoteEvent[] {
   const c = chordAt(ctx, 0);
   // ambient: follow the root; minimal: tonic pedal unless the chord moves far away
   const pc = ctx.style.id === "minimal" ? pcOf(ctx.key.tonic) : c.bass;
-  const p = fold(nearestPc(pc, ctx.mem.lastPitch ?? lo + 7), lo, hi);
+  // a pedal sits deep and stays there (drifting up after the last note, it ends up in the pad)
+  const p = fold(nearestPc(pc, Math.min(ctx.mem.lastPitch ?? lo + 7, lo + 10)), lo, hi);
   ctx.mem.lastPitch = p;
   if (pulse) {
     const out: NoteEvent[] = [];

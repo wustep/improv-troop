@@ -31,15 +31,18 @@ function family(ctx: BarCtx): VoicingFamily {
  * sounding around `pos` (a pianist voices below the tune, not on top of it).
  */
 function voiceRange(ctx: BarCtx, pos?: number): [number, number] {
-  let [lo, hi] = compRange(ctx);
-  if (!ctx.featured.length || ctx.role === "solo" || ctx.role === "lead") return [lo, hi];
+  const [lo, top] = compRange(ctx);
+  if (!ctx.featured.length || ctx.role === "solo" || ctx.role === "lead") return [lo, top];
   const near = pos === undefined ? ctx.featured : ctx.featured.filter((n) => n.start + n.dur > pos - 0.25 && n.start < pos + 1.5);
   const tune = near.length ? near : ctx.featured;
   const low = Math.min(...tune.map((n) => n.pitch));
-  if (low - 1 < 55) return [lo, hi]; // a low solo: stay put rather than comp in the basement
-  hi = Math.min(hi, low - 1);
-  lo = Math.max(43, Math.min(lo, hi - 15));
-  return [lo, hi];
+  if (low - 1 < 55) return [lo, top]; // a low solo: stay put rather than comp in the basement
+  const hi = Math.min(top, low - 1);
+  // room under the tune, but not down in the bassist's register
+  const floor = Math.max(ctx.hasBass ? 48 : 43, Math.min(lo, hi - 15));
+  // not enough room for a real voicing under it: comp in the usual place (lighter, see listen)
+  if (hi - floor < 10) return compRange(ctx);
+  return [floor, hi];
 }
 
 function voice(ctx: BarCtx, h: Harm, fam = family(ctx), pos?: number): number[] {
