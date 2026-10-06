@@ -18,3 +18,17 @@ describe("harmonyBlock", () => {
     expect(harmonyBlock(frame, plan, [3, 4, 2])).toMatch(/then bar 6:/);
   });
 });
+
+describe("chartBlock", () => {
+  it("tells the band a song's head is its written melody (in this key), and where the intro is", async () => {
+    const { chartBlock } = await import("./prompts");
+    const { STANDARDS } = await import("@/music/standards");
+    const std = STANDARDS.find((s) => s.id === "saints")!;
+    const { score } = generateLocal({ ...defaultSettings(band), standard: "saints", style: std.style, key: { tonic: "Bb", mode: "major" }, bars: 48 }, band);
+    const text = chartBlock(score.frame, band);
+    expect(text).toContain("The tune is When the Saints Go Marching In");
+    // bar 2 of the melody (r F A Bb in F) is r Bb D Eb in Bb
+    expect(text).toMatch(/opens: .*\| r\/4 Bb\d\/4 D\d\/4 Eb\d\/4/);
+    expect(text).toContain("Bars 1-4 are the intro");
+  });
+});

@@ -1,8 +1,9 @@
 import { DIRECTIVE_HELP } from "@/music/directives";
 import { ENDINGS } from "@/music/ending";
 import { ANIMALS, INSTRUMENTS } from "@/music/instruments";
-import { drumsToGrid, notesToText } from "@/music/notation";
+import { drumsToGrid, notesToText, parseNotes } from "@/music/notation";
 import { harmonyOf } from "@/music/realize";
+import { getStandard, standardShift } from "@/music/standards";
 import { STYLES } from "@/music/styles";
 import { keyPrefersFlats, pcName, pitchName } from "@/music/theory";
 import { sectionAt } from "@/music/form";
@@ -46,6 +47,17 @@ export function chartBlock(frame: Frame, members: Member[], from = 0, to = frame
   const rows: string[] = [];
   for (let i = 0; i < cells.length; i += 4) rows.push(cells.slice(i, i + 4).join(" | "));
   lines.push("Changes (bar:chords; two chords split the bar):", ...rows.map((r) => "  " + r));
+  // a song with its written melody: the head is that tune, and solos can quote it
+  const std = getStandard(frame.standard);
+  if (std?.melody) {
+    const semis = standardShift(std, frame.key.tonic);
+    const flats = keyPrefersFlats(frame.key);
+    const tune = std.melody.slice(0, 4).map((bar) => notesToText(parseNotes(bar, frame.meter.beats).notes.map((n) => ({ ...n, pitch: n.pitch + semis })), frame.meter.beats, flats));
+    lines.push(
+      `The tune is ${std.name}: on the head and the head out the leader plays its written melody as written (@tune bars). It opens: ${tune.join(" | ")}. Quote it in a solo; don't rewrite it.`,
+    );
+  }
+  if (frame.intro) lines.push(`Bars 1-${frame.intro} are the intro: the rhythm section sets it up, nobody takes the melody yet.`);
   const e = ENDINGS[frame.style];
   const how = { ring: "a big held final chord over a cymbal roll", button: "everyone hits the final downbeat together, short, and stops", fade: "soft, the final chord left to ring away", cadence: "a broad final cadence, the last chord held" }[e.kind];
   lines.push(`Ending (bar ${frame.bars}): ${how}${e.slow > 1 ? `; the band slows down over the ${e.ritBars > 1 ? `${e.ritBars} bars` : "bar"} before it` : ""}.`);
