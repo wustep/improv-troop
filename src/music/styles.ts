@@ -80,7 +80,8 @@ export const STYLES: Record<StyleId, StyleDef> = {
       trade: { bass: "@walk", chordal: "@comp sparse", rhythm: "@groove", melodic: "@rest" },
       vamp: { bass: "@walk", chordal: "@comp", rhythm: "@groove", melodic: "@riff" },
       out: { bass: "@walk", chordal: "@comp", rhythm: "@groove peak", melodic: "@guide", "melodic-support": "@harmony" },
-      tag: { bass: "@end", chordal: "@end", rhythm: "@end", melodic: "@end" },
+      // the tag: the turnaround again (and again), everyone in, before the last chord
+      tag: { bass: "@walk", chordal: "@comp", rhythm: "@groove peak", melodic: "@riff", "melodic-support": "@riff" },
     },
     line: {
       density: 2,
@@ -282,7 +283,7 @@ export const STYLES: Record<StyleId, StyleDef> = {
       trade: { bass: "@two", chordal: "@stride", rhythm: "@groove", melodic: "@riff" },
       vamp: { bass: "@two", chordal: "@stride", rhythm: "@groove", melodic: "@riff" },
       out: { bass: "@two", chordal: "@stride", rhythm: "@groove peak", melodic: "@counter", "melodic-support": "@counter" },
-      tag: { bass: "@end", chordal: "@end", rhythm: "@end", melodic: "@end" },
+      tag: { bass: "@two", chordal: "@stride", rhythm: "@groove peak", melodic: "@counter", "melodic-support": "@counter" },
     },
     line: {
       density: 1.6,
@@ -463,11 +464,11 @@ export const STYLE_LIST: StyleId[] = ["swing", "bossa", "funk", "pop", "neworlea
  * the cello takes the style's bass pattern instead — see planner.)
  */
 export const CELLO_TEXTURE: Record<StyleId, Partial<Record<SectionKind, string>>> = {
-  swing: { intro: "@rest", head: "@counter", solo: "@pizz sparse", trade: "@pizz sparse", vamp: "@pizz", out: "@harmony", tag: "@end" },
+  swing: { intro: "@rest", head: "@counter", solo: "@pizz sparse", trade: "@pizz sparse", vamp: "@pizz", out: "@harmony", tag: "@pizz busy" },
   bossa: { intro: "@pad", head: "@pad", solo: "@pizz", trade: "@pizz", vamp: "@pad", out: "@harmony", tag: "@end" },
   funk: { intro: "@rest", head: "@riff", solo: "@pizz busy", trade: "@pizz", vamp: "@riff", out: "@riff", tag: "@end" },
   pop: { intro: "@rest", head: "@pad", solo: "@pizz", trade: "@pizz", vamp: "@pad", out: "@harmony", tag: "@end" },
-  neworleans: { intro: "@riff", head: "@counter", solo: "@riff", trade: "@riff", vamp: "@riff", out: "@counter", tag: "@end" },
+  neworleans: { intro: "@riff", head: "@counter", solo: "@riff", trade: "@riff", vamp: "@riff", out: "@counter", tag: "@counter" },
   minimal: { intro: "@arp", head: "@arp", solo: "@arp", trade: "@arp", vamp: "@arp", out: "@arp", tag: "@end" },
   baroque: { intro: "@rest", head: "@canon", solo: "@counter", trade: "@canon", vamp: "@counter", out: "@canon", tag: "@end" },
   ambient: { intro: "@pad", head: "@pad", solo: "@pad", trade: "@pad", vamp: "@pad", out: "@pad", tag: "@end" },

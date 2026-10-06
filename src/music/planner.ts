@@ -55,6 +55,8 @@ function arcDynamic(style: StyleDef, frame: Frame, bar: number, s: Section): Dyn
       return "f";
     case "out":
       return inSec > 0.7 ? "ff" : "f";
+    case "tag":
+      return "ff";
     default:
       return "mf";
   }
@@ -84,6 +86,7 @@ function textureFor(style: StyleDef, frame: Frame, bar: number, s: Section, isLa
   if ((ending === "fade" || ending === "cadence") && inRit(style, frame, bar)) return ending === "fade" ? "sparse" : "tutti";
   if (s.kind === "out") return inSec >= s.length - 2 ? "peak" : "tutti";
   if (s.kind === "trade") return "groove";
+  if (s.kind === "tag") return "peak";
   return "groove";
 }
 
@@ -208,6 +211,11 @@ export function planLocal(frame: Frame, members: Member[], motif: Motif, rng: Rn
       }
       if (slot === "lead") {
         roles[m.id] = "lead";
+        // the tag: short improvised phrases over the turnaround, building into the last chord
+        if (s.kind === "tag") {
+          directives[m.id] = inSec % 2 === 0 ? "@line" : "@line dense";
+          continue;
+        }
         // a standard with a written melody: the leader plays the tune itself
         if (std?.melody) {
           directives[m.id] = `@tune ${((bar - (frame.intro ?? 0)) % std.bars.length) + 1}`;

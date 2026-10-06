@@ -332,18 +332,30 @@ describe("standards in choruses", () => {
     }
     expect(buildFrame({ ...defaultSettings(band5), style: "ambient", bars: 32, soloists: ["cat"] }, band5).intro).toBe(0);
   });
+  it("a swing standard played through three times ends with a tag: iii-VI-ii-V twice, then home", () => {
+    const f = frameFor("f-blues", 36, ["cat"]);
+    const tag = f.sections.at(-1)!;
+    expect(tag).toMatchObject({ kind: "tag", length: 4 });
+    const sym = (b: number) => f.chords[b].map((c) => c.symbol).join(" ");
+    const end = f.bars - 1;
+    expect([end - 4, end - 3, end - 2, end - 1, end].map(sym)).toEqual(["Am7 D7", "Gm7 C7", "Am7 D7", "Gm7 C7", "F6"]);
+    expect(f.slots[tag.start].fox).toBe("lead");
+    // twice through has no tag, and a minor tune keeps its plain ending
+    expect(frameFor("f-blues", 24, ["cat"]).sections.at(-1)!.kind).not.toBe("tag");
+    expect(frameFor("autumn", 96, ["cat"]).sections.at(-1)!.kind).not.toBe("tag");
+  });
   it("a 32-bar tune: head, a whole chorus solo, head out", () => {
     expect(layout(frameFor("autumn", 96, ["cat"]))).toEqual(["head:0+32:fox", "solo:32+32:cat", "out:64+32:fox"]);
   });
   it("two soloists each take whole choruses of the blues", () => {
-    expect(layout(frameFor("f-blues", 60, ["cat", "bear"]))).toEqual(["head:0+12:fox", "solo:12+24:cat", "solo:36+12:bear", "out:48+12:fox"]);
+    expect(layout(frameFor("f-blues", 60, ["cat", "bear"]))).toEqual(["head:0+12:fox", "solo:12+24:cat", "solo:36+12:bear", "out:48+12:fox", "tag:60+4:fox"]);
   });
   it("more soloists than choruses split them where the form does", () => {
     expect(layout(frameFor("autumn", 96, ["cat", "bear"]))).toEqual(["head:0+32:fox", "solo:32+16:cat", "solo:48+16:bear", "out:64+32:fox"]);
   });
   it("the drummer trades 4s for a chorus, the horns taking turns", () => {
     const f = frameFor("f-blues", 72, ["cat", "bear", "owl"]);
-    expect(layout(f)).toEqual(["head:0+12:fox", "solo:12+24:cat", "solo:36+12:bear", "trade:48+12:cat,bear,owl", "out:60+12:fox"]);
+    expect(layout(f)).toEqual(["head:0+12:fox", "solo:12+24:cat", "solo:36+12:bear", "trade:48+12:cat,bear,owl", "out:60+12:fox", "tag:72+4:fox"]);
     const trade = f.sections.find((s) => s.kind === "trade")!;
     expect(trade.turn).toBe(4);
     const who = (b: number) => Object.entries(f.slots[b]).filter(([, r]) => r === "solo" || r === "trade").map(([id]) => id).join();
@@ -361,7 +373,7 @@ describe("standards form", () => {
         const s = { ...defaultSettings(band), standard: std.id, key: std.key, style: std.style, bars, meter: { beats: std.meter }, soloists: ["bear"] };
         const { score } = generateLocal(s, band);
         const last = score.frame.sections[score.frame.sections.length - 1];
-        expect(["head", "out"]).toContain(last.kind);
+        expect(["head", "out", "tag"]).toContain(last.kind);
         if (bars > std.bars.length || std.bars.length >= 16) expect(score.frame.sections.some((x) => x.kind === "solo")).toBe(true);
       }
     }

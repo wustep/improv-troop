@@ -14,6 +14,8 @@ export const FREE_LENGTHS = [8, 12, 16, 24, 32];
 
 /** Styles whose bands count off into a rhythm-section intro before the head. */
 const INTRO_STYLES = new Set<string>(["swing", "bossa", "neworleans", "pop", "funk"]);
+/** Styles that end a standard with a tag (the turnaround played again before the last chord). */
+const TAG_STYLES = new Set<string>(["swing", "neworleans"]);
 const SHARP_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const FLAT_NAMES = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
 
@@ -310,6 +312,18 @@ export function buildFrame(input: TroopSettings, members: Member[]): Frame {
     if (soloLen > 0) pushSolos(head, soloLen);
     if (out > 0) sections.push({ name: words.outHead, kind: "out", start: total - out, length: out, featured: [leaderId] });
   }
+  // The tag: a swing or New Orleans standard played as a full performance doesn't resolve on
+  // the out head's last bar. It swerves to iii (iii7 VI7 | ii7 V7), plays that turnaround
+  // twice, and only then lands home, everyone in.
+  const tag = std && TAG_STYLES.has(settings.style) && settings.key.mode === "major" && total >= 3 * std.bars.length ? 4 : 0;
+  if (tag) {
+    const tonic = barTexts[total - 1];
+    const turn = [`${romanToChord("iii7", settings.key)} ${romanToChord("VI7", settings.key)}`, `${romanToChord("ii7", settings.key)} ${romanToChord("V7", settings.key)}`];
+    chords.splice(total - 1, 1, ...[turn[0], turn[1], turn[0], turn[1], tonic].map((t) => splitBar(t, beats)));
+    const last = sections[sections.length - 1];
+    sections.push({ name: "Tag", kind: "tag", start: last.start + last.length, length: tag, featured: [leaderId] });
+  }
+
   // The intro: the rhythm section plays the tune's last bars, turned around into the top,
   // before the head comes in.
   if (intro) {
@@ -326,14 +340,14 @@ export function buildFrame(input: TroopSettings, members: Member[]): Frame {
     for (const sec of sections) sec.start += intro;
     sections.unshift({ name: "Intro", kind: "intro", start: 0, length: intro });
   }
-  const bars = total + intro;
+  const bars = total + intro + tag;
   sections.sort((a, b) => a.start - b.start);
 
   // ── Locked slots ──
   const slots: Record<string, Role>[] = Array.from({ length: bars }, () => ({}));
   for (const s of sections) {
     for (let b = s.start; b < s.start + s.length; b++) {
-      if (s.kind === "head" || s.kind === "out") {
+      if (s.kind === "head" || s.kind === "out" || s.kind === "tag") {
         if (leaderId) slots[b][leaderId] = "lead";
       } else if (s.kind === "solo" && s.featured?.[0]) {
         slots[b][s.featured[0]] = "solo";
