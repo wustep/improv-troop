@@ -238,15 +238,16 @@ export function finishPart(member: Member, notes: NoteEvent[]): NoteEvent[] {
     }
     out = mono;
   }
-  // de-duplicate identical drum hits
+  // de-duplicate identical drum hits, keeping the louder (a fill's closing accent over its ghost)
   if (inst.fn === "rhythm") {
-    const seen = new Set<string>();
-    out = out.filter((n) => {
+    const kept = new Map<string, NoteEvent>();
+    for (const n of out) {
       const k = `${n.pitch}:${Math.round(n.start * 48)}`;
-      if (seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    });
+      const had = kept.get(k);
+      if (!had || n.vel > had.vel) kept.set(k, n);
+    }
+    const keep = new Set(kept.values());
+    out = out.filter((n) => keep.has(n));
   }
   return out;
 }

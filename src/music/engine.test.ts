@@ -571,6 +571,19 @@ describe("groove grids", () => {
 });
 
 describe("drum fills", () => {
+  it("two hits on one drum at once keep the louder, so a fill's closing accent survives", async () => {
+    const { finishPart } = await import("./realize");
+    const owl = band.find((m) => m.instrument === "drums")!;
+    const out = finishPart(owl, [
+      { pitch: DRUM.snare, start: 3.75, dur: 0.1, vel: 0.6 },
+      { pitch: DRUM.snare, start: 3.75, dur: 0.1, vel: 0.9, art: "accent" },
+      { pitch: DRUM.kick, start: 3, dur: 0.1, vel: 0.7 },
+      { pitch: DRUM.kick, start: 3, dur: 0.1, vel: 0.5 },
+    ]);
+    expect(out.filter((n) => n.pitch === DRUM.snare)).toMatchObject([{ vel: 0.9, art: "accent" }]);
+    expect(out.filter((n) => n.pitch === DRUM.kick)).toMatchObject([{ vel: 0.7 }]);
+  });
+
   // the last beat of every bar the drummer plays, as a fingerprint of what's in it
   const lastBeats = (style: StyleId, seeds: number[]) =>
     seeds.flatMap((seed) => {
