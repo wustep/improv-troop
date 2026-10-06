@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { troopAudio, type LoadState } from "@/audio/engine";
 import { canShare, shareUrl } from "@/state/share";
 import { useTroop } from "@/state/store";
+import { openBrains } from "./ControlPanel";
 import { RoughButton } from "./ui/rough";
 
 function useLoadStates() {
@@ -77,6 +78,12 @@ export function Transport() {
         </RoughButton>
       )}
 
+      {!hasKey && !gen.running && (
+        <button type="button" className="text-action text-s" onClick={openBrains}>
+          add an AI key
+        </button>
+      )}
+
       {mode === "composer" && (
         <label className="flex cursor-pointer items-center gap-xs text-m" title="Write 4 candidate charts and let a judge pick the most distinctive">
           <input type="checkbox" className="sketch-check" checked={bestOf > 1} onChange={(e) => set({ bestOf: e.target.checked ? 4 : 1 })} />
@@ -84,15 +91,21 @@ export function Transport() {
         </label>
       )}
 
-      <div className="min-w-0 flex-1 text-m text-ink-soft" aria-live="polite">
+      <div className="min-w-0 flex-1 basis-60 text-m text-ink-soft" aria-live="polite">
         {gen.running ? (
           <span>{gen.status}</span>
         ) : gen.error ? (
           <span role="alert" className="flex flex-wrap items-baseline gap-x-s">
             <span className="text-(--error)">The band lost the thread: {gen.error}</span>
-            <button type="button" className="text-action" onClick={() => void generate()}>
-              try again
-            </button>
+            {/key/i.test(gen.error) ? (
+              <button type="button" className="text-action" onClick={openBrains}>
+                check the key
+              </button>
+            ) : (
+              <button type="button" className="text-action" onClick={() => void generate()}>
+                try again
+              </button>
+            )}
             <button type="button" className="text-action" onClick={playSketchInstead}>
               play the sketch instead
             </button>

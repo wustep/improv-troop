@@ -6,6 +6,7 @@ import { troopAudio } from "@/audio/engine";
 import { ANIMALS, INSTRUMENTS } from "@/music/instruments";
 import { useDebug } from "@/state/debug";
 import { useTroop } from "@/state/store";
+import { openBrains } from "./ControlPanel";
 import { FormMap } from "./FormMap";
 import { Bunting } from "./stage/Bunting";
 import { FrameComputer } from "./stage/frames";
@@ -37,7 +38,12 @@ function IntroNote({ onClose }: { onClose: () => void }) {
           <span className="lg:hidden">(just below)</span>
         </li>
         <li>Press ▶ to hear their sketch</li>
-        <li>Add a gateway key, then <b>Let them jam!</b> to make them think it through</li>
+        <li>
+          <button type="button" className="text-action" onClick={openBrains}>
+            Add a gateway key
+          </button>
+          , then <b>Let them jam!</b> to make them think it through
+        </li>
       </ol>
       <div className="mt-xxs text-xs text-ink-soft">Tap a name to mute them. Tap the form strip to jump around.</div>
     </div>

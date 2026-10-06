@@ -101,6 +101,16 @@ function MemberRow({ m, members, onChange, onRemove }: { m: Member; members: Mem
   );
 }
 
+/** Open “Brains & sounds”, bring it into view and put the cursor in the key field. */
+export function openBrains() {
+  const details = document.getElementById("brains") as HTMLDetailsElement | null;
+  if (!details) return;
+  details.open = true;
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  details.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
+  document.getElementById("gateway-key")?.focus({ preventScroll: true });
+}
+
 export function ControlPanel() {
   const s = useTroop((x) => x.settings);
   const members = useTroop((x) => x.members);
@@ -295,7 +305,7 @@ export function ControlPanel() {
         </Field>
       )}
 
-      <details className="group mb-xxs">
+      <details id="brains" className="group mb-xxs">
         <summary className="type-label cursor-pointer list-none">
           <span className="inline-block transition-transform duration-(--motion-duration) ease-small group-open:rotate-90">▸</span> Brains &amp; sounds
         </summary>
@@ -312,14 +322,25 @@ export function ControlPanel() {
                 autoComplete="off"
                 spellCheck={false}
                 aria-label="Vercel AI Gateway key"
+                id="gateway-key"
               />
               <button type="button" className="text-action px-xxs text-s" onClick={() => setShowKey((v) => !v)}>
                 {showKey ? "hide" : "show"}
               </button>
             </div>
-            <p className="mt-xxs text-xs text-ink-soft">
-              Without a key the band plays from its own sketchbook — no model calls. Models are only called when you press the big button.
-            </p>
+            {apiKey ? (
+              <p className="mt-xxs text-xs text-ink-soft">
+                Saved in this browser. The big button now says <b>{s.mode === "composer" ? "Compose!" : "Let them jam!"}</b>, and models are only called when you press it.
+              </p>
+            ) : (
+              <p className="mt-xxs text-xs text-ink-soft">
+                Without a key the band plays from its own sketchbook, with no model calls.{" "}
+                <a className="text-action" href="https://vercel.com/ai-gateway" target="_blank" rel="noreferrer">
+                  Get a key from Vercel AI Gateway
+                </a>
+                .
+              </p>
+            )}
           </div>
           <div>
             <Label>{s.mode === "composer" ? "Director" : "Leader"} model</Label>
