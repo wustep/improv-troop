@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AnimalSprite, IDLE_STATE, type SpriteHandle } from "@/art/AnimalSprite";
+import { AnimalSprite, IDLE_STATE, isPhrasing, type SpriteHandle } from "@/art/AnimalSprite";
 import { troopAudio } from "@/audio/engine";
 import { ANIMALS, INSTRUMENTS } from "@/music/instruments";
 import { useDebug } from "@/state/debug";
@@ -155,7 +155,8 @@ export function Stage() {
         if (mutedSet.has(m.id)) st = { ...st, role: "rest", featured: false, active: [], recent: [], upcoming: [], nextOnsetIn: Infinity, nextPitch: null };
         h.update(st);
         const spot = spots.current.get(m.id);
-        if (spot) spot.style.opacity = st.featured && Number.isFinite(beat) && beat >= 0 ? "1" : "0";
+        // the spotlight stays on the soloist, softer while they breathe between phrases
+        if (spot) spot.style.opacity = st.featured && Number.isFinite(beat) && beat >= 0 ? (isPhrasing(st) ? "1" : "0.45") : "0";
       }
       if (score && Number.isFinite(beat)) {
         const beats = score.frame.meter.beats;

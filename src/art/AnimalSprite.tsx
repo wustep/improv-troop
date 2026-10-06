@@ -25,6 +25,15 @@ export interface AnimalSpriteProps {
 const VB_W = 240;
 const VB_H = 270;
 
+/**
+ * Is this player in the middle of a phrase: a note sounding, one just played, or one about to
+ * land? A soloist's spotlight and sparkles dim in the gaps between phrases, so the solo is seen
+ * to breathe the way it's heard to.
+ */
+export function isPhrasing(s: MemberFrameState): boolean {
+  return s.active.length > 0 || (s.recent[0]?.age ?? Infinity) < 0.6 || s.nextOnsetIn < 0.35;
+}
+
 export const IDLE_STATE: MemberFrameState = {
   playing: false,
   beat: 0,
@@ -152,6 +161,7 @@ export const AnimalSprite = forwardRef<SpriteHandle, AnimalSpriteProps>(function
     bliss: 0,
     blinkAt: 1.5 + (hash(animal) % 1000) / 400,
     glance: 0,
+    glow: 0,
     oh: 0,
     brow: 0,
     browUp: 0,
@@ -287,8 +297,11 @@ export const AnimalSprite = forwardRef<SpriteHandle, AnimalSpriteProps>(function
       }
 
       // ── soloist sparkles ──
+      // full while phrasing, a faint glimmer while the soloist breathes (eased, so choppy lines don't flicker)
+      const wantGlow = feat * (isPhrasing(s) ? 1 : 0.25);
+      r.glow += (wantGlow - r.glow) * approach(dt, 0.15);
       for (let i = 0; i < SPARKS.length; i++) {
-        const tw = feat ? 0.45 + 0.55 * Math.sin(t * 4.2 + i * 2.1) : 0;
+        const tw = r.glow > 0.01 ? r.glow * (0.45 + 0.55 * Math.sin(t * 4.2 + i * 2.1)) : 0;
         me.op("spark" + i, Math.max(0, tw));
         me.tf("spark" + i, `translate(${SPARKS[i].x} ${SPARKS[i].y}) scale(${(0.7 + 0.4 * Math.max(0, tw)).toFixed(2)}) rotate(${((t * 40 + i * 60) % 360).toFixed(1)})`);
       }
