@@ -8,6 +8,7 @@
 
 ### 1. Speech bubbles open toward the stage, per row
 - **Impact:** 🟡 med · **Effort:** S · **Status:** ✅ accepted
+- **Outcome.** The premise was wrong when checked at 375px: bubbles never overflowed. They shrank to the slot (88px wide, 126px tall). Shipped instead: a player who's alone in their row gets up to 15rem, opening toward the middle of the stage and capped to it. Crowded rows keep slot-width bubbles. (ec9a1eb)
 - **Problem.** `Stage.tsx` anchors bubbles with `i >= n / 2`, the position in the whole band, not the column in a wrapped row. On phones a right-column player in row 1 gets a left-anchored 15rem bubble that runs off the stage.
 - **Proposal.** Anchor by column within the player's row (`col >= cols / 2`), and cap the bubble width to the row container.
 - **Risks / trade-offs.** Edge sprites at the narrowest slot can still clip slightly.
@@ -70,6 +71,7 @@
 - **Proposal.** `fitRegister` in `merge.ts`: one octave shift for the whole bar or motif that puts the most notes in range (tie → smallest shift), recorded as a repair. `finishPart` stays as the per-note backstop.
 - **Risks / trade-offs.** Rewriting text could drop articulations; keep the original text when the shift is 0.
 - **Files.** `src/ai/merge.ts`, `src/ai/merge.test.ts`
+- **Outcome.** Shipped in 204b46f, with `registerShift`/`shiftOctaves` and tests.
 
 ### 10. Trades actually trade: the drummer hears the horn's 2 bars first
 - **Impact:** 🔴 high · **Effort:** M · **Status:** ❌ rejected
@@ -84,6 +86,7 @@
 - **Proposal.** Move the check into `merge.ts` as `directiveFits` and apply it in `validateBarText` whenever a role is known, recording a repair. Mirror `bassCapable` so a cello on bass can still walk.
 - **Risks / trade-offs.** If the table is too strict, legitimate cross-overs get rejected.
 - **Files.** `src/ai/merge.ts`, `src/ai/improviser.ts`, `src/ai/composer.ts`, `src/ai/merge.test.ts`
+- **Outcome.** Shipped in 17784d2. The check covers phrase replies and `mergePlan` (Composer).
 
 ### 12. Composer soloists hear the solo they're told to answer
 - **Impact:** 🟡 med · **Effort:** S–M · **Status:** ❌ rejected
@@ -128,6 +131,7 @@
 - **Proposal.** A small fill vocabulary per style, chosen with `ctx.rng`, never repeating the previous shape. Section ends get the bigger shapes.
 - **Risks / trade-offs.** A busier fill could crowd a soloist's ending, so the small shapes stay at 1 beat or less.
 - **Files.** `src/music/patterns/drums.ts`, `src/music/context.ts`, `src/music/engine.test.ts`
+- **Outcome.** Shipped in e31b4d1: run, setup, drag, toms, press, ghosts, hats and rim shapes.
 
 ### 18. Swing heads in two, solos walking
 - **Impact:** 🟡 med · **Effort:** S · **Status:** ✅ accepted
@@ -135,6 +139,7 @@
 - **Proposal.** Head bass `@two` on heads of 8 bars or more, walking into the last head bar. Solos and the out head walk.
 - **Risks / trade-offs.** Short charts would be mostly two-feel, so the change is gated by head length.
 - **Files.** `src/music/styles.ts`, `src/music/planner.ts`, `src/music/engine.test.ts`
+- **Outcome.** Shipped in 71f3151 (planner only; the style table is unchanged, so model prompts are unaffected).
 
 ### 19. Bossa bass and comping anticipate the next chord
 - **Impact:** 🟡 med · **Effort:** S · **Status:** ❌ rejected
