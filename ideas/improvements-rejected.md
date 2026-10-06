@@ -66,3 +66,15 @@
 - **Hairpins into dynamic changes** — velocity ramp before a dynamic change _(rejected 2026-10-06)_
 - **Baroque bass avoids parallels** — strong-beat P5/P8 check against the melody _(rejected 2026-10-06)_
 - **Band talk for handoffs and shout choruses** — ANSWER lines and riff calls in narrate.ts _(rejected 2026-10-06)_
+- **Number keys mute players** — 1–N toggles mute with the not-typing guard _(rejected 2026-10-06)_
+- **BandTalk empty state links to the mode switch** — text-action focusing the mode chips _(rejected 2026-10-06)_
+- **Accompanists get harmony and the soloist's gaps** — chord-tone line and GAPS: line in accompanimentPhase _(rejected 2026-10-06)_
+- **Featured solo vocabulary; reject unknown directives** — @answer in the featured prompt, KNOWN_DIRECTIVES check _(rejected 2026-10-06)_
+- **Live soloists see only the nearby chart** — windowed chartBlock for featured calls _(rejected 2026-10-06)_
+- **Ties hold across the barline** — post-realize merge of cross-bar ties _(rejected 2026-10-06)_
+- **Critic reads pitch names, not MIDI** — pitchName in textureFeatures register _(rejected 2026-10-06)_
+- **Solos save their top note** — remembered peaks and an arc-gated ceiling _(rejected 2026-10-06)_
+- **Jazz-waltz comping vocabulary** — 3/4 comp cells through listen() _(rejected 2026-10-06)_
+- **Comp voicing low-interval limits and top-voice leading** — LIL penalty and top-voice cost in voiceChord _(rejected 2026-10-06)_
+- **Baroque prelude under the tune, several figures** — voiceRange plus per-phrase figure _(rejected 2026-10-06)_
+- **Blues out-chorus is a whole chorus** — full-chorus out for blues forms _(rejected 2026-10-06)_
