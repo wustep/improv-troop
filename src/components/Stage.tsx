@@ -44,6 +44,36 @@ function IntroNote({ onClose }: { onClose: () => void }) {
   );
 }
 
+function SharedNote() {
+  const arrival = useTroop((s) => s.sharedArrival);
+  const take = useTroop((s) => s.takes.find((t) => t.id === s.sharedArrival?.takeId));
+  const play = useTroop((s) => s.play);
+  const adopt = useTroop((s) => s.adoptSharedBand);
+  const dismiss = useTroop((s) => s.dismissArrival);
+  if (!arrival || !take) return null;
+  const names = take.score.members.map((m) => m.name);
+  const band = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0];
+  return (
+    <div className="sticky-note relative z-30 mx-auto mt-s w-full max-w-[19rem] -rotate-[1deg] px-s py-xs text-m lg:absolute lg:left-1 lg:top-14 lg:mt-0 lg:w-[17.5rem] lg:-rotate-[2deg]" role="note">
+      <button type="button" onClick={dismiss} className="absolute right-xs top-xxs text-l text-ink-soft transition-colors duration-(--motion-duration) hover:text-ink" aria-label="Dismiss">
+        ×
+      </button>
+      <div className="type-label">Someone sent you a take</div>
+      <p>
+        <b>{take.score.title}</b>, played by {band}.
+      </p>
+      <div className="mt-xxs flex flex-wrap gap-x-s">
+        <button type="button" className="text-action" onClick={() => void play()}>
+          ▶ play it
+        </button>
+        <button type="button" className="text-action" onClick={adopt}>
+          jam with this band
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function Stage() {
   const score = useTroop((s) => s.current);
   const members = useTroop((s) => s.members);
@@ -65,6 +95,7 @@ export function Stage() {
   const autopilotBars = useTroop((s) => s.autopilotBars);
   const play = useTroop((s) => s.play);
   const seenIntro = useTroop((s) => s.seenIntro);
+  const sharedArrival = useTroop((s) => !!s.sharedArrival);
   const dismissIntro = useTroop((s) => s.dismissIntro);
 
   // the band on stage is the chart's band when one is loaded (so sketches and takes match what you hear)
@@ -236,7 +267,7 @@ export function Stage() {
             onSeek={(b) => void play(b)}
           />
         )}
-        {!seenIntro && <IntroNote onClose={dismissIntro} />}
+        {sharedArrival ? <SharedNote /> : !seenIntro && <IntroNote onClose={dismissIntro} />}
       </div>
     </RoughBox>
   );

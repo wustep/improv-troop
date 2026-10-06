@@ -51,10 +51,15 @@ interface TroopState {
   autopilotBars: number[];
   /** First-visit hints dismissed. */
   seenIntro: boolean;
+  /** Just arrived from a share link: the take it carried (cleared on play or dismiss). */
+  sharedArrival: { takeId: string } | null;
   hydrate(): void;
   toggleMute(id: string): void;
   deleteTake(id: string): void;
   dismissIntro(): void;
+  dismissArrival(): void;
+  /** Make the shared take's band and settings your own, to jam on from there. */
+  adoptSharedBand(): void;
   setSettings(patch: Partial<TroopSettings>): void;
   setStyle(style: TroopSettings["style"]): void;
   setStandard(id: string | null): void;
@@ -165,6 +170,25 @@ export const useTroop = create<TroopState>((set, get) => {
     else void troopAudio.prepare(members, { pianoPack: get().pianoPack, notesHint: notesHintFromScore(score) });
   };
 
+  // A shared link (#t=…): replay that take without touching the visitor's own band.
+  const openSharedLink = () => {
+    let shared: SharedTake | null = null;
+    try {
+      shared = sharedFromHash(location.hash);
+      if (/[#&]t=/.test(location.hash)) history.replaceState(null, "", location.pathname + location.search);
+    } catch {
+      /* ignore */
+    }
+    if (!shared) return;
+    if (get().playing) get().stop();
+    const settings = reconcile({ ...defaultSettings(shared.members), ...shared.settings }, shared.members);
+    const { score } = generateLocal(settings, shared.members);
+    const take: Take = { id: score.id, score, label: `Shared · ${STYLES[settings.style].name}`, engine: "local", createdAt: Date.now() };
+    set((s) => ({ current: score, isSketch: false, takes: [take, ...s.takes].slice(0, 12), chat: [], sharedArrival: { takeId: take.id } }));
+    saveTakes(get().takes);
+    void troopAudio.prepare(score.members, { pianoPack: get().pianoPack, notesHint: notesHintFromScore(score) });
+  };
+
   let persistTimer: ReturnType<typeof setTimeout> | null = null;
   const persist = () => {
     if (persistTimer) clearTimeout(persistTimer);
@@ -193,6 +217,7 @@ export const useTroop = create<TroopState>((set, get) => {
     readyBars: null,
     autopilotBars: [],
     seenIntro: true,
+    sharedArrival: null,
 
     hydrate() {
       if (get().hydrated) return;
@@ -212,22 +237,9 @@ export const useTroop = create<TroopState>((set, get) => {
         set({ playing: false });
       });
       sketch();
-      // a shared link (#t=…): replay that take without touching the visitor's own band
-      let shared: SharedTake | null = null;
-      try {
-        shared = sharedFromHash(location.hash);
-        if (/[#&]t=/.test(location.hash)) history.replaceState(null, "", location.pathname + location.search);
-      } catch {
-        /* ignore */
-      }
-      if (shared) {
-        const settings = reconcile({ ...defaultSettings(shared.members), ...shared.settings }, shared.members);
-        const { score } = generateLocal(settings, shared.members);
-        const take: Take = { id: score.id, score, label: `Shared · ${STYLES[settings.style].name}`, engine: "local", createdAt: Date.now() };
-        set((s) => ({ current: score, isSketch: false, takes: [take, ...s.takes].slice(0, 12), chat: [] }));
-        saveTakes(get().takes);
-        void troopAudio.prepare(score.members, { pianoPack: get().pianoPack, notesHint: notesHintFromScore(score) });
-      }
+      openSharedLink();
+      // a link pasted into a tab that's already open only changes the hash
+      window.addEventListener("hashchange", openSharedLink);
     },
 
     setSettings(patch) {
@@ -401,6 +413,7 @@ export const useTroop = create<TroopState>((set, get) => {
       troopAudio.play(score, { fromBar, countIn: fromBar === 0 });
       set((s) => ({ playing: true, playToken: s.playToken + 1 }));
       if (!get().seenIntro) get().dismissIntro();
+      if (get().sharedArrival) set({ sharedArrival: null });
       // live improv watchdog: if playback catches up with the band's thinking, they vamp on autopilot
       stopLiveWatch();
       // A timer, not rAF: rAF pauses in a background tab but the audio keeps playing, and the
@@ -439,6 +452,24 @@ export const useTroop = create<TroopState>((set, get) => {
       const takes = get().takes.filter((t) => t.id !== id);
       set({ takes });
       saveTakes(takes);
+    },
+
+    dismissArrival() {
+      set({ sharedArrival: null });
+    },
+
+    adoptSharedBand() {
+      const take = get().takes.find((t) => t.id === get().sharedArrival?.takeId);
+      set({ sharedArrival: null });
+      if (!take) return;
+      const { members, settings: from } = take.score;
+      const { style, bars, tempo, key, meter, standard, leaderId, soloists, seed, phraseBars } = from;
+      // only the musical choices: the visitor keeps their own mode, models and key
+      const settings = reconcile({ ...get().settings, style, bars, tempo, key, meter, standard, leaderId, soloists, seed, phraseBars }, members);
+      set({ members, settings });
+      persist();
+      // the same settings and seed, so the sketch is the take they were sent
+      sketch();
     },
 
     dismissIntro() {
