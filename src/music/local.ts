@@ -3,6 +3,7 @@ import { ritFor } from "./ending";
 import { buildFrame } from "./form";
 import { INSTRUMENTS } from "./instruments";
 import { generateMotif, motifFromText, transposeMotif } from "./motif";
+import { narrateLocal } from "./narrate";
 import { planLocal } from "./planner";
 import { realize, type RealizeIssue } from "./realize";
 import { makeRng } from "./rng";
@@ -87,7 +88,7 @@ export function generateLocal(settings: TroopSettings, members: Member[]): Local
     swing: swingAt(style, frame.tempo),
     rit: ritFor(frame),
     parts: res.parts,
-    chat: [],
+    chat: narrateLocal(frame, plan, members, rng.fork("narrate")),
     engine: "local",
     notes: [`Local engine, seed ${settings.seed}.`],
   };
