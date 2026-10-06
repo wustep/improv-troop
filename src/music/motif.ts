@@ -124,7 +124,8 @@ export function generateMotif(
   return { notes, length: Math.ceil(pos - 1e-6) || beats, chord: firstChord, text, description: `${cellText} · contour ${contour.join(",")}` };
 }
 
-export function parseMotifOps(args: string[]): MotifOp[] {
+/** Read transform words; anything not understood is collected in `unknown` (if given). */
+export function parseMotifOps(args: string[], unknown?: string[]): MotifOp[] {
   const ops: MotifOp[] = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i].toLowerCase();
@@ -149,6 +150,7 @@ export function parseMotifOps(args: string[]): MotifOp[] {
     else if (a.startsWith("orn")) ops.push({ op: "ornament" });
     else if (a.startsWith("rhy")) ops.push({ op: "rhythm" });
     else if (a === "state") ops.push({ op: "state" });
+    else unknown?.push(args[i]);
   }
   return ops;
 }

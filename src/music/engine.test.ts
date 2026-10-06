@@ -498,6 +498,36 @@ describe("arrangement textures", () => {
   });
 });
 
+describe("@motif as a model writes it", () => {
+  const play = async (directive: string, motifText: string) => {
+    const { realize } = await import("./realize");
+    const { motifFromText } = await import("./motif");
+    const { score } = generateLocal({ ...defaultSettings(band), bars: 16, seed: 4 }, band);
+    const leader = score.settings.leaderId;
+    const bar = score.plan.findIndex((b) => b.directives?.[leader]?.startsWith("@motif"));
+    const plan = score.plan.map((b) => ({ ...b, directives: { ...b.directives } }));
+    plan[bar].directives![leader] = directive;
+    const motif = motifFromText(motifText, 4, score.frame.chords[0][0].symbol);
+    const res = realize({ frame: score.frame, members: band, plan, motif, seed: 4 });
+    const notes = res.parts[leader].filter((n) => Math.floor(n.start / 4 + 1e-9) === bar).map((n) => [n.pitch, +(n.start % 4).toFixed(3)]);
+    return { notes, issues: res.issues.filter((i) => i.bar === bar).map((i) => i.detail).join(" ") };
+  };
+  const twoBars = "C5/4 D5/4 E5/2 | G5/4 F5/4 E5/2";
+  it("reads \"bar 2\" the way it reads \"bar2\"", async () => {
+    const spaced = await play("@motif bar 2", twoBars);
+    expect(spaced.notes).toEqual((await play("@motif bar2", twoBars)).notes);
+    expect(spaced.notes).not.toEqual((await play("@motif", twoBars)).notes);
+  });
+  it("plays the statement's last bar when asked for a bar it doesn't have, and says so", async () => {
+    const r = await play("@motif bar2", "C5/4 D5/4 E5/4 G5/4");
+    expect(r.notes.length).toBeGreaterThan(0);
+    expect(r.issues).toMatch(/no bar 2; playing bar 1/);
+  });
+  it("names the words it couldn't use", async () => {
+    expect((await play("@motif up 2 octave", twoBars)).issues).toMatch(/ignored "octave"/);
+  });
+});
+
 describe("the tune at the bar's dynamic", () => {
   it("a stated motif and a replayed head play softer at pp than at ff", async () => {
     const { realize } = await import("./realize");
