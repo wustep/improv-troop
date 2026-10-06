@@ -2,6 +2,7 @@ import { chordSpans, dynamicLift, harmAt, velFor, type BarCtx } from "./context"
 import { holdable, nearestIn } from "./harmony";
 import { keyPrefersFlats, mod, pitchName } from "./theory";
 import { ENDINGS } from "./ending";
+import { getStandard, tuneBar } from "./standards";
 import { DRUM } from "./instruments";
 import { parseMotifOps, realizeMotifBar } from "./motif";
 import { looksLikeDrumGrid, parseDrumGrid, parseNotes } from "./notation";
@@ -20,6 +21,7 @@ export const DIRECTIVE_HELP = `Each bar of each player's part is ONE of:
 - a directive the band's engine realizes in style:
   @motif [up N|down N|seq N|invert|retro|aug|dim|frag N|displace 0.5|ornament|rhythm] [bar2]  — the shared motif or a transform of it (up/down/seq count scale steps: 7 = an octave; "bar2" = 2nd bar of a 2-bar statement)
   @head N  — play again exactly what the leader played in bar N (how a tune comes back: repeated A sections, the out head)
+  @tune N  — play bar N of the standard's written melody, as written (the tune itself; only on standards that have one)
   @line [dense|sparse|run|long]  — improvise a line over the changes
   @answer  — open a solo by answering the previous soloist's last phrase (its rhythm, your register), then carry on
   @walk @two @bossa @funk @baroque @pedal  — bass patterns
@@ -176,6 +178,21 @@ function realizeRaw(ctx: BarCtx, text: string): DirectiveResult {
       }
       issues.push(`@head ${args[0] ?? ""}: nothing to replay; stating the motif`);
       return done(realizeMotifBar(c, []));
+    }
+    case "tune": {
+      // the standard's written melody, as written (in this key, in this player's register)
+      const std = getStandard(ctx.standard);
+      const [slo, shi] = ctx.inst.solo ?? ctx.inst.sweet;
+      const notes = std ? tuneBar(std, parseInt(args[0] ?? "", 10) - 1, ctx.key.tonic, ctx.beats, (slo + shi) / 2, ctx.inst.range) : null;
+      if (!notes) {
+        issues.push(`@tune ${args[0] ?? ""}: no written melody here; stating the motif`);
+        return done(realizeMotifBar(c, []));
+      }
+      const vel = velFor(ctx, 0.8);
+      const out = notes.map((n) => ({ ...n, vel: n.art === "ghost" ? vel * 0.4 : vel, written: true as const }));
+      if (out.length) ctx.mem.lastPitch = out[out.length - 1].pitch;
+      ctx.mem.phrase = null;
+      return done(out);
     }
     case "motif": {
       // "bar2" or "bar 2": which bar of a multi-bar statement

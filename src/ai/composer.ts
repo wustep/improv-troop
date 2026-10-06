@@ -271,8 +271,8 @@ export async function runComposer(settings: TroopSettings, members: Member[], ho
   for (const bp of plan) {
     for (const m of members) {
       if (m.instrument === "drums") continue;
-      // the tune coming back (@head) replays what was written for the head: nothing to write
-      if (isFeaturedRole(bp.roles[m.id]) && bp.index !== frame.bars - 1 && !bp.directives?.[m.id]?.startsWith("@head")) {
+      // the tune coming back (@head) or written out (@tune) is already decided: nothing to write
+      if (isFeaturedRole(bp.roles[m.id]) && bp.index !== frame.bars - 1 && !/^@(head|tune)\b/.test(bp.directives?.[m.id] ?? "")) {
         if (!featured.has(m.id)) featured.set(m.id, []);
         featured.get(m.id)!.push(bp.index);
       }

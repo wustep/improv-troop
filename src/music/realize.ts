@@ -156,6 +156,7 @@ export function makeBarCtx(
     next: parseChord(nextBar[0].symbol),
     prev: parseChord(prevBar[prevBar.length - 1].symbol),
     key: frame.key,
+    standard: frame.standard,
     keyPcs: keyScale(frame.key),
     style,
     section,

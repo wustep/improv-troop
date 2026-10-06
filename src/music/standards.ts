@@ -1,4 +1,6 @@
-import type { KeySig, StyleId } from "./types";
+import { parseNotes } from "./notation";
+import { mod, pcOf } from "./theory";
+import type { KeySig, NoteEvent, StyleId } from "./types";
 
 // Chord changes only (progressions aren't copyrightable); melodies are included
 // only for public-domain tunes. Everything else gets a motif from the band.
@@ -16,6 +18,11 @@ export interface Standard {
   tempo: number;
   /** Public-domain head motif in compact notation (bars separated by |), if any. */
   motif?: string;
+  /**
+   * The written melody, one entry per bar in compact notation, in the standard's key (public
+   * domain tunes only). The leader plays it as written on the head and the head out.
+   */
+  melody?: string[];
   note: string;
 }
 
@@ -119,11 +126,30 @@ export const STANDARDS: Standard[] = [
     name: "When the Saints Go Marching In",
     key: { tonic: "F", mode: "major" },
     meter: 4,
-    bars: ["F", "F", "F", "F", "F", "F", "C7", "C7", "F", "F7", "Bb", "Bbm", "F", "C7", "F", "F"],
+    bars: ["F", "F", "F", "F", "F", "F", "C7", "C7", "F", "F7", "Bb", "Bbm", "F", "F C7", "F", "F"],
     form: [["A", 16]],
     style: "neworleans",
     tempo: 150,
     motif: "r/4 F4/4 A4/4 Bb4/4 | C5/1",
+    // "Oh when the saints | go marching in | ..." (the pickups end the bar before)
+    melody: [
+      "C5/1",
+      "r/4 F4/4 A4/4 Bb4/4",
+      "C5/1",
+      "r/4 F4/4 A4/4 Bb4/4",
+      "C5/2 A4/2",
+      "F4/2 A4/2",
+      "G4/1",
+      "r/4 A4/4 A4/4 G4/4",
+      "F4/2. F4/4",
+      "A4/4 C5/4 C5/4 Bb4/4",
+      "Bb4/1",
+      "r/4 F4/4 A4/4 Bb4/4",
+      "C5/2 A4/2",
+      "F4/2 G4/2",
+      "F4/1",
+      "r/4 F4/4 A4/4 Bb4/4",
+    ],
     note: "Public-domain parade tune.",
   },
   {
@@ -143,12 +169,61 @@ export const STANDARDS: Standard[] = [
     name: "Greensleeves",
     key: { tonic: "A", mode: "minor" },
     meter: 3,
-    bars: ["Am", "G", "Am", "E", "Am", "G", "Am E", "Am", "C", "G", "Am", "E", "C", "G", "Am E", "Am"],
+    // harmonized to the melody: the verse, then the "Greensleeves was all my joy" chorus
+    bars: ["Am", "C", "G", "Em", "Am", "Am", "E", "Am", "C", "G", "G", "Em", "Am", "E", "Am", "Am"],
     form: [["A", 8], ["B", 8]],
     style: "baroque",
     tempo: 104,
     motif: "C5/2 D5/4 | E5/4. F5/8 E5/4",
+    melody: [
+      "C5/2 D5/4",
+      "E5/4. F5/8 E5/4",
+      "D5/2 B4/4",
+      "G4/4. A4/8 B4/4",
+      "C5/2 A4/4",
+      "A4/4. G#4/8 A4/4",
+      "B4/2 G#4/4",
+      "E4/2.",
+      "G5/2.",
+      "G5/4. F#5/8 E5/4",
+      "D5/2 B4/4",
+      "G4/4. A4/8 B4/4",
+      "C5/4. B4/8 A4/4",
+      "G#4/4. F#4/8 G#4/4",
+      "A4/2.",
+      "r/2 A4/4",
+    ],
     note: "Traditional English tune in 3/4, public domain.",
+  },
+  {
+    id: "ode-to-joy",
+    name: "Ode to Joy",
+    key: { tonic: "C", mode: "major" },
+    meter: 4,
+    bars: ["C", "G", "C", "C G", "C", "G", "C", "G C", "G", "G C", "G", "C G", "C", "G", "C", "G C"],
+    form: [["A", 4], ["A", 4], ["B", 4], ["A", 4]],
+    style: "baroque",
+    tempo: 108,
+    motif: "E5/4 E5/4 F5/4 G5/4 | G5/4 F5/4 E5/4 D5/4",
+    melody: [
+      "E5/4 E5/4 F5/4 G5/4",
+      "G5/4 F5/4 E5/4 D5/4",
+      "C5/4 C5/4 D5/4 E5/4",
+      "E5/4. D5/8 D5/2",
+      "E5/4 E5/4 F5/4 G5/4",
+      "G5/4 F5/4 E5/4 D5/4",
+      "C5/4 C5/4 D5/4 E5/4",
+      "D5/4. C5/8 C5/2",
+      "D5/4 D5/4 E5/4 C5/4",
+      "D5/4 E5/8 F5/8 E5/4 C5/4",
+      "D5/4 E5/8 F5/8 E5/4 D5/4",
+      "C5/4 D5/4 G4/2",
+      "E5/4 E5/4 F5/4 G5/4",
+      "G5/4 F5/4 E5/4 D5/4",
+      "C5/4 C5/4 D5/4 E5/4",
+      "D5/4. C5/8 C5/2",
+    ],
+    note: "Beethoven's tune from the Ninth, public domain.",
   },
   {
     id: "dorian-vamp",
@@ -166,4 +241,36 @@ export const STANDARDS: Standard[] = [
 export function getStandard(id: string | null): Standard | null {
   if (!id) return null;
   return STANDARDS.find((s) => s.id === id) ?? null;
+}
+
+/** Semitones from a standard's own key to the key it's played in (the nearer way round). */
+export function standardShift(std: Standard, tonic: string): number {
+  const semis = mod(pcOf(tonic) - pcOf(std.key.tonic), 12);
+  return semis > 6 ? semis - 12 : semis;
+}
+
+const tuneOctave = new Map<string, number>();
+
+/**
+ * One bar of a standard's written melody (form bar `index`), in `tonic` and moved by whole
+ * octaves so the tune as a whole sits around `center` and inside [lo, hi]. The octave is
+ * decided once for the whole tune, so the melody never jumps register mid-phrase.
+ */
+export function tuneBar(std: Standard, index: number, tonic: string, beats: number, center: number, [lo, hi]: [number, number]): NoteEvent[] | null {
+  const text = std.melody?.[mod(index, std.bars.length)];
+  if (!text) return null;
+  const semis = standardShift(std, tonic);
+  const key = `${std.id}:${semis}:${center}:${lo}:${hi}`;
+  let oct = tuneOctave.get(key);
+  if (oct === undefined) {
+    const all = (std.melody ?? []).flatMap((b) => parseNotes(b, beats).notes.map((n) => n.pitch + semis));
+    const mean = all.reduce((sum, p) => sum + p, 0) / Math.max(1, all.length);
+    oct = Math.round((center - mean) / 12) * 12;
+    const min = Math.min(...all) + oct;
+    const max = Math.max(...all) + oct;
+    if (max > hi && min - 12 >= lo) oct -= 12;
+    else if (min < lo && max + 12 <= hi) oct += 12;
+    tuneOctave.set(key, oct);
+  }
+  return parseNotes(text, beats).notes.map((n) => ({ ...n, pitch: n.pitch + semis + oct }));
 }

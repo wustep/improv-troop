@@ -76,6 +76,8 @@ export interface NoteEvent {
   vel: number;
   /** "pizz" = plucked (bowed strings); everything else is a dynamic/length articulation. */
   art?: "accent" | "staccato" | "ghost" | "legato" | "pizz";
+  /** A note of a tune's written melody: the band's own fixes never move it. */
+  written?: true;
 }
 
 export interface ChordChange {

@@ -526,6 +526,52 @@ describe("playing like a band", () => {
   });
 });
 
+describe("standards with a written melody", () => {
+  it("the leader plays the tune as written on the head and the head out, in any key", () => {
+    for (const id of ["saints", "greensleeves", "ode-to-joy"]) {
+      const std = STANDARDS.find((s) => s.id === id)!;
+      for (const tonic of [std.key.tonic, "Eb"]) {
+        const bars = std.bars.length * 3;
+        const { score } = generateLocal({ ...defaultSettings(band), standard: id, key: { tonic, mode: std.key.mode }, style: std.style, bars, meter: { beats: std.meter }, soloists: ["bear"], seed: 2 }, band);
+        const beats = score.frame.meter.beats;
+        const lead = score.frame.leaderId;
+        const semis = (((parsePitch(`${tonic}4`)! - parsePitch(`${std.key.tonic}4`)!) % 12) + 12) % 12;
+        const sections = score.frame.sections.filter((s) => s.kind === "head" || s.kind === "out");
+        expect(sections.length).toBe(2);
+        let pitches: number[] = [];
+        for (const sec of sections)
+          for (let b = sec.start; b < sec.start + sec.length - (sec.kind === "out" ? 1 : 0); b++) {
+            const want = parseNotes(std.melody![b % std.bars.length], beats).notes;
+            const got = score.parts[lead].filter((n) => Math.floor(n.start / beats + 1e-9) === b);
+            expect(got.map((n) => +(n.start - b * beats).toFixed(3)), `${id} in ${tonic} bar ${b + 1} rhythm`).toEqual(want.map((n) => +n.start.toFixed(3)));
+            expect(got.map((n) => mod(n.pitch, 12)), `${id} in ${tonic} bar ${b + 1}`).toEqual(want.map((n) => mod(n.pitch + semis, 12)));
+            pitches = [...pitches, ...got.map((n) => n.pitch)];
+          }
+        // one register for the whole tune, inside the leader's range
+        const inst = INSTRUMENTS[band.find((m) => m.id === lead)!.instrument];
+        expect(Math.min(...pitches)).toBeGreaterThanOrEqual(inst.range[0]);
+        expect(Math.max(...pitches)).toBeLessThanOrEqual(inst.range[1]);
+      }
+    }
+  });
+  it("each written melody bar fills its bar and sits on its chord's downbeat", () => {
+    for (const std of STANDARDS.filter((s) => s.melody)) {
+      expect(std.melody!.length, std.id).toBe(std.bars.length);
+      std.melody!.forEach((bar, i) => {
+        const r = parseNotes(bar, std.meter);
+        expect(r.errors, `${std.id} bar ${i + 1}`).toEqual([]);
+        expect(r.covered, `${std.id} bar ${i + 1}`).toBeCloseTo(std.meter);
+        // a note struck on the downbeat belongs to the bar's first chord (the tune and its changes agree)
+        const first = r.notes.find((n) => n.start < 1e-6);
+        if (!first) return;
+        const c = parseChord(std.bars[i].split(" ")[0]);
+        const pcs = [...c.tones, ...c.tensions].map((t) => mod(c.root + t, 12));
+        expect(pcs, `${std.id} bar ${i + 1}: ${bar} over ${std.bars[i]}`).toContain(mod(first.pitch, 12));
+      });
+    }
+  });
+});
+
 describe("endings", () => {
   const bandE: Member[] = [...defaultMembers(), { id: "cat", animal: "cat", name: "Mochi", instrument: "sax" }];
   const take = (style: StyleId, mode: "major" | "minor" = "major") =>

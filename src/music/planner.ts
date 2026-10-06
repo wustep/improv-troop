@@ -181,7 +181,8 @@ export function planLocal(frame: Frame, members: Member[], motif: Motif, rng: Rn
 
   // per-section lead lines
   const leadLines = new Map<Section, string[]>();
-  const blues = !!getStandard(frame.standard)?.form.some(([letter]) => letter === "Blues");
+  const std = getStandard(frame.standard);
+  const blues = !!std?.form.some(([letter]) => letter === "Blues");
   for (const s of frame.sections) {
     if (s.kind === "head" || s.kind === "out") leadLines.set(s, headLine(style, s.length, motifBars, rng.fork(s.start), s.kind === "out", blues));
   }
@@ -207,6 +208,11 @@ export function planLocal(frame: Frame, members: Member[], motif: Motif, rng: Rn
       }
       if (slot === "lead") {
         roles[m.id] = "lead";
+        // a standard with a written melody: the leader plays the tune itself
+        if (std?.melody) {
+          directives[m.id] = `@tune ${(bar % std.bars.length) + 1}`;
+          continue;
+        }
         const src = melodySource(frame, bar);
         directives[m.id] = src !== null ? `@head ${src + 1}` : (leadLines.get(s)?.[inSec] ?? "@motif");
         continue;

@@ -70,9 +70,9 @@ const ACCOMPANIMENT: Record<InstrumentFunction, RegExp> = {
 // cellos also pluck and bow
 const CELLO_EXTRA = /^@(pizz|arco)$/;
 // anyone can rest, fill, hit with the band, end, or bring the tune back
-const ANYONE = /^@(rest|end|fill|hits|head)$/;
+const ANYONE = /^@(rest|end|fill|hits|head|tune)$/;
 // what a featured player can play in their own bars (the last bar can also @end)
-const FEATURED_VOCAB = /^@(motif|line|answer|solo|trade|head|fill|rest|end)$/;
+const FEATURED_VOCAB = /^@(motif|line|answer|solo|trade|head|tune|fill|rest|end)$/;
 
 /**
  * Is this an accompaniment directive this player can play? A cello covering the bass chair
@@ -287,7 +287,7 @@ export function mergePlan(
         if (!text) continue;
         // the out head (and a repeated A) comes back to the melody: those bars stay locked
         const locked = base[i]?.directives?.[m.id];
-        if (locked?.startsWith("@head") && !text.trim().startsWith("@head")) {
+        if (locked && /^@(head|tune)\b/.test(locked) && !text.trim().startsWith(locked.split(/\s+/)[0])) {
           repairs.push(`bar ${b1} ${m.name}: kept ${locked} (the tune comes back to the melody here)`);
           continue;
         }

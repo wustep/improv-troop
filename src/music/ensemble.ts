@@ -88,7 +88,7 @@ export function ensemble(o: EnsembleInput): EnsembleFix[] {
     for (let i = 0; i < notes.length; i++) {
       const n = notes[i];
       const bar = barOf(n.start);
-      if (!bars.has(bar)) continue;
+      if (!bars.has(bar) || n.written) continue; // the tune as written is the tune
       const home = homeOf(harmony, n);
       const pc = mod(n.pitch, 12);
       const rel = n.start - bar * beats;

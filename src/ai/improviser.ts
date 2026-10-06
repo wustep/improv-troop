@@ -312,8 +312,8 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
       const last = frame.bars - 1;
       const sec = sectionAt(frame, bars[0]);
       const prevBars = pi > 0 ? phrases[pi - 1] : [];
-      // bars where the tune comes back (@head) are the melody as already played: nobody rewrites them
-      const writes = (id: string, b: number) => b !== last && isFeaturedRole(plan[b].roles[id]) && !plan[b].directives?.[id]?.startsWith("@head");
+      // bars where the tune comes back (@head) or is written out (@tune) are the melody: nobody rewrites them
+      const writes = (id: string, b: number) => b !== last && isFeaturedRole(plan[b].roles[id]) && !/^@(head|tune)\b/.test(plan[b].directives?.[id] ?? "");
       const featuredIds = members.filter((m) => bars.some((b) => writes(m.id, b))).map((m) => m.id);
       step(`Bars ${bars[0] + 1}–${bars.at(-1)! + 1}: ${featuredIds.length ? `${featuredIds.map(nameOf).join(" & ")} ${sec.kind === "head" || sec.kind === "out" ? "on the head" : "stretching out"}` : "the band"}…`);
       const tPhrase = performance.now();

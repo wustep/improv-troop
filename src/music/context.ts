@@ -58,6 +58,8 @@ export interface BarCtx {
   next: Chord;
   prev: Chord;
   key: KeySig;
+  /** The standard being played, if any (its written melody is the tune). */
+  standard: string | null;
   keyPcs: number[];
   style: StyleDef;
   section: Section;
