@@ -19,13 +19,14 @@ export const GROOVES: Record<string, Record<number, Grid>> = {
       light: "rd:x...x.x.x... ph:....x...x...",
     },
   },
+  // bossa: the hats are a whisper under the cross-stick clave (which is the part you hear)
   bossa: {
     4: {
-      base: "hh:x.x.x.x.x.x.x.x. bd:x.....x.x.....x.",
-      light: "hh:g.g.g.g.g.g.g.g. bd:x.......x.......",
-      peak: "hh:x.x.x.x.x.x.x.x. bd:x.....x.x.....x.",
+      base: "hh:g.g.g.g.g.g.g.g. bd:x.....x.x.....x.",
+      light: "hh:g...g...g...g... bd:x.......x.......",
+      peak: "hh:x.g.x.g.x.g.x.g. bd:x.....x.x.....x.",
     },
-    3: { base: "hh:x.x.x.x.x.x. bd:x.....x....." },
+    3: { base: "hh:g.g.g.g.g.g. bd:x.....x....." },
   },
   funk: {
     4: {
