@@ -3,7 +3,7 @@ import { defaultMembers } from "@/music/instruments";
 import { defaultSettings } from "@/music/local";
 import type { Member, Score } from "@/music/types";
 import { useDebug } from "@/state/debug";
-import { runComposer, type PipelineHooks } from "./composer";
+import { pickCandidate, runComposer, type PipelineHooks } from "./composer";
 import { startImproviser } from "./improviser";
 import { fakeModel } from "./mock";
 
@@ -123,5 +123,21 @@ describe("improviser pacing", () => {
     const bandFirstDone = Math.max(...bandFirst.map((c) => c.startedAt + (c.ms ?? 0)));
     expect(nextSolo.startedAt).toBeLessThan(bandFirstDone);
     expect(ctl.readyToPlay(0.375)).toBe(true);
+  });
+});
+
+describe("pickCandidate", () => {
+  const sc = (candidate: number, score: number) => ({ candidate, distinctiveness: score, coherence: score, score, notes: "" });
+  it("goes with the judge's scores over the favourite it named", () => {
+    expect(pickCandidate([sc(1, 9), sc(2, 2)], 2, [1, 2])).toBe(1);
+  });
+  it("lets the named favourite break a tie, else the lower number", () => {
+    expect(pickCandidate([sc(1, 7), sc(2, 7), sc(3, 4)], 2, [1, 2, 3])).toBe(2);
+    expect(pickCandidate([sc(1, 7), sc(2, 7)], 9, [1, 2])).toBe(1);
+  });
+  it("ignores scores for candidates that don't exist", () => {
+    expect(pickCandidate([sc(5, 10), sc(2, 3)], 0, [1, 2])).toBe(2);
+    expect(pickCandidate([], 2, [1, 2])).toBe(2);
+    expect(pickCandidate([], 7, [1, 2])).toBeUndefined();
   });
 });

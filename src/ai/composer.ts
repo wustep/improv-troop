@@ -116,9 +116,28 @@ function partsPrompt(member: Member, bars: number[], plan: BarPlan[], frame: Ret
     .join("\n");
 }
 
-function criticPrompt(frame: ReturnType<typeof buildFrame>, cands: Candidate[]): string {
+/**
+ * The candidate the judge's own scores favour. Its "best" only breaks a tie (judges often
+ * name a favourite their scores don't back), and scores for candidates that don't exist are ignored.
+ */
+export function pickCandidate(scores: CriticScore[], best: number, indexes: number[]): number | undefined {
+  const real = scores.filter((s) => indexes.includes(s.candidate));
+  if (!real.length) return indexes.includes(best) ? best : undefined;
+  const top = Math.max(...real.map((s) => s.score));
+  const leaders = real.filter((s) => s.score === top).map((s) => s.candidate);
+  return leaders.includes(best) ? best : Math.min(...leaders);
+}
+
+function criticPrompt(frame: ReturnType<typeof buildFrame>, cands: Candidate[], seed: number): string {
   const style = STYLES[frame.style];
-  const blocks = cands.map((c) =>
+  // shown in a shuffled order (labels kept) so the judge's position bias doesn't pick for it
+  const order = [...cands];
+  const rng = makeRng(seed).fork("judge");
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = rng.int(0, i);
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+  const blocks = order.map((c) =>
     [
       `CANDIDATE ${c.index}: "${c.concept}"`,
       `  motif: ${c.motif.text}`,
@@ -204,7 +223,8 @@ export async function runComposer(settings: TroopSettings, members: Member[], ho
   if (cands.length > 1) {
     step("Weighing the sketches…");
     for (const c of cands) {
-      const r = realize({ frame, members, plan: c.plan, motif: c.motif, seed: settings.seed + c.index });
+      // the same seed for every candidate, so the features compare the plans and not the dice
+      const r = realize({ frame, members, plan: c.plan, motif: c.motif, seed: settings.seed });
       c.features = textureFeatures(frame, members, c.plan, r.parts);
     }
     try {
@@ -217,7 +237,7 @@ export async function runComposer(settings: TroopSettings, members: Member[], ho
         agent: "critic",
         model: settings.directorModel,
         system: CRITIC_SYSTEM,
-        prompt: criticPrompt(frame, cands),
+        prompt: criticPrompt(frame, cands, settings.seed),
         temperature: 0.2,
         maxOutputTokens: 800,
         reasoning: "none",
@@ -230,13 +250,13 @@ export async function runComposer(settings: TroopSettings, members: Member[], ho
       setParsed(call.id, obj);
       const scores: CriticScore[] = (Array.isArray(obj.scores) ? obj.scores : []).map((s) => {
         const o = asRecord(s);
-        const d = Number(o.distinctiveness) || 0;
-        const co = Number(o.coherence) || 0;
+        const clamp = (v: unknown) => Math.max(0, Math.min(10, Number(v) || 0));
+        const d = clamp(o.distinctiveness);
+        const co = clamp(o.coherence);
         return { candidate: Number(o.candidate) || 0, distinctiveness: d, coherence: co, score: Math.round((d * 0.6 + co * 0.4) * 10) / 10, notes: asString(o.note, 120) ?? "" };
       });
-      const best = Number(obj.best);
-      const byScore = [...scores].sort((a, b) => b.score - a.score)[0];
-      const pick = cands.find((c) => c.index === best) ?? cands.find((c) => c.index === byScore?.candidate) ?? cands[0];
+      const picked = pickCandidate(scores, Number(obj.best), cands.map((c) => c.index));
+      const pick = cands.find((c) => c.index === picked) ?? cands[0];
       chosen = pick;
       critic = { scores, chosen: pick.index, summary: asString(obj.summary, 200) ?? "" };
     } catch (e) {
