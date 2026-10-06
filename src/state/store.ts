@@ -136,6 +136,12 @@ function reconcile(settings: TroopSettings, members: Member[]): TroopSettings {
   return { ...settings, leaderId, soloists, bars };
 }
 
+/** The chart at another tempo. Tempo is a playback dial: the plan and the notes stay as they are. */
+function atTempo(score: Score, tempo: number): Score {
+  if (score.frame.tempo === tempo && score.settings.tempo === tempo) return score;
+  return { ...score, settings: { ...score.settings, tempo }, frame: { ...score.frame, tempo } };
+}
+
 let controller: AbortController | null = null;
 let improv: ImprovController | null = null;
 let liveTimer: ReturnType<typeof setInterval> | null = null;
@@ -255,7 +261,7 @@ export const useTroop = create<TroopState>((set, get) => {
         // tempo is a playback dial: apply to the chart on screen without re-planning it
         const cur = get().current;
         if (cur) {
-          const next: Score = { ...cur, settings: { ...cur.settings, tempo: settings.tempo }, frame: { ...cur.frame, tempo: settings.tempo } };
+          const next = atTempo(cur, settings.tempo);
           set({ current: next });
           // re-tempo in place; restart from this bar only if the transport can't (e.g. mid count-in)
           if (get().playing && !troopAudio.setTempo(next)) {
@@ -341,7 +347,9 @@ export const useTroop = create<TroopState>((set, get) => {
         signal: controller.signal,
         onStatus: (status) => set((s) => ({ gen: { ...s.gen, status } })),
         onChat: (msg) => set((s) => ({ chat: [...s.chat, msg] })),
-        onScore: (score) => {
+        onScore: (phrase) => {
+          // the band planned at the tempo they were asked for: keep any change made since
+          const score = atTempo(phrase, get().settings.tempo);
           // live improv: start the band as soon as the first phrase is down
           set({
             current: score,
@@ -358,7 +366,8 @@ export const useTroop = create<TroopState>((set, get) => {
         },
       };
 
-      const finish = (score: Score) => {
+      const finish = (done: Score) => {
+        const score = atTempo(done, get().settings.tempo);
         const label = `${STYLES[settings.style].name} · ${settings.mode === "composer" ? "composed" : "jammed"}`;
         const take: Take = { id: score.id, score, label, engine: "ai", createdAt: Date.now() };
         set((s) => ({
