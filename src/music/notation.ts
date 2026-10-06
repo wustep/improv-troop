@@ -294,44 +294,56 @@ export function drumsToGrid(notes: NoteEvent[], beats: number): string {
 
 // ─── Serialisation (notes -> text) ───────────────────────────────────────────
 
-const DUR_NAMES: [number, string][] = [
+// Every value the parser reads, longest first.
+const VALUES: [number, string][] = [
   [4, "1"],
   [3, "2."],
   [2, "2"],
   [1.5, "4."],
+  [4 / 3, "2t"],
   [1, "4"],
   [0.75, "8."],
+  [2 / 3, "4t"],
   [0.5, "8"],
   [1 / 3, "8t"],
   [0.25, "16"],
-  [2 / 3, "4t"],
+  [1 / 6, "16t"],
+  [0.125, "32"],
+  [1 / 12, "32t"],
 ];
+const EPS = 1e-3;
 
-function durName(d: number): string {
-  let best = DUR_NAMES[0];
-  for (const x of DUR_NAMES) if (Math.abs(x[0] - d) < Math.abs(best[0] - d)) best = x;
+/** The note value nearest `d` that still ends by `room` (so the next onset and the bar line stay put). */
+function durName(d: number, room: number): string {
+  const fits = VALUES.filter(([v]) => v <= room + EPS);
+  if (!fits.length) return VALUES[VALUES.length - 1][1];
+  let best = fits[0];
+  for (const x of fits) if (Math.abs(x[0] - d) < Math.abs(best[0] - d)) best = x;
   return best[1];
 }
 
-const REST_VALUES: [number, string][] = [
-  [4, "1"],
-  [3, "2."],
-  [2, "2"],
-  [1.5, "4."],
-  [1, "4"],
-  [0.75, "8."],
-  [0.5, "8"],
-  [0.25, "16"],
-  [1 / 3, "8t"],
-];
-
-/** Greedy rest decomposition of a gap (never overshoots). */
+/** Rests that fill a gap exactly (fewest tokens), so later onsets land where they were; greedy if nothing fits. */
 function restsFor(gap: number): string[] {
+  if (gap <= EPS) return [];
+  const search = (g: number, from: number, depth: number): string[] | null => {
+    if (Math.abs(g) <= EPS) return [];
+    if (depth === 0) return null;
+    for (let i = from; i < VALUES.length; i++) {
+      const [v, name] = VALUES[i];
+      if (v > g + EPS) continue;
+      const rest = search(g - v, i, depth - 1);
+      if (rest) return [`r/${name}`, ...rest];
+    }
+    return null;
+  };
+  for (let depth = 1; depth <= 5; depth++) {
+    const exact = search(gap, 0, depth);
+    if (exact) return exact;
+  }
   const out: string[] = [];
   let g = gap;
-  let guard = 0;
-  while (g > 0.1 && guard++ < 16) {
-    const v = REST_VALUES.find(([d]) => d <= g + 1e-3);
+  while (g > 0.1 && out.length < 16) {
+    const v = VALUES.find(([d]) => d <= g + EPS);
     if (!v) break;
     out.push(`r/${v[1]}`);
     g -= v[0];
@@ -343,7 +355,11 @@ function durValue(name: string): number {
   return durationBeats(name) ?? 1;
 }
 
-/** Notes (relative to bar start) to compact text. Approximate; for prompts and debug. */
+/**
+ * Notes (relative to bar start) to compact text. Onsets on a 1/24-beat grid (any value the text
+ * can spell) and pitches come back exactly; lengths are rounded to a note value. Off-grid onsets
+ * (rubato) land on the nearest spellable spot.
+ */
 export function notesToText(notes: NoteEvent[], beats: number, flats = true): string {
   const sorted = [...notes].sort((a, b) => a.start - b.start || a.pitch - b.pitch);
   const groups: { start: number; dur: number; pitches: number[] }[] = [];
@@ -359,9 +375,8 @@ export function notesToText(notes: NoteEvent[], beats: number, flats = true): st
   for (let i = 0; i < groups.length; i++) {
     const g = groups[i];
     if (g.start > t + 1e-3) out.push(...restsFor(g.start - t));
-    const next = groups[i + 1]?.start ?? beats;
-    const d = Math.min(g.dur, next - g.start, beats - g.start);
-    const name = durName(Math.max(d, 0.25));
+    const room = Math.min(groups[i + 1]?.start ?? beats, beats) - g.start;
+    const name = durName(Math.min(g.dur, room), room);
     const p =
       g.pitches.length === 1
         ? pitchName(g.pitches[0], flats)
@@ -369,6 +384,6 @@ export function notesToText(notes: NoteEvent[], beats: number, flats = true): st
     out.push(`${p}/${name}`);
     t = g.start + durValue(name);
   }
-  if (beats - t > 0.1) out.push(...restsFor(beats - t));
+  out.push(...restsFor(beats - t));
   return out.join(" ");
 }
