@@ -34,18 +34,33 @@ export function Transport() {
 
   const goLabel = hasKey ? (mode === "composer" ? "Compose!" : "Let them jam!") : "Sketch a new take";
 
-  // Space toggles play/stop (unless typing)
+  // Space toggles play/stop (unless typing, or pressing a button reached by keyboard).
+  // A button focused by a mouse click would otherwise be clicked again by Space.
   useEffect(() => {
+    let pointed: Element | null = null; // the button the pointer last pressed
+    const onPointer = (e: PointerEvent) => {
+      pointed = (e.target as HTMLElement | null)?.closest("button") ?? null;
+    };
     const onKey = (e: KeyboardEvent) => {
-      if (e.code !== "Space" || e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.code !== "Space") {
+        if (e.key === "Tab") pointed = null;
+        return;
+      }
+      if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
       const t = e.target as HTMLElement | null;
-      if (t && (t.closest("input, textarea, select, [contenteditable]") || t.closest("button"))) return;
+      const button = t?.closest("button");
+      if (t && (t.closest("input, textarea, select, [contenteditable]") || (button && button !== pointed))) return;
       e.preventDefault();
+      button?.blur(); // so the key's release can't click it either
       if (useTroop.getState().playing) useTroop.getState().stop();
       else void useTroop.getState().play();
     };
+    window.addEventListener("pointerdown", onPointer, true);
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("pointerdown", onPointer, true);
+      window.removeEventListener("keydown", onKey);
+    };
   }, []);
 
   return (
