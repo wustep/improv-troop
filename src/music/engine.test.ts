@@ -262,6 +262,26 @@ describe("style feel in the rhythm section", () => {
   });
 });
 
+describe("slow harmony", () => {
+  it("minimalist and ambient pieces let each chord ring for two bars, and float home without a hard V7", () => {
+    for (const style of ["minimal", "ambient"] as StyleId[]) {
+      let changes = 0;
+      let bars = 0;
+      for (const seed of [1, 2, 3, 4, 5, 6]) {
+        const f = buildFrame({ ...defaultSettings(band), style, seed, bars: 16 }, band);
+        const syms = f.chords.map((b) => b.map((c) => c.symbol));
+        for (let b = 1; b < f.bars - 2; b++) {
+          bars++;
+          if (syms[b][0] !== syms[b - 1].at(-1)) changes++;
+        }
+        const cadence = f.chords[f.bars - 2].at(-1)!.symbol;
+        expect(parseChord(cadence).quality, `${style} ${cadence}`).not.toBe("dom");
+      }
+      expect(changes / bars, style).toBeLessThan(0.65);
+    }
+  });
+});
+
 describe("held notes in pop and minimal", () => {
   it("land on chord tones (or a plain 9th or 6th), not a jazz #11", async () => {
     const { harmonyOf } = await import("./realize");

@@ -216,10 +216,13 @@ export function buildFrame(input: TroopSettings, members: Member[]): Frame {
       for (let i = 0; i < out; i++) barTexts[outStart + i] = barTexts[i];
       if (outStart - 1 >= head) barTexts[outStart - 1] = toText(prog[prog.length - 1]);
     }
-    // cadence: the dominant into the tonic at the very end (keeping the bar's own first chord)
+    // cadence: the dominant into the tonic at the very end (keeping the bar's own first chord),
+    // in the style's own color: a suspended V floats an ambient piece home, a plain triad ends a
+    // pop song or a minimalist piece, everyone else leans on the V7
     if (total >= 4) {
       const first = barTexts[total - 2].split(/\s+/)[0];
-      const v7 = dominantOf(settings);
+      const plainV = settings.style === "ambient" ? romanToChord("Vsus", settings.key) : settings.style === "minimal" || settings.style === "pop" ? romanToChord("V", { ...settings.key, mode: "major" }) : null;
+      const v7 = plainV ?? dominantOf(settings);
       barTexts[total - 2] = first === v7 ? v7 : `${first} ${v7}`;
     }
     barTexts[total - 1] = tonicChord(settings);

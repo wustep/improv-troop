@@ -322,7 +322,7 @@ export const STYLES: Record<StyleId, StyleDef> = {
       ],
       minor: [
         ["i", "i", "VI", "VI", "III", "III", "VII", "VII"],
-        ["i", "VI", "III", "VII", "i", "VI", "iv", "V"],
+        ["i", "i", "iv", "iv", "VI", "VI", "V", "V"],
       ],
     },
     section: {
@@ -417,11 +417,11 @@ export const STYLES: Record<StyleId, StyleDef> = {
       major: [
         ["Imaj7", "Imaj7", "IVmaj7", "IVmaj7", "vi7", "vi7", "IVmaj7", "Vsus"],
         ["Isus", "Isus", "bVIImaj7", "bVIImaj7", "IVmaj7", "IVmaj7", "Isus", "Isus"],
-        ["vi9", "IVmaj7", "Imaj7", "Vsus", "vi9", "IVmaj7", "ii7", "Vsus"],
+        ["vi9", "vi9", "IVmaj7", "IVmaj7", "Imaj7", "Imaj7", "Vsus", "Vsus"],
       ],
       minor: [
         ["i9", "i9", "bVImaj7", "bVImaj7", "iv9", "iv9", "bVIImaj7", "Vsus"],
-        ["i9", "bIIImaj7", "bVImaj7", "bVIImaj7", "i9", "iv9", "bVImaj7", "Vsus"],
+        ["i9", "i9", "bIIImaj7", "bIIImaj7", "bVImaj7", "bVImaj7", "bVIImaj7", "bVIImaj7"],
       ],
     },
     section: {
