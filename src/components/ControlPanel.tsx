@@ -136,7 +136,7 @@ export function ControlPanel() {
   return (
     <RoughBox seed="panel" rough={{ weight: "l" }} className="panel-paper w-full p-m" as="aside" aria-label="Band settings">
       <Field>
-        <Label>Mode</Label>
+        <Label hint={apiKey ? undefined : "how they think, once they have a key"}>Mode</Label>
         <div className="grid grid-cols-2 gap-xs">
           <RoughButton seed="mode-imp" active={s.mode === "improviser"} onClick={() => set({ mode: "improviser" })} className="px-xs py-xs text-left">
             <div className="type-label">Improviser</div>
@@ -295,9 +295,10 @@ export function ControlPanel() {
         </div>
       </Field>
 
-      {s.mode === "improviser" && (
+      {/* only the model-driven band talks in rounds; without a key it does nothing */}
+      {s.mode === "improviser" && apiKey && (
         <Field>
-          <Label hint="bars per round of talk">Phrase</Label>
+          <Label hint="how much each player writes before the band answers">Phrase</Label>
           <div className="flex gap-xs">
             {[2, 4, 8].map((p) => (
               <Chip key={p} seed={`phrase-${p}`} active={s.phraseBars === p} onClick={() => set({ phraseBars: p })}>

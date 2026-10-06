@@ -145,7 +145,7 @@ export function Transport() {
         </button>
       )}
 
-      {mode === "composer" && (
+      {mode === "composer" && hasKey && (
         <label className="flex cursor-pointer items-center gap-xs text-m" title="Write 4 candidate charts and let a judge pick the most distinctive">
           <input type="checkbox" className="sketch-check" checked={bestOf > 1} onChange={(e) => set({ bestOf: e.target.checked ? 4 : 1 })} />
           best of 4
