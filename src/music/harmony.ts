@@ -98,7 +98,8 @@ function colorsFor(c: Chord, scale: number[], style: StyleId): number[] {
     case "6":
     case "maj":
       if (has(2)) out.push(2);
-      if (has(6)) out.push(6); // lydian #11
+      // a held lydian #11 is a jazz color; in pop or a minimalist piece it's a wrong note
+      if (has(6) && JAZZ.includes(style)) out.push(6);
       if (has(9)) out.push(9);
       break;
     case "dom":
@@ -106,7 +107,7 @@ function colorsFor(c: Chord, scale: number[], style: StyleId): number[] {
       if (has(1) && JAZZ.includes(style)) out.push(1);
       if (has(9)) out.push(9);
       if (has(8) && JAZZ.includes(style)) out.push(8);
-      if (has(6)) out.push(6);
+      if (has(6) && JAZZ.includes(style)) out.push(6);
       break;
     case "min7":
     case "min":

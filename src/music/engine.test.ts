@@ -262,6 +262,31 @@ describe("style feel in the rhythm section", () => {
   });
 });
 
+describe("held notes in pop and minimal", () => {
+  it("land on chord tones (or a plain 9th or 6th), not a jazz #11", async () => {
+    const { harmonyOf } = await import("./realize");
+    const five: Member[] = [...defaultMembers(), { id: "cat", animal: "cat", name: "Mochi", instrument: "sax" }];
+    for (const style of ["pop", "minimal"] as StyleId[]) {
+      let held = 0;
+      let off = 0;
+      for (const seed of [1, 2, 3, 4, 5, 6]) {
+        const { score } = generateLocal({ ...defaultSettings(five), style, seed, bars: 16 }, five);
+        const h = harmonyOf(score.frame, score.plan);
+        for (const id of [score.frame.leaderId, "cat"]) {
+          for (const n of score.parts[id] ?? []) {
+            if (n.dur < 0.9 || n.written) continue;
+            const c = h.at(n.start).chord;
+            const iv = mod(n.pitch - c.root, 12);
+            held++;
+            if (!c.tones.includes(iv) && iv !== 2 && iv !== 9) off++;
+          }
+        }
+      }
+      expect(off / held, `${style}: ${off}/${held}`).toBeLessThan(0.04);
+    }
+  });
+});
+
 describe("drums by style", () => {
   const owlBars = (style: StyleId, seed: number) => {
     const { score } = generateLocal({ ...defaultSettings(band), style, seed, bars: 32 }, band);
