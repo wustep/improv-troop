@@ -1,5 +1,6 @@
 import { buildFrame, frameSummary } from "@/music/form";
 import { ritFor } from "@/music/ending";
+import { getStandard } from "@/music/standards";
 import { INSTRUMENTS } from "@/music/instruments";
 import { motifForFrame, newScoreId } from "@/music/local";
 import { planLocal } from "@/music/planner";
@@ -335,7 +336,7 @@ export async function runComposer(settings: TroopSettings, members: Member[], ho
   const style = STYLES[settings.style];
   const score: Score = {
     id: newScoreId(),
-    title: `${style.name} · composed`,
+    title: `${frame.standard ? (getStandard(frame.standard)?.name ?? style.name) : style.name} · composed`,
     createdAt: Date.now(),
     settings,
     members,
