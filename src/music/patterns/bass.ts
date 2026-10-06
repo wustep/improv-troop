@@ -18,6 +18,18 @@ function root(ctx: BarCtx, c: Chord, near: number | null): number {
   return bassNote(c, lo, hi, target);
 }
 
+// The chord's own fifth and seventh, from its root and quality (a b5 over m7b5 and dim,
+// a major 7th over maj7), never from a slash bass: over G7/B the fifth is still D.
+const fifthPc = (c: Chord) => mod(c.root + (c.tones[2] ?? 7), 12);
+const seventhPc = (c: Chord) => mod(c.root + (c.tones[3] ?? 10), 12);
+
+/** The nearest pitch of class `pc` above `base`, dropped an octave if it would pass `hi`. */
+function above(base: number, pc: number, hi: number): number {
+  let p = base + (mod(pc - base, 12) || 12);
+  if (p > hi) p -= 12;
+  return p;
+}
+
 function approach(ctx: BarCtx, from: number, target: number, nextScale: number[]): number {
   const r = ctx.rng.next();
   let p: number;
@@ -85,7 +97,7 @@ export function two(ctx: BarCtx): NoteEvent[] {
   for (let b = 0; b < ctx.beats; b += half) {
     const c = chordAt(ctx, b);
     const isChange = spans.some((s) => Math.abs(s.start - b) < 1e-6);
-    let p = isChange && b > 0 ? root(ctx, c, prev) : b === 0 ? root(ctx, c, prev) : nearestPc(mod(c.root + 7, 12), prev);
+    let p = isChange && b > 0 ? root(ctx, c, prev) : b === 0 ? root(ctx, c, prev) : nearestPc(fifthPc(c), prev);
     p = fold(p, lo, hi);
     const pickup = b + half === ctx.beats && ctx.rng.chance(ctx.style.id === "neworleans" ? 0.55 : 0.3);
     out.push({ pitch: p, start: b, dur: pickup ? half - 0.5 : half, vel });
@@ -109,16 +121,16 @@ export function bossa(ctx: BarCtx): NoteEvent[] {
   if (ctx.beats === 3) {
     const r = root(ctx, chordAt(ctx, 0), prev);
     out.push({ pitch: r, start: 0, dur: 1.5, vel });
-    out.push({ pitch: fold(r + 7, lo, hi), start: 1.5, dur: 1.5, vel: vel * 0.85 });
+    out.push({ pitch: fold(above(r, fifthPc(chordAt(ctx, 0)), hi), lo, hi), start: 1.5, dur: 1.5, vel: vel * 0.85 });
     ctx.mem.lastPitch = r;
     return out;
   }
   const c1 = chordAt(ctx, 0);
   const c2 = chordAt(ctx, 2);
   const r1 = root(ctx, c1, prev);
-  const f1 = fold(r1 + 7 > hi ? r1 - 5 : r1 + 7, lo, hi);
+  const f1 = fold(above(r1, fifthPc(c1), hi), lo, hi);
   const r2 = c2.symbol !== c1.symbol ? root(ctx, c2, r1) : r1;
-  const f2 = c2.symbol !== c1.symbol ? fold(r2 + 7 > hi ? r2 - 5 : r2 + 7, lo, hi) : f1;
+  const f2 = c2.symbol !== c1.symbol ? fold(above(r2, fifthPc(c2), hi), lo, hi) : f1;
   out.push({ pitch: r1, start: 0, dur: 1.5, vel });
   out.push({ pitch: f1, start: 1.5, dur: 0.5, vel: vel * 0.8 });
   out.push({ pitch: r2, start: 2, dur: 1.5, vel: vel * 0.95 });
@@ -173,8 +185,8 @@ export function funk(ctx: BarCtx): NoteEvent[] {
     const r = root(ctx, c, prev);
     let p = r;
     if (n.deg === "8") p = r + 12 <= hi + 12 ? r + 12 : r;
-    if (n.deg === "5") p = fold(r + 7, lo, hi + 7);
-    if (n.deg === "b7") p = fold(r + 10, lo, hi + 10);
+    if (n.deg === "5") p = fold(above(r, fifthPc(c), hi + 7), lo, hi + 7);
+    if (n.deg === "b7") p = fold(above(r, seventhPc(c), hi + 10), lo, hi + 10);
     if (n.deg === "ap") p = root(ctx, ctx.next, r) - 1;
     if (n.deg === "g") p = r;
     out.push({
@@ -272,7 +284,7 @@ export function strideBass(ctx: BarCtx): NoteEvent[] {
   for (let b = 0; b < ctx.beats; b += step) {
     const c = chordAt(ctx, b);
     const r = bassNote(c, 36, 50, ctx.mem.lastPitch);
-    const alt = b > 0 && ctx.chords.every((x) => x.beat !== b) ? fold(r + 7, 36, 52) : r;
+    const alt = b > 0 && ctx.chords.every((x) => x.beat !== b) ? fold(above(r, fifthPc(c), 52), 36, 52) : r;
     out.push({ pitch: alt, start: b, dur: 1, vel });
     if (ctx.rng.chance(0.4) && alt - 12 >= 28) out.push({ pitch: alt - 12, start: b, dur: 1, vel: vel * 0.8 });
   }

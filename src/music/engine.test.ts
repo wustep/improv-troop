@@ -586,3 +586,32 @@ describe("ambient", () => {
     expect(leaps / ivs).toBeGreaterThan(0.4);
   });
 });
+
+describe("bass fifths", () => {
+  it("are the chord's own fifth: a b5 over m7b5, never off a slash bass", () => {
+    const band = defaultMembers();
+    let checked = 0;
+    for (const id of ["blue-bossa", "autumn", "rhythm-changes", "minor-blues", "giant-steps"]) {
+      const std = STANDARDS.find((s) => s.id === id)!;
+      for (let seed = 1; seed <= 6; seed++) {
+        const bars = lengthOptions(std.id).at(-1)!;
+        const { score } = generateLocal({ ...defaultSettings(band), standard: std.id, key: std.key, style: std.style, bars, seed, meter: { beats: std.meter }, soloists: ["fox"] }, band);
+        const beats = score.frame.meter.beats;
+        for (const n of score.parts.frog) {
+          const b = Math.floor(n.start / beats + 1e-9);
+          const pos = +(n.start - b * beats).toFixed(3);
+          const d = score.plan[b]?.directives?.frog ?? "";
+          // the fifth slots: beat 3 in two, the "and"s of 2 and 4 in bossa (pickups are approach notes)
+          if (!(d.startsWith("@two") ? pos === 2 : d.startsWith("@bossa") && (pos === 1.5 || pos === 3.5))) continue;
+          let sym = score.frame.chords[b][0].symbol;
+          for (const c of score.frame.chords[b]) if (c.beat <= pos + 1e-6) sym = c.symbol;
+          const c = parseChord(sym);
+          const pcs = [...c.tones.map((t) => mod(c.root + t, 12)), c.bass];
+          expect(pcs, `${id} seed ${seed} bar ${b + 1}: ${n.pitch} over ${sym}`).toContain(mod(n.pitch, 12));
+          checked++;
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(500);
+  });
+});
