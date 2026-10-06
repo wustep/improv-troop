@@ -88,6 +88,16 @@ describe("improviser pipeline", () => {
     expect(Object.values(score.plan).some((bp) => bp.directives?.owl?.startsWith("rd:"))).toBe(true);
   });
 
+  it("keeps the arrangement when bandmates name their go-to part", async () => {
+    installFakeFetch();
+    const settings = { ...defaultSettings(band), mode: "improviser" as const, bars: 32, soloists: ["bear"] };
+    const score = await startImproviser(settings, band, hooks("t-arr")).promise;
+    // the bassist answered "@walk", but the swing head still goes in two
+    const head = score.frame.sections.find((s) => s.kind === "head")!;
+    expect(head.length).toBeGreaterThanOrEqual(8);
+    expect(score.plan[head.start].directives?.frog).toBe("@two");
+  });
+
   it("vamps on autopilot when playback catches up", async () => {
     installFakeFetch(15);
     const settings = { ...defaultSettings(band), mode: "improviser" as const, soloists: ["bear"] };

@@ -12,7 +12,7 @@ import { useDebug } from "@/state/debug";
 import { chatMsg, type PipelineHooks } from "./composer";
 import { asRecord, asString, extractJson, parseBarRange } from "./json";
 import { callLLM, noteRepair, setParsed } from "./llm";
-import { accompanimentFits, asDynamic, asTexture, enforceSlots, resolveMember, validateBarText, validateMotif } from "./merge";
+import { accompanimentFits, applyDefault, asDynamic, asTexture, enforceSlots, resolveMember, usualDirective, validateBarText, validateMotif } from "./merge";
 import { barsSchema, countOffSchema, replySchema } from "./schemas";
 import {
   arcNote,
@@ -252,7 +252,7 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
               `${leader.name} said to the band: "${chat.find((c) => c.from === leader.id && c.to === "band")?.text ?? "Let's go."}"`,
               asks[m.id] ? `${leader.name} to you: "${asks[m.id]}"` : "",
               "",
-              `Your usual accompaniment directive right now: ${plan.find((b) => !isFeaturedRole(b.roles[m.id]) && b.directives?.[m.id] !== "@rest")?.directives?.[m.id] ?? "@rest"}`,
+              `Your usual accompaniment directive right now: ${usualDirective(plan, m.id) ?? "@rest"}`,
               "Directives you can use when accompanying: @walk @two @bossa @funk @baroque @pedal (bass) · @comp [sparse|busy] @stride @arp @prelude @continuo @pad @shimmer (chords) · @guide @harmony @canon @riff @counter (horns/strings) · @pizz [sparse|busy] @arco (cello) · @groove [light|peak] (drums).",
               `Reply JSON: {"say": "<= 1 short sentence back to ${leader.name} or the band", "default": "your go-to directive when you're accompanying"}`,
             ]
@@ -272,13 +272,9 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
           const d = asString(o.default, 60)?.trim();
           if (d && d.startsWith("@")) {
             const head = d.split(/\s+/)[0];
-            if (accompanimentFits(head, m)) {
-              for (const bp of plan) {
-                const cur = bp.directives?.[m.id];
-                if (isFeaturedRole(bp.roles[m.id]) || !cur || cur === "@rest" || cur === "@end") continue;
-                bp.directives = { ...bp.directives, [m.id]: d };
-              }
-            } else noteRepair(call.id, `"${d}" isn't an accompaniment directive for ${INSTRUMENTS[m.instrument].name.toLowerCase()}; kept the style default`);
+            const role = plan.find((b) => !isFeaturedRole(b.roles[m.id]) && b.directives?.[m.id] !== "@rest")?.roles[m.id];
+            if (accompanimentFits(head, m, role)) applyDefault(plan, m.id, d);
+            else noteRepair(call.id, `"${d}" isn't an accompaniment directive for ${INSTRUMENTS[m.instrument].name.toLowerCase()}; kept the style default`);
           }
         } catch (e) {
           if ((e as Error).name === "AbortError") throw e;

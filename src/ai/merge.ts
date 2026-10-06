@@ -160,6 +160,35 @@ export function validateMotif(text: unknown, idea: unknown, frame: Frame, leader
   return m;
 }
 
+/** The directive a member plays most while accompanying (ties go to the earliest), or null. */
+export function usualDirective(plan: BarPlan[], memberId: string): string | null {
+  const counts = new Map<string, number>();
+  for (const bp of plan) {
+    const d = bp.directives?.[memberId];
+    if (!d || d === "@rest" || d === "@end" || isFeaturedRole(bp.roles[memberId])) continue;
+    counts.set(d, (counts.get(d) ?? 0) + 1);
+  }
+  let best: string | null = null;
+  for (const [d, n] of counts) if (best === null || n > counts.get(best)!) best = d;
+  return best;
+}
+
+/**
+ * A bandmate's go-to directive swaps in for their usual one, and only that: bars the
+ * arrangement shaped (a head in two, a light intro, a peak out-chorus, shout riffs) keep their part.
+ */
+export function applyDefault(plan: BarPlan[], memberId: string, directive: string): number {
+  const usual = usualDirective(plan, memberId);
+  if (!usual) return 0;
+  let n = 0;
+  for (const bp of plan) {
+    if (bp.directives?.[memberId] !== usual || isFeaturedRole(bp.roles[memberId])) continue;
+    bp.directives = { ...bp.directives, [memberId]: directive };
+    n++;
+  }
+  return n;
+}
+
 function defaultFeaturedDirective(role: Role, member: Member): string {
   if (member.instrument === "drums") return "@solo";
   return role === "lead" ? "@motif" : "@line";

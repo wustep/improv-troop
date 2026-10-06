@@ -3,7 +3,7 @@ import { defaultMembers, INSTRUMENTS } from "@/music/instruments";
 import { defaultSettings, generateLocal } from "@/music/local";
 import { isFeaturedRole } from "@/music/realize";
 import type { Member } from "@/music/types";
-import { accompanimentFits, enforceSlots, mergePlan, registerShift, resolveMember, shiftOctaves, validateBarText, validateMotif } from "./merge";
+import { accompanimentFits, applyDefault, enforceSlots, mergePlan, registerShift, resolveMember, shiftOctaves, usualDirective, validateBarText, validateMotif } from "./merge";
 
 // bear piano, frog bass, owl drums, fox trumpet (leader), cat sax (soloist)
 const band: Member[] = [...defaultMembers(), { id: "cat", animal: "cat", name: "Mochi", instrument: "sax" }];
@@ -227,5 +227,28 @@ describe("enforceSlots", () => {
     p[free].directives = { ...p[free].directives, bear: "@stride" };
     expect(bear.instrument).toBe("piano");
     expect(enforceSlots(p, frame, band, [])[free].roles.bear).toBe("comp");
+  });
+});
+
+describe("a bandmate's go-to directive", () => {
+  const swing = generateLocal({ ...defaultSettings(band), bars: 32, seed: 3, soloists: ["cat"] }, band).score;
+  it("swaps in for the usual part only, leaving the arranged bars alone", () => {
+    const plan = swing.plan.map((b) => ({ ...b, directives: { ...b.directives } }));
+    const before = plan.map((b) => b.directives?.frog);
+    expect(usualDirective(plan, "frog")).toBe("@walk");
+    expect(before).toContain("@two"); // the head in two
+    const n = applyDefault(plan, "frog", "@walk busy");
+    expect(n).toBe(before.filter((d) => d === "@walk").length);
+    plan.forEach((b, i) => {
+      if (before[i] === "@walk") expect(b.directives?.frog).toBe("@walk busy");
+      else expect(b.directives?.frog).toBe(before[i]);
+    });
+  });
+  it("keeps the drummer's light and peak grooves", () => {
+    const plan = swing.plan.map((b) => ({ ...b, directives: { ...b.directives } }));
+    const shaped = plan.filter((b) => /@groove (light|peak)/.test(b.directives?.owl ?? "")).length;
+    expect(shaped).toBeGreaterThan(0);
+    applyDefault(plan, "owl", "@groove");
+    expect(plan.filter((b) => /@groove (light|peak)/.test(b.directives?.owl ?? "")).length).toBe(shaped);
   });
 });
