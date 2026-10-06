@@ -283,6 +283,26 @@ describe("solos build", () => {
       expect(avg(dense) / avg(plain), style).toBeGreaterThan(1.52);
     }
   });
+  it("a sparse bar leaves space: no busier than a plain one", () => {
+    const five: Member[] = [...defaultMembers(), { id: "cat", animal: "cat", name: "Mochi", instrument: "sax" }];
+    for (const style of ["swing", "funk", "pop"] as StyleId[]) {
+      const sparse: number[] = [];
+      const plain: number[] = [];
+      for (let seed = 1; seed <= 8; seed++) {
+        const { score } = generateLocal({ ...defaultSettings(five), style, seed, bars: 32, soloists: ["cat"] }, five);
+        for (const sec of score.frame.sections.filter((x) => x.kind === "solo"))
+          for (let b = sec.start + 1; b < sec.start + sec.length; b++) {
+            const d = score.plan[b].directives?.cat ?? "";
+            const n = score.parts.cat.filter((x) => Math.floor(x.start / 4 + 1e-9) === b).length;
+            if (d === "@line sparse") sparse.push(n);
+            else if (d === "@line") plain.push(n);
+          }
+      }
+      const avg = (x: number[]) => x.reduce((a, v) => a + v, 0) / x.length;
+      expect(avg(sparse), style).toBeLessThanOrEqual(avg(plain) * 1.05);
+      expect(Math.max(...sparse), style).toBeLessThanOrEqual(5);
+    }
+  });
 });
 
 describe("slow harmony", () => {

@@ -51,7 +51,7 @@ const PHRASE: Record<StyleId, PhraseStyle> = {
   swing: {
     runs: ["8t 8t 8t", "8 8", "16 16 16 16", "8t 8t 8t"],
     units: [
-      ["4", "r/8 8", "8 8", "4", "8 8"],
+      ["4", "r/8 8", "2", "4", "8 8"],
       ["8 8", "8 8", "8 8", "8 8", "4", "r/8 8", "8t 8t 8t"],
       ["8 8", "8 8", "8 8", "8t 8t 8t", "8 8"],
     ],
@@ -294,7 +294,7 @@ function phraseRhythm(ctx: BarCtx, ps: PhraseStyle, t0: number, end: number, tie
   const grid = ps.units[2].some((u) => u.includes("16")) ? 0.25 : 0.5;
   const q = (x: number) => Math.max(grid, Math.round(x / grid) * grid);
   // a busier player lands shorter and breathes quicker; a sparse one lets it ring
-  const ease = tier === 3 ? 0.3 : tier === 2 ? 0.45 : tier === 0 ? 1.3 : 1;
+  const ease = tier === 3 ? 0.3 : tier === 2 ? 0.45 : tier === 0 ? 1.8 : 1;
   const breathAfter = (landEnd: number) => {
     const b = q((ps.breath[0] + rng.next() * (ps.breath[1] - ps.breath[0])) * ease) - (ps.breath[0] === 0 && rng.chance(0.5) ? grid : 0);
     // the breath belongs to this run of bars: the next instruction starts fresh
@@ -324,7 +324,7 @@ function phraseRhythm(ctx: BarCtx, ps: PhraseStyle, t0: number, end: number, tie
   let landAt: number;
   if (opts.landAt !== undefined) landAt = opts.landAt;
   else {
-    const scale = tier === 0 ? 0.7 : tier === 3 ? 1.6 : tier === 2 ? 1.3 : 1;
+    const scale = tier === 0 ? 0.55 : tier === 3 ? 1.6 : tier === 2 ? 1.3 : 1;
     const want = Math.min(breathMax - 1, rng.int(Math.round(ps.length[0] * scale), Math.round(ps.length[1] * scale)));
     const cands: number[] = [];
     for (let b = Math.ceil(t0 + 1); b <= end - Math.min(ps.landing[0], 0.5) + EPS; b++) if (isStrong(ctx, b)) cands.push(b);
@@ -619,8 +619,16 @@ export function phraseLine(ctx: BarCtx, opts: LineOpts = {}): NoteEvent[] {
     for (const n of notes) if (n.start >= barStart - EPS && n.start < barEnd - EPS) out.push({ ...n, start: n.start - barStart });
   };
   let t = barStart;
+  const tier = tierOf(ctx, opts);
   const continuing = mem.phrase && mem.phrase.bar === ctx.bar - 1 && mem.phrase.until > barStart + EPS;
-  if (continuing) {
+  if (continuing && tier < (mem.phrase!.tier ?? tier)) {
+    // this bar asks for less than the phrase running into it (a sparse bar after a busy
+    // opener): let the phrase land on the downbeat, then leave the space the bar asked for
+    const landing = mem.phrase!.notes.filter((n) => n.start < barStart + 1 - EPS);
+    emit(landing.map((n) => (n.start >= barStart - EPS ? { ...n, dur: Math.min(n.dur, barStart + 1.5 - n.start) } : n)));
+    t = barStart + (ctx.beats === 3 ? 1.5 : 2);
+    mem.phrase = null;
+  } else if (continuing) {
     emit(mem.phrase!.notes);
     t = mem.phrase!.until;
     mem.phrase!.bar = ctx.bar;
@@ -632,7 +640,7 @@ export function phraseLine(ctx: BarCtx, opts: LineOpts = {}): NoteEvent[] {
   while (t < barEnd - EPS && guard++ < 8) {
     if (ctx.runEnd - t < 1 - EPS) break;
     const plan = planPhrase(ctx, t, Math.min(end, ctx.runEnd), { ...opts, final: ctx.lastBar });
-    mem.phrase = { notes: plan.notes, until: plan.until, bar: ctx.bar };
+    mem.phrase = { notes: plan.notes, until: plan.until, bar: ctx.bar, tier };
     emit(plan.notes);
     if (plan.until <= t + EPS) break;
     t = plan.until;
@@ -645,8 +653,24 @@ export function phraseLine(ctx: BarCtx, opts: LineOpts = {}): NoteEvent[] {
     mem.phrase = { notes: plan.notes, until: barEnd, bar: ctx.bar };
     emit(plan.notes);
   }
+  if (ctx.args.includes("sparse") && out.length > ctx.beats - 1) thinOut(out, ctx.beats - 1);
   if (out.length) mem.lastPitch = out[out.length - 1].pitch;
   return out;
+}
+
+/**
+ * A sparse bar leaves space: past one note a beat, the offbeats in the middle of the line go
+ * (the first note and the landing stay) and the notes before them ring on into the gap, so
+ * the bar reads as a few longer notes rather than a stream of 8ths.
+ */
+function thinOut(notes: NoteEvent[], beats: number): void {
+  notes.sort((a, b) => a.start - b.start);
+  for (let i = notes.length - 2; i > 0 && notes.length > beats; i--) {
+    if (Math.abs(notes[i].start - Math.round(notes[i].start)) < EPS) continue;
+    const prev = notes[i - 1];
+    prev.dur = Math.max(prev.dur, notes[i].start + notes[i].dur - prev.start);
+    notes.splice(i, 1);
+  }
 }
 
 /** A cadence inside one bar: a short phrase that lands on a long chord tone on beat 3 (beat 2 in 3/4). */

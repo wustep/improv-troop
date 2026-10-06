@@ -17,7 +17,8 @@ export interface PlayerMemory {
   riff: NoteEvent[] | null;
   lastGuide: number | null;
   /** The phrase being played (absolute starts) and the beat where it and its breath end. */
-  phrase: { notes: NoteEvent[]; until: number; bar: number } | null;
+  /** The phrase in progress (absolute times), and the density tier it was planned at. */
+  phrase: { notes: NoteEvent[]; until: number; bar: number; tier?: number } | null;
   /** Rhythm of the last phrase (onsets relative to its start), for answering it. */
   lastRhythm: { start: number; dur: number; pitch?: number }[] | null;
   /** Contour of the last phrase, so the next one can answer in the other direction. */
