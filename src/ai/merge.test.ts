@@ -67,6 +67,31 @@ describe("validateBarText", () => {
     expect(r.out).toBe("G4/8 A4/8 C5/8 D5/8 E5/4> r/4");
     expect(r.repairs.join()).toMatch(/moved down an octave/);
   });
+  // the shapes real models sent through the AI Gateway
+  it("squeezes an over-full bar back in, keeping every pitch and the landing", () => {
+    // 5 beats: the rest goes
+    expect(check("D5/8 Bb4/8 F5/4 r/4 D5/8 C5/8 Bb4/4", fox).out).toBe("D5/8 Bb4/8 F5/4 D5/8 C5/8 Bb4/4");
+    // 6 beats: the rest, then the long notes before the last one give way
+    const r = check("F4/8 A4/8 C5/8 Bb4/8 A4/4 r/8 G4/8 F4/4 Bb4/4", { ...fox, instrument: "sax" });
+    const notes = r.out!.split(" ");
+    expect(notes.map((n) => n.split("/")[0])).toEqual(["F4", "A4", "C5", "Bb4", "A4", "G4", "F4", "Bb4"]);
+    expect(notes[notes.length - 1]).toBe("Bb4/4");
+    expect(r.repairs.join()).toMatch(/6 beats in a 4-beat bar, squeezed/);
+  });
+  it("cuts a bar that is far too long instead of squeezing it", () => {
+    const r = check("C5/2 D5/2 E5/2 F5/2", fox);
+    expect(r.out).toBe("C5/2 D5/2 E5/2 F5/2");
+    expect(r.repairs.join()).toMatch(/overflow/);
+  });
+  it("spells chord symbols written as notes", () => {
+    const frog = band[1];
+    expect(check("Bb2/4 r/4 Gm7/4 r/4", frog).out).toBe("Bb2/4 r/4 G2/4 r/4");
+    // "Cm2" is a C2 with a minor chord's m in it
+    expect(check("C2/4 Cm2/4 C2/4 B1/4", frog).out).toBe("C2/4 C2/4 C2/4 B1/4");
+    // a symbol in front of real pitches just goes; on its own it's voiced
+    expect(check("[Gm7 B3 D4]/8 r/8 Cm7/4 r/2", bear).out).toBe("[B3 D4]/8 r/8 [C4 Eb4 G4 Bb4]/4 r/2");
+    expect(check("[Gm7 B3 D4]/8 r/8 r/4 r/2", bear).repairs.join()).toMatch(/chord symbols/);
+  });
   it("leaves a line alone when moving it wouldn't fit more notes", () => {
     expect(check("C5/4 D5/4 E5/4 G5/4", fox).repairs).toEqual([]);
     // one stray low note: shifting the rest up would push them out instead

@@ -1,6 +1,6 @@
 import { INSTRUMENTS } from "@/music/instruments";
 import { motifFromText } from "@/music/motif";
-import { looksLikeDrumGrid, notesToText, parseNotes } from "@/music/notation";
+import { looksLikeDrumGrid, notesToText, parseNotes, spellChordSymbols, squeezeBar } from "@/music/notation";
 import { isFeaturedRole } from "@/music/realize";
 import { fold, keyPrefersFlats } from "@/music/theory";
 import type { BarPlan, Dynamic, Frame, InstrumentFunction, Member, Motif, NoteEvent, Role, Texture } from "@/music/types";
@@ -55,6 +55,8 @@ export function shiftOctaves(text: string, octaves: number): string {
   if (!octaves) return text;
   return text.replace(/(^|[\s,[~])([A-Ga-g][#b]{0,2})(-?\d)(?=[/\s,\]~>'?]|$)/g, (_, pre, name, oct) => `${pre}${name}${parseInt(oct, 10) + octaves}`);
 }
+
+const fmtBeats = (b: number) => String(Math.round(b * 100) / 100);
 
 function movedWords(octaves: number): string {
   return `${octaves < 0 ? "down" : "up"} ${OCTAVE_WORDS[Math.abs(octaves)]}`;
@@ -118,15 +120,28 @@ export function validateBarText(text: string, member: Member, beats: number, rep
     return null;
   }
   // a multi-bar string in one cell: keep the first bar
-  const first = t.split("|")[0].trim();
-  const r = parseNotes(first, beats);
+  let first = t.split("|")[0].trim();
+  const inst = INSTRUMENTS[member.instrument];
+  const spelled = spellChordSymbols(first, fn === "bass" || role === "bass" ? inst.sweet[0] : Math.max(inst.sweet[0], 55), fn === "bass" || role === "bass");
+  if (spelled.fixed) {
+    repairs.push(`${where}: chord symbols written as notes, spelled out`);
+    first = spelled.text;
+  }
+  let r = parseNotes(first, beats);
+  if (r.covered > beats + 1e-6) {
+    const squeezed = squeezeBar(first, beats);
+    if (squeezed) {
+      repairs.push(`${where}: ${fmtBeats(r.covered)} beats in a ${fmtBeats(beats)}-beat bar, squeezed to fit`);
+      first = squeezed;
+      r = parseNotes(first, beats);
+    }
+  }
   if (!r.notes.length && !/^(r\/\S+\s*)+$/.test(first)) {
     repairs.push(`${where}: unreadable notes "${first.slice(0, 40)}" (${r.errors[0] ?? "empty"})`);
     return null;
   }
   if (r.errors.length) repairs.push(`${where}: ${r.errors.slice(0, 2).join("; ")}`);
   if (r.covered < beats - 1e-6) repairs.push(`${where}: short bar padded with rest`);
-  const inst = INSTRUMENTS[member.instrument];
   const k = registerShift(r.notes.map((n) => n.pitch), inst.range[0], inst.range[1]);
   if (k) {
     repairs.push(`${where}: moved ${movedWords(k)} to sit in the ${inst.name.toLowerCase()}'s range`);

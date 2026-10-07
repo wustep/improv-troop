@@ -1,5 +1,5 @@
 import { DRUM } from "./instruments";
-import { parsePitch, pitchName } from "./theory";
+import { chordPcs, mod, parseChord, parsePitch, pitchName } from "./theory";
 import type { NoteEvent } from "./types";
 
 // Compact text grammar shared by the local engine, the models, and the debug view.
@@ -158,6 +158,150 @@ export function parseNotes(text: string, beats: number): ParseResult {
     t += dur;
   }
   return { notes, errors, covered: t };
+}
+
+// ─── Salvaging model-written bars ────────────────────────────────────────────
+
+const SPEC: [number, string][] = [
+  [4, "1"],
+  [3, "2."],
+  [2, "2"],
+  [1.5, "4."],
+  [1, "4"],
+  [0.75, "8."],
+  [0.5, "8"],
+  [0.25, "16"],
+];
+const specFor = (beats: number) => SPEC.find(([b]) => Math.abs(b - beats) < 1e-6)?.[1];
+
+/**
+ * A bar the writer over-filled (models miscount their beats) squeezed back into the bar with
+ * every pitch kept: rests go first, then the longest notes give up the difference, the last
+ * note (the landing) last of all. Cutting at the barline instead loses exactly the notes a
+ * phrase was aiming for. Null when the bar fits already, is more than half again too long,
+ * or won't squeeze exactly; triplets are left as written.
+ */
+export function squeezeBar(text: string, beats: number): string | null {
+  type Item = { pitch: string; dur: number; suffix: string; rest: boolean; locked: boolean };
+  const items: Item[] = [];
+  let lastDur = 1;
+  for (const tok of tokenize(text)) {
+    if (tok === "|") continue;
+    const suffix = /[~>'?]*$/.exec(tok)![0];
+    const body = tok.slice(0, tok.length - suffix.length);
+    const slash = body.lastIndexOf("/");
+    const pitch = slash > 0 ? body.slice(0, slash) : body;
+    const spec = slash > 0 ? body.slice(slash + 1) : null;
+    const dur = spec === null ? lastDur : durationBeats(spec);
+    if (dur === null) return null;
+    lastDur = dur;
+    items.push({ pitch, dur, suffix, rest: /^[rR-]$/.test(pitch), locked: !!spec?.endsWith("t") || (spec === null && !specFor(dur)) });
+  }
+  const total = () => items.reduce((a, it) => a + it.dur, 0);
+  if (total() <= beats + 1e-6 || total() > beats * 1.5 + 1e-6) return null;
+  for (let guard = 0; guard < 32; guard++) {
+    const excess = total() - beats;
+    if (excess < 1e-6) break;
+    const open = items.filter((it) => !it.locked);
+    // a rest that the excess covers goes; a longer one gives up the excess
+    const rest = open.filter((it) => it.rest).sort((a, b) => b.dur - a.dur);
+    const gone = rest.find((it) => it.dur <= excess + 1e-6);
+    if (gone) {
+      items.splice(items.indexOf(gone), 1);
+      continue;
+    }
+    const trim = rest.find((it) => specFor(it.dur - excess));
+    if (trim) {
+      trim.dur -= excess;
+      continue;
+    }
+    // the longest note that can give up the whole excess, else halve the longest and look
+    // again; the last note (where the phrase lands) only when nothing else can give
+    const notes = open.filter((it) => !it.rest).sort((a, b) => b.dur - a.dur || items.indexOf(a) - items.indexOf(b));
+    const landing = items[items.length - 1];
+    const give = (pool: Item[]) => {
+      const whole = pool.find((it) => specFor(it.dur - excess) && it.dur - excess >= 0.5 - 1e-6) ?? pool.find((it) => specFor(it.dur - excess));
+      if (whole) return ((whole.dur -= excess), true);
+      const half = pool.find((it) => it.dur >= 0.5 - 1e-6 && specFor(it.dur / 2));
+      if (half) return ((half.dur /= 2), true);
+      return false;
+    };
+    if (!give(notes.filter((it) => it !== landing)) && !give(notes)) return null;
+  }
+  const short = beats - total();
+  if (short < -1e-6) return null;
+  if (short > 1e-6) {
+    const spec = specFor(short);
+    if (!spec) return null;
+    items.push({ pitch: "r", dur: short, suffix: "", rest: true, locked: false });
+  }
+  return items.map((it) => `${it.pitch}/${specFor(it.dur) ?? durSpecOf(it.dur)}${it.suffix}`).join(" ");
+}
+
+function durSpecOf(beats: number): string {
+  // triplets kept as written
+  for (const [b, s] of SPEC) if (Math.abs((b * 2) / 3 - beats) < 1e-6) return `${s}t`;
+  return "4";
+}
+
+const CHORD_SYMBOL = /^([A-G][#b]?)(m|maj|min|dim|aug|sus|add|ø|°|\+|-|6|7|9|11|13)[A-Za-z0-9#b+°ø()]*(\/[A-G][#b]?)?$/;
+
+/**
+ * Chord symbols written where notes belong ("Gm7/4", "[Cm7 C4 Eb4]/8", "Cm2/4"): models
+ * comping from a lead sheet do this. A bassist gets the root, anyone else the chord's tones
+ * stacked up from `low` (a bassist's root beside the note before); inside a bracket the symbol just goes when real pitches are there.
+ * "Cm2" (a minor-chord letter with an octave) is read as the pitch C2.
+ */
+export function spellChordSymbols(text: string, low: number, bassist: boolean): { text: string; fixed: number } {
+  let fixed = 0;
+  let prev: number | null = null;
+  const voice = (sym: string): string => {
+    const c = parseChord(sym);
+    let root = low + mod(c.root - low, 12);
+    // a bassist's root goes next to the note before it
+    if (bassist && prev !== null && Math.abs(root + 12 - prev) < Math.abs(root - prev)) root += 12;
+    if (bassist) return pitchName(root, true);
+    const pcs = chordPcs(c).slice(0, 4);
+    const out: number[] = [];
+    let p = root;
+    for (const pc of pcs) {
+      while (mod(p, 12) !== pc) p++;
+      out.push(p);
+    }
+    return `[${out.map((x) => pitchName(x, true)).join(" ")}]`;
+  };
+  const one = (word: string): string | null => {
+    if (parsePitch(word) !== null) return null;
+    const octave = /^([A-G][#b]?)m([0-5])$/.exec(word);
+    if (octave) return `${octave[1]}${octave[2]}`;
+    return CHORD_SYMBOL.test(word) ? voice(word) : null;
+  };
+  const out = tokenize(text).map((tok) => {
+    const suffix = /[~>'?]*$/.exec(tok)![0];
+    const body = tok.slice(0, tok.length - suffix.length);
+    const slash = body.lastIndexOf("/");
+    // "/" also marks a slash chord ("C7/E"); a duration is digits
+    const durAt = /\/(1|2|4|8|16|32)\.{0,2}t?$/.test(body) ? slash : -1;
+    const head = durAt > 0 ? body.slice(0, durAt) : body;
+    const tail = durAt > 0 ? body.slice(durAt) : "";
+    const p = parsePitch(head);
+    if (p !== null) prev = p;
+    if (head.startsWith("[")) {
+      const words = head.replace(/^\[|\]$/g, "").trim().split(/\s+/).filter(Boolean);
+      const pitches = words.filter((w) => parsePitch(w) !== null);
+      if (pitches.length === words.length) return tok;
+      fixed++;
+      if (pitches.length) return `[${pitches.join(" ")}]${tail}${suffix}`;
+      const sym = words.map(one).find(Boolean);
+      return sym ? `${sym}${tail}${suffix}` : tok;
+    }
+    const spelled = one(head);
+    if (!spelled) return tok;
+    fixed++;
+    prev = parsePitch(spelled) ?? prev;
+    return `${spelled}${tail}${suffix}`;
+  });
+  return { text: fixed ? out.join(" ") : text, fixed };
 }
 
 /** Split "a | b | c" into bar texts. */
