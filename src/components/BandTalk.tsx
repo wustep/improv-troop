@@ -32,6 +32,11 @@ export function BandTalk() {
   return (
     <div>
       <h2 className="type-section mb-xs">Band talk</h2>
+      {!msgs.length && (
+        <p className="text-m text-ink-soft">
+          the band is huddling<span className="thinking-dots" aria-hidden><i>.</i><i>.</i><i>.</i></span>
+        </p>
+      )}
       <ol ref={listRef} className="max-h-72 space-y-xs overflow-y-auto pr-xxs">
         {msgs.map((c, i) => {
           const m = members.find((x) => x.id === c.from);
@@ -40,7 +45,7 @@ export function BandTalk() {
           const divider =
             !prev || prev.phase !== c.phase || (c.phase === "jam" && prev.bar !== c.bar)
               ? c.phase === "jam" && c.bar !== undefined
-                ? `bar ${c.bar + 1}`
+                ? [`bar ${c.bar + 1}`, current?.plan[c.bar]?.section].filter(Boolean).join(" · ")
                 : c.phase === "count-off"
                   ? "before the count-off"
                   : c.phase === "setup"

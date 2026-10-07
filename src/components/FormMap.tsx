@@ -37,38 +37,51 @@ export function FormMap({
   onSeek: (bar: number) => void;
 }) {
   const headRef = useRef<HTMLDivElement>(null);
+  const stripRef = useRef<HTMLDivElement>(null);
   const total = score.frame.bars;
   const beats = score.frame.meter.beats;
+  const sections = score.frame.sections;
 
   useEffect(() => {
     let raf = 0;
+    let lastSec = -2;
     const loop = () => {
       const el = headRef.current;
+      const beat = playing ? troopAudio.getBeat() : -Infinity;
+      const on = Number.isFinite(beat) && beat >= 0;
       if (el) {
-        const beat = playing ? troopAudio.getBeat() : -Infinity;
-        if (Number.isFinite(beat) && beat >= 0) {
+        if (on) {
           el.style.opacity = "1";
           el.style.left = `${Math.min(100, (beat / (total * beats)) * 100)}%`;
         } else el.style.opacity = "0";
+      }
+      // the section being played is lit, so you can tell whose solo it is from across the room
+      const bar = on ? Math.min(total - 1, Math.floor(beat / beats)) : -1;
+      const sec = bar < 0 ? -1 : sections.findIndex((s) => bar >= s.start && bar < s.start + s.length);
+      if (sec !== lastSec && stripRef.current) {
+        lastSec = sec;
+        stripRef.current.toggleAttribute("data-playing", sec >= 0);
+        [...stripRef.current.querySelectorAll<HTMLElement>("[data-sec]")].forEach((n, i) => n.toggleAttribute("data-now", i === sec));
       }
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [playing, total, beats]);
+  }, [playing, total, beats, sections]);
 
   const nameOf = (id: string) => score.members.find((m) => m.id === id);
   const auto = new Set(autopilotBars);
 
   return (
     <div className="relative mt-xs select-none" aria-label="Form of the tune">
-      <div className="relative flex h-12 w-full overflow-hidden rounded-[var(--radius-s)_var(--radius-m)_var(--radius-s)_var(--radius-m)]">
+      <div ref={stripRef} className="form-strip relative flex h-12 w-full overflow-hidden rounded-[var(--radius-s)_var(--radius-m)_var(--radius-s)_var(--radius-m)]">
         {score.frame.sections.map((s, si) => {
           const who = s.featured?.map(nameOf).filter(Boolean) ?? [];
           return (
             <div
               key={s.start}
-              className={`relative flex min-w-0 flex-col ${si > 0 ? "shadow-[inset_var(--border-m)_0_0_0_var(--border-default-color)]" : ""}`}
+              data-sec
+              className={`form-sec relative flex min-w-0 flex-col ${si > 0 ? "shadow-[inset_var(--border-m)_0_0_0_var(--border-default-color)]" : ""}`}
               style={{ width: `${(s.length / total) * 100}%`, background: KIND_FILL[s.kind] ?? "transparent" }}
             >
               <div className="pointer-events-none flex items-center gap-xxs overflow-hidden whitespace-nowrap px-xs text-s">

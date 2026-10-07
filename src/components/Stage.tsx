@@ -119,7 +119,8 @@ export function Stage() {
   const [wrapRef, width] = useWidth<HTMLDivElement>();
   const sprites = useRef(new Map<string, SpriteHandle | null>());
   const spots = useRef(new Map<string, HTMLDivElement | null>());
-  const labelRef = useRef<HTMLDivElement>(null);
+  const labelRef = useRef<HTMLSpanElement>(null);
+  const counterRef = useRef<HTMLSpanElement>(null);
   const chordRef = useRef<HTMLDivElement>(null);
   const nextChordRef = useRef<HTMLSpanElement>(null);
   const [bar, setBar] = useState(-1);
@@ -171,17 +172,22 @@ export function Stage() {
         if (b !== lastBar) {
           lastBar = b;
           setBar(b);
-          if (labelRef.current) {
-            labelRef.current.textContent =
-              b < 0 ? "count-in…" : `${score.plan[b]?.section ?? ""} · bar ${b + 1}/${score.frame.bars}`;
-          }
+          if (labelRef.current) labelRef.current.textContent = b < 0 ? "count-in…" : (score.plan[b]?.section ?? "");
+          // the counter has its own fixed width, so the line doesn't shift as the bar number grows
+          if (counterRef.current) counterRef.current.textContent = b < 0 ? "" : `· bar ${b + 1}/${score.frame.bars}`;
         }
         if (chordRef.current && b >= 0) {
           const inBar = beat - b * beats;
           const chords = score.frame.chords[b] ?? [];
           let sym = chords[0]?.symbol ?? "";
           for (const c of chords) if (c.beat <= inBar + 1e-6) sym = c.symbol;
-          if (chordRef.current.textContent !== sym) chordRef.current.textContent = sym;
+          if (chordRef.current.textContent !== sym) {
+            chordRef.current.textContent = sym;
+            // a change inks in, so it reads apart from a repeat (restarting the animation, not a React render)
+            chordRef.current.classList.remove("chord-ink");
+            void chordRef.current.offsetWidth;
+            chordRef.current.classList.add("chord-ink");
+          }
           // read ahead, like the band does: the next change in this bar or the next two
           let next = "";
           for (let k = b; k < Math.min(score.frame.bars, b + 3) && !next; k++) {
@@ -199,6 +205,7 @@ export function Stage() {
         setBar(-1);
         // stopped: the stage says what's loaded, so you know what Play will play
         if (labelRef.current) labelRef.current.textContent = score?.title ?? "";
+        if (counterRef.current) counterRef.current.textContent = "";
         if (chordRef.current) chordRef.current.textContent = "";
         if (nextChordRef.current) nextChordRef.current.textContent = score ? `${score.frame.key.tonic} ${score.frame.key.mode} · ${score.frame.tempo} bpm` : "";
       }
@@ -237,7 +244,10 @@ export function Stage() {
       <div ref={wrapRef} className="relative">
         <Bunting />
         <div className="flex min-h-7 items-baseline justify-between gap-s px-xs pt-9 font-brand font-heavy text-ink-soft">
-          <div ref={labelRef} className="truncate text-l" aria-live="off" />
+          <div className="flex min-w-0 items-baseline gap-xxs text-l" aria-live="off">
+            <span ref={labelRef} className="truncate" />
+            <span ref={counterRef} className="shrink-0 tabular-nums" style={{ minWidth: score ? `${`· bar ${score.frame.bars}/${score.frame.bars}`.length}ch` : undefined }} />
+          </div>
           <div className="flex shrink-0 items-baseline gap-xs">
             <div ref={chordRef} className="text-xl text-(--color-3)" aria-label="current chord" />
             <span ref={nextChordRef} className="text-m text-ink-soft" aria-hidden />
@@ -276,6 +286,8 @@ export function Stage() {
                 />
                 {(bubble || isThinking) && (
                   <div
+                    // a new line is a new bubble: it pops in rather than swapping its words in place
+                    key={bubble && !isThinking ? `say:${bubble}` : "thinking"}
                     className={`bubble absolute z-10 ${fit.right ? "bubble-right right-xs" : "left-xs"} w-max px-s py-xs text-m`}
                     style={{ bottom: spriteW * 1.04, maxWidth: fit.maxWidth }}
                   >

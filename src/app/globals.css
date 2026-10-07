@@ -328,6 +328,7 @@ body {
   border-radius: var(--radius-l) var(--radius-xl) var(--radius-l) var(--radius-m) / var(--radius-m) var(--radius-l) var(--radius-xl) var(--radius-l);
   box-shadow: var(--border-shadow-m), var(--shadow-s);
   animation: bubble-in var(--motion-large-duration) var(--motion-large-easing);
+  text-wrap: balance;
 }
 .bubble::after {
   content: "";
@@ -343,6 +344,15 @@ body {
 .bubble-right::after {
   left: auto;
   right: 30%;
+}
+.chord-ink {
+  animation: chord-ink var(--motion-large-duration) var(--motion-easing);
+}
+@keyframes chord-ink {
+  from {
+    opacity: 0.35;
+    transform: translateY(var(--space-xxs));
+  }
 }
 @keyframes bubble-in {
   from {
@@ -485,9 +495,21 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .bubble,
+  .chord-ink,
   .thinking-dots i {
     animation: none;
   }
+}
+
+/* while playing, the form strip lights the section being played and lets the others recede */
+.form-sec {
+  transition:
+    opacity var(--motion-large-duration) var(--motion-easing),
+    color var(--motion-large-duration) var(--motion-easing);
+}
+.form-strip[data-playing] .form-sec:not([data-now]) {
+  opacity: 0.55;
+  color: var(--color-ink-soft);
 }
 
 /* bars the band hasn't played yet: washed out and pencil-hatched, like an unfinished sketch */
