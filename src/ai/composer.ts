@@ -50,7 +50,18 @@ interface Candidate {
 
 let msgSeq = 0;
 export function chatMsg(from: string, text: string, phase: ChatMessage["phase"], bar?: number, to?: string): ChatMessage {
-  return { id: `m${Date.now().toString(36)}${++msgSeq}`, from, text: text.slice(0, 220), phase, bar, to };
+  return { id: `m${Date.now().toString(36)}${++msgSeq}`, from, text: trimSpeech(text), phase, bar, to };
+}
+
+/** Long speech ends at its last whole sentence that fits (or word, with "…"), never mid-word. */
+export function trimSpeech(text: string, max = 220): string {
+  const t = text.trim();
+  if (t.length <= max) return t;
+  const head = t.slice(0, max);
+  const sentence = Math.max(head.lastIndexOf(". "), head.lastIndexOf("! "), head.lastIndexOf("? "));
+  if (sentence > max * 0.25) return head.slice(0, sentence + 1);
+  const word = head.lastIndexOf(" ");
+  return `${head.slice(0, word > 0 ? word : max).replace(/[\s,;:—-]+$/, "")}…`;
 }
 
 /**

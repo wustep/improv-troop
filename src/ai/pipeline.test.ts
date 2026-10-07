@@ -235,3 +235,13 @@ describe("a featured player who miscounts", () => {
     expect(score.plan[solo.start].directives?.bear).toBe("C5/4 D5/4 E5/4 G5/4");
   });
 });
+
+describe("band talk", () => {
+  it("long speech ends on a whole sentence or word", async () => {
+    const { trimSpeech } = await import("./composer");
+    const long = "Alright gang, here's the plan: I state a bold little riff in the head. Bruno takes the solo over bars 7-12, then I bring it home loud and Lily walks it strong while Hoot keeps that ride singing and we land the ending together.";
+    expect(trimSpeech(long)).toBe("Alright gang, here's the plan: I state a bold little riff in the head.");
+    expect(trimSpeech("word ".repeat(60))).toMatch(/word…$/);
+    expect(trimSpeech("short")).toBe("short");
+  });
+});
