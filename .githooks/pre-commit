@@ -1,0 +1,3 @@
+#!/bin/sh
+# A commit must build on its own (e4de2bc didn't). Skip in an emergency with --no-verify.
+exec pnpm check

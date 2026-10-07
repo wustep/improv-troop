@@ -130,3 +130,19 @@
 - **Sheet colours from tokens** — resolve --ink-soft/--color-2 via getComputedStyle, halo in sheet surface colour _(rejected 2026-10-06)_
 - **Roster feedback** — 32px remove target, disabled reason, "stage is full" line _(rejected 2026-10-06)_
 - **Share cap at 6 and model-take share note** — MAX_MEMBERS 6, explain no share for model takes _(rejected 2026-10-06)_
+- **Enforce beats in the schema for busy bars** — per-beat object keys for 16th-heavy bars _(rejected 2026-10-07)_
+- **One `applyModelBars` instead of four copies** — shared read/validate/write loop for model bars _(rejected 2026-10-07)_
+- **Bubble tail points at the speaker** — `--tail-x` from bubbleFit _(rejected 2026-10-07)_
+- **Take rows with hanging numbers and a now-playing mark** — grid rows, equaliser on the playing take _(rejected 2026-10-07)_
+- **Stage spacing on the spacing tokens** — replace pt-9/top-16/etc. with token steps, reset `--spacing` _(rejected 2026-10-07)_
+- **Drawn Play/Stop glyph that breathes on the beat** — roughjs triangle/square, reseed per beat _(rejected 2026-10-07)_
+- **Tunes for ambient and minimal** — Gymnopédie No. 1, Prelude in C, Wade in the Water _(rejected 2026-10-07)_
+- **Public-domain jazz melodies** — I Got Rhythm melody, St. Louis Blues, Sweet Georgia Brown _(rejected 2026-10-07)_
+- **Cut the pop "standards"** — remove Four-Chord Song and Doo-Wop Changes _(rejected 2026-10-07)_
+- **A slow swing ballad** — ballad texture under 90 bpm plus a ballad standard _(rejected 2026-10-07)_
+- **Re-parse recorded takes offline** — re-run merge/validate over EVAL_OUT takes _(rejected 2026-10-07)_
+- **Record and replay real-model replies** — EVAL_RECORD / EVAL_REPLAY cassettes _(rejected 2026-10-07)_
+- **Several seeds and a budget in the eval** — EVAL_SEEDS, concurrency, EVAL_BUDGET_USD _(rejected 2026-10-07)_
+- **Typed repair kinds** — `{kind, where, detail}` repairs _(rejected 2026-10-07)_
+- **Model prices in `ModelInfo`** — one price table shared with the eval _(rejected 2026-10-07)_
+- **Offline eval smoke run in CI** — EVAL_MOCK through the mock key _(rejected 2026-10-07)_

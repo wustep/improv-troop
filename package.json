@@ -10,7 +10,8 @@
     "typecheck": "next typegen && tsc --noEmit --incremental false",
     "test": "vitest run",
     "check": "pnpm typecheck && pnpm lint && pnpm test",
-    "eval:gateway": "vitest run --config vitest.eval.config.mts"
+    "eval:gateway": "vitest run --config vitest.eval.config.mts",
+    "prepare": "git config core.hooksPath .githooks || true"
   },
   "dependencies": {
     "@ai-sdk/gateway": "^4.0.103",

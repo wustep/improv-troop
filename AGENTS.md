@@ -9,3 +9,5 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 <!-- END:nextjs-agent-rules -->
 
 For UI work, follow GUI.md and use graphical-ui, graphical-convert, or graphical-audit as appropriate.
+
+Run `pnpm check` (typecheck, lint, tests) before every commit; each commit must build on its own. `pnpm install` points git at `.githooks/`, whose pre-commit hook runs it.
