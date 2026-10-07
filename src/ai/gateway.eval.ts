@@ -76,7 +76,11 @@ function measure(model: string, mode: string, style: StyleId, runId: string, sco
   const run = runs.find((r) => r.id === runId);
   const tokIn = mine.reduce((a, c) => a + (c.usage?.inputTokens ?? 0), 0);
   const tokOut = mine.reduce((a, c) => a + (c.usage?.outputTokens ?? 0), 0);
-  const [pi, po] = PRICE[model] ?? [3, 15];
+  // each call at its own model's price: a director and its players can differ
+  const usd = mine.reduce((a, c) => {
+    const [pi, po] = PRICE[c.model] ?? [3, 15];
+    return a + ((c.usage?.inputTokens ?? 0) * pi + (c.usage?.outputTokens ?? 0) * po) / 1e6;
+  }, 0);
   const repairs: Record<string, number> = {};
   for (const c of mine) for (const r of c.repairs) repairs[bucket(r)] = (repairs[bucket(r)] ?? 0) + 1;
   const issues: Record<string, number> = {};
@@ -107,7 +111,8 @@ function measure(model: string, mode: string, style: StyleId, runId: string, sco
     structured: `${mine.filter((c) => c.structured).length}/${mine.filter((c) => c.status === "ok").length}`,
     tokIn,
     tokOut,
-    usd: Math.round(((tokIn * pi + tokOut * po) / 1e6) * 1000) / 1000,
+    usd: Math.round(usd * 1000) / 1000,
+    director: DIRECTOR || undefined,
     written: `${written}/${cells}`,
     repairs,
     issues,
