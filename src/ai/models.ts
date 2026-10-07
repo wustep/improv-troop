@@ -14,11 +14,17 @@ export interface ModelInfo {
   efforts: string[];
   /** Reasoning can be switched off entirely. */
   canDisableReasoning: boolean;
+  /**
+   * Thinking and a JSON schema don't mix: measured on the gateway, Haiku 4.5's count-off with
+   * thinking on returned no structured output 6 times in 8 (3,500 tokens each, then a retry as
+   * text); with thinking off, 8 in 8 at 350 tokens. Schema calls run without thinking.
+   */
+  noThinkingWithSchema?: boolean;
 }
 
 export const MODELS: ModelInfo[] = [
   { id: "anthropic/claude-sonnet-5.5", label: "Claude Sonnet 5.5", temperature: false, efforts: ["low", "medium", "high", "xhigh", "max"], canDisableReasoning: false },
-  { id: "anthropic/claude-haiku-4.5", label: "Claude Haiku 4.5", temperature: true, efforts: [], canDisableReasoning: true },
+  { id: "anthropic/claude-haiku-4.5", label: "Claude Haiku 4.5", temperature: true, efforts: [], canDisableReasoning: true, noThinkingWithSchema: true },
   { id: "anthropic/claude-opus-5.5", label: "Claude Opus 5.5", temperature: false, efforts: ["low", "medium", "high", "xhigh", "max"], canDisableReasoning: false },
   { id: "anthropic/claude-fable-5.1", label: "Claude Fable 5.1", temperature: true, efforts: ["none", "low", "medium", "high", "xhigh", "max"], canDisableReasoning: true },
   { id: "anthropic/claude-opus-5", label: "Claude Opus 5", temperature: false, efforts: ["none", "low", "medium", "high", "xhigh", "max"], canDisableReasoning: true },
@@ -70,10 +76,11 @@ const ORDER: ReasoningLevel[] = ["none", "minimal", "low", "medium", "high"];
  */
 export function callParams(
   id: string,
-  want: { temperature?: number; reasoning?: ReasoningLevel },
+  want: { temperature?: number; reasoning?: ReasoningLevel; schema?: boolean },
 ): { temperature?: number; reasoning?: ReasoningLevel } {
   const m = BY_ID.get(id);
   if (!m) return {};
+  if (want.schema && m.noThinkingWithSchema && want.reasoning) want = { ...want, reasoning: "none" };
   const out: { temperature?: number; reasoning?: ReasoningLevel } = {};
   if (want.reasoning) {
     if (want.reasoning === "none" && m.canDisableReasoning) out.reasoning = "none";

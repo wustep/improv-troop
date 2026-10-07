@@ -80,7 +80,7 @@ export async function POST(req: Request) {
 
   const gateway = createGateway({ apiKey });
   // only send what this model accepts (e.g. Claude Sonnet 5.5 takes no temperature)
-  const params = callParams(body.model, { temperature: body.temperature, reasoning: body.reasoning });
+  const params = callParams(body.model, { temperature: body.temperature, reasoning: body.reasoning, schema: !!body.schema });
   const base = {
     model: gateway(body.model),
     system: body.system,

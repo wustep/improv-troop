@@ -28,6 +28,12 @@ describe("model catalog", () => {
     expect(callParams("openai/gpt-6.1-sol", { reasoning: "minimal", temperature: 0.5 })).toEqual({ reasoning: "low", temperature: 0.5 });
   });
 
+  it("runs Haiku's schema calls without thinking, which breaks its structured output", () => {
+    expect(callParams("anthropic/claude-haiku-4.5", { temperature: 0.9, reasoning: "low", schema: true })).toEqual({ temperature: 0.9, reasoning: "none" });
+    expect(callParams("anthropic/claude-haiku-4.5", { reasoning: "low" })).toEqual({ reasoning: "low" });
+    expect(callParams("anthropic/claude-sonnet-5.5", { reasoning: "low", schema: true })).toEqual({ reasoning: "low" });
+  });
+
   it("sends nothing risky for unknown models", () => {
     expect(callParams("someone/new-model", { temperature: 0.7, reasoning: "low" })).toEqual({});
   });
