@@ -805,6 +805,15 @@ describe("pop", () => {
   });
 });
 
+describe("bossa in three", () => {
+  it("keeps its cross-stick clave", () => {
+    const { score } = generateLocal({ ...defaultSettings(band), style: "bossa", meter: { beats: 3 }, bars: 16, seed: 1 }, band);
+    const rims = score.parts.owl.filter((n) => n.pitch === DRUM.stick);
+    expect(rims.length).toBeGreaterThan(16);
+    expect(rims.every((n) => n.start < 16 * 3)).toBe(true);
+  });
+});
+
 describe("jazz waltz", () => {
   it("is played in three: a swing chart in 3/4 with the bass and ride in three", () => {
     const std = STANDARDS.find((s) => s.id === "jazz-waltz")!;

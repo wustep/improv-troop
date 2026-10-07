@@ -102,6 +102,10 @@ function gridFor(ctx: BarCtx, which: "base" | "light" | "peak"): string {
   if (ctx.style.id === "bossa" && ctx.beats === 4) {
     text += ctx.bar % 2 === 0 ? " rim:x.....x.....x..." : " rim:....x.....x.....";
   }
+  // a bossa in three still has its cross-stick: a two-bar clave over six beats
+  if (ctx.style.id === "bossa" && ctx.beats === 3) {
+    text += ctx.bar % 2 === 0 ? " rim:x.....x....." : " rim:...x.....x..";
+  }
   if (ctx.style.id === "swing") {
     // the ride pattern breathes bar to bar: now and then the last skip note drops, or one is
     // added after the one, so a long tune isn't one bar on repeat
