@@ -3,6 +3,7 @@ import { ritFor } from "@/music/ending";
 import { getStandard } from "@/music/standards";
 import { INSTRUMENTS } from "@/music/instruments";
 import { motifForFrame, newScoreId } from "@/music/local";
+import { parseNotes, squeezeBar } from "@/music/notation";
 import { planLocal } from "@/music/planner";
 import { isFeaturedRole, realize } from "@/music/realize";
 import { makeRng } from "@/music/rng";
@@ -143,6 +144,19 @@ function partsPrompt(member: Member, bars: number[], plan: BarPlan[], frame: Ret
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+function recountPrompt(bars: { b: number; raw: string; covered: number }[], beats: number, frame: ReturnType<typeof buildFrame>): string {
+  const fmt = (x: number) => String(Math.round(x * 100) / 100);
+  return [
+    `These bars should each be exactly ${beats} beats, but they don't add up:`,
+    ...bars.map(({ b, raw, covered }) => `  bar ${b + 1} (${frame.chords[b].map((c) => c.symbol).join(" ")}): "${raw}" = ${fmt(covered)} beats`),
+    "",
+    NOTES_ONLY,
+    "",
+    `Rewrite only these bars so each is exactly ${beats} beats. Keep the idea, the pitches and the landing note; ${bars.some((x) => x.covered > beats) ? "cut or shorten notes where there are too many" : "fill out the rhythm where it's short"}. Count each bar before you answer.`,
+    `Reply: {"bars": {${bars.map(({ b }) => `"${b + 1}": "..."`).join(", ")}}}`,
+  ].join("\n");
 }
 
 /**
@@ -334,6 +348,47 @@ export async function runComposer(settings: TroopSettings, members: Member[], ho
           if (error) noteRepair(call.id, error);
           const obj = asRecord(asRecord(value).bars);
           setParsed(call.id, obj);
+          // Bars whose notes don't add up go back once with the count (models miscount, and
+          // see their mistake when it's pointed out); the squeeze is the fallback.
+          const beats = frame.meter.beats;
+          const miscounted = bars
+            .map((b) => ({ b, raw: asString(obj[String(b + 1)], 600) ?? "" }))
+            .filter(({ raw }) => raw && !raw.trim().startsWith("@"))
+            .map((x) => ({ ...x, covered: parseNotes(x.raw.split("|")[0], beats).covered }))
+            .filter(({ covered }) => Math.abs(covered - beats) > 1e-6);
+          if (miscounted.length) {
+            try {
+              const fix = await callLLM({
+                runId,
+                apiKey,
+                signal,
+                label: `recount: ${m.name}`,
+                agent: "director",
+                model: settings.directorModel,
+                system: personaSystem(m, frame, "You're checking your written bars before the band reads them."),
+                prompt: recountPrompt(miscounted, beats, frame),
+                temperature: 0.3,
+                maxOutputTokens: 1200,
+                reasoning: "none",
+                schema: barsSchema(miscounted.map(({ b }) => b + 1), false),
+                schemaName: "bars",
+              });
+              const fixed = asRecord(asRecord(extractJson(fix.text).value).bars);
+              setParsed(fix.call.id, fixed);
+              // how far a bar is from fitting: an over-full one that squeezes nearly fits, an exact one best
+              const miss = (text: string) => {
+                const covered = parseNotes(text.split("|")[0], beats).covered;
+                return covered <= beats + 1e-6 ? beats - covered : squeezeBar(text.split("|")[0], beats) ? 0.01 : covered - beats;
+              };
+              for (const { b, raw } of miscounted) {
+                const again = asString(fixed[String(b + 1)], 600);
+                if (again && !again.trim().startsWith("@") && miss(again) < miss(raw)) obj[String(b + 1)] = again;
+                else if (again && miss(again) > 0.01) noteRepair(fix.call.id, `bar ${b + 1} still doesn't add up; kept the first try`);
+              }
+            } catch (e) {
+              if ((e as Error).name === "AbortError") throw e;
+            }
+          }
           for (const b of bars) {
             const raw = asString(obj[String(b + 1)], 600);
             if (!raw) {

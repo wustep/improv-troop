@@ -213,3 +213,25 @@ describe("pickCandidate", () => {
     expect(pickCandidate([], 7, [1, 2])).toBeUndefined();
   });
 });
+
+describe("a featured player who miscounts", () => {
+  it("gets the bars back once with the count, and the recount is played", async () => {
+    const fetch = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}"));
+      const prompt = String(body.prompt);
+      const bars = [...prompt.matchAll(/"(\d+)": "\.\.\."/g)].map((m) => m[1]);
+      let text = fakeModel(body);
+      // five beats in every bar of the first try; four in the recount
+      if (prompt.includes("YOUR FEATURED BARS")) text = JSON.stringify({ bars: Object.fromEntries(bars.map((b) => [b, "C5/4 D5/4 E5/4 F5/4 G5/4"])) });
+      if (prompt.includes("don't add up")) text = JSON.stringify({ bars: Object.fromEntries(bars.map((b) => [b, "C5/4 D5/4 E5/4 G5/4"])) });
+      return new Response(JSON.stringify({ text, serverMs: 5 }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetch);
+    const settings = { ...defaultSettings(band), mode: "composer" as const, bestOf: 1, soloists: ["bear"] };
+    const score = await runComposer(settings, band, hooks("t-recount"));
+    const labels = useDebug.getState().calls.filter((c) => c.runId === "t-recount").map((c) => c.label);
+    expect(labels.filter((l) => l.startsWith("recount")).length).toBe(2);
+    const solo = score.frame.sections.find((s) => s.kind === "solo")!;
+    expect(score.plan[solo.start].directives?.bear).toBe("C5/4 D5/4 E5/4 G5/4");
+  });
+});

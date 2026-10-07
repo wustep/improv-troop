@@ -397,7 +397,7 @@ const LANE_NAME: Record<number, string> = {
 };
 
 export function looksLikeDrumGrid(text: string): boolean {
-  return /(^|\s)[a-z0-9]{1,5}:[xXgo.\-|]+/.test(text);
+  return /(^|\s)[a-z0-9]{1,5}:[xXgo.\-|~_]+/.test(text);
 }
 
 export function parseDrumGrid(text: string, beats: number): ParseResult {
@@ -429,7 +429,8 @@ export function parseDrumGrid(text: string, beats: number): ParseResult {
     const stepBeats = beats / steps.length;
     for (let i = 0; i < steps.length; i++) {
       const ch = steps[i];
-      if (ch === "." || ch === "-") continue;
+      // "~" (let it ring) and "_" are read as space: the kit's hits ring on their own
+      if (ch === "." || ch === "-" || ch === "~" || ch === "_") continue;
       let vel = 0.75;
       let art: NoteEvent["art"] | undefined;
       let p = pitch;

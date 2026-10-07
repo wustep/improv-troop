@@ -1238,3 +1238,11 @@ describe("bass fifths", () => {
     expect(checked).toBeGreaterThan(500);
   });
 });
+
+describe("drum grids from models", () => {
+  it("read a ringing ~ as space, not a bad step", () => {
+    const r = parseDrumGrid("cr:x~~~~~~~~~~~~~~~ bd:x~~~~~~~~~~~~~~~", 4);
+    expect(r.errors).toEqual([]);
+    expect(r.notes.length).toBe(2);
+  });
+});
