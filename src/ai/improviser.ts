@@ -13,7 +13,7 @@ import { useDebug } from "@/state/debug";
 import { chatMsg, trimSpeech, type PipelineHooks } from "./composer";
 import { asRecord, asString, extractJson, parseBarRange } from "./json";
 import { callLLM, LlmError, noteRepair, setParsed } from "./llm";
-import { checkChordNames, TalkGate } from "./talk";
+import { checkChordNames, insertByBar, TalkGate } from "./talk";
 import { accompanimentFits, applyDefault, asDynamic, asTexture, enforceSlots, resolveMember, usualDirective, validateBarText, validateMotif } from "./merge";
 import { barsSchema, countOffSchema, replySchema } from "./schemas";
 import {
@@ -88,7 +88,7 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
   const parts: Record<string, NoteEvent[]> = Object.fromEntries(members.map((m) => [m.id, []]));
   const memories = new Map<string, PlayerMemory>(members.map((m) => [m.id, newMemory()]));
   const featuredByBar = new Map<number, NoteEvent[]>();
-  const chat: ChatMessage[] = [];
+  let chat: ChatMessage[] = [];
   const issues: ReturnType<typeof realize>["issues"] = [];
   const nameOf = (id: string) => members.find((m) => m.id === id)?.name ?? id;
   const leader = members.find((m) => m.id === frame.leaderId) ?? members[0];
@@ -99,7 +99,7 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
 
   const talk = new TalkGate(frame, P);
   const say = (msg: ChatMessage) => {
-    chat.push(msg);
+    chat = insertByBar(chat, msg);
     hooks.onChat(msg);
   };
   const step = (s: string) => {

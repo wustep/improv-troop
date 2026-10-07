@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { runComposer, type PipelineHooks } from "@/ai/composer";
+import { insertByBar } from "@/ai/talk";
 import { startImproviser, type ImprovController } from "@/ai/improviser";
 import { notesHintFromScore, troopAudio, type PianoPack } from "@/audio/engine";
 import { defaultStandardLength, snapLength } from "@/music/form";
@@ -334,7 +335,7 @@ export const useTroop = create<TroopState>((set, get) => {
         apiKey: st.apiKey,
         signal: controller.signal,
         onStatus: (status) => set((s) => ({ gen: { ...s.gen, status } })),
-        onChat: (msg) => set((s) => ({ chat: [...s.chat, msg] })),
+        onChat: (msg) => set((s) => ({ chat: insertByBar(s.chat, msg) })),
         onScore: (phrase) => {
           // the band planned at the tempo they were asked for: keep any change made since
           const score = atTempo(phrase, get().settings.tempo);

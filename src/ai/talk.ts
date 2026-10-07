@@ -74,31 +74,50 @@ const words = (s: string) =>
     .filter((w) => w && !STOP.has(w));
 
 /**
- * Who gets to talk. A player who isn't featured speaks at most every other phrase; a phrase
- * holds two lines at most; a line whose words are mostly bandstand filler or already said in
- * the last few lines is dropped.
+ * Who gets to talk. The jam has a budget of lines, paced across its phrases so the talk doesn't
+ * all land in the first half; a phrase holds two lines at most; a player who isn't featured
+ * speaks at most every other phrase; a line whose words are mostly bandstand filler or already
+ * said in the last few lines is dropped.
  */
 export class TalkGate {
   private lastSpoke = new Map<string, number>();
   private perPhrase = new Map<number, number>();
+  private used = 0;
+  private phrases: number;
+  readonly budget: number;
   constructor(
     private frame: Frame,
     private phraseBars: number,
-  ) {}
+  ) {
+    this.phrases = Math.max(1, Math.ceil(frame.bars / phraseBars));
+    this.budget = Math.min(10, Math.max(4, Math.round(this.phrases * 1.25)));
+  }
 
   /** The line as it should be said, or null to stay quiet. */
   allow(speaker: string, line: string, bar: number, featured: boolean, chat: ChatMessage[]): string | null {
     const phrase = Math.floor(bar / this.phraseBars);
     if ((this.perPhrase.get(phrase) ?? 0) >= 2) return null;
+    // by the end of this phrase, at most its share of the budget (what earlier phrases left unsaid carries over)
+    if (this.used >= Math.ceil((this.budget * (phrase + 1)) / this.phrases)) return null;
     const last = this.lastSpoke.get(speaker);
-    if (!featured && last !== undefined && phrase - last < 2) return null;
+    // phrases are answered a little out of order (the next soloist thinks while the band answers)
+    if (!featured && last !== undefined && Math.abs(phrase - last) < 2) return null;
     const checked = checkChordNames(line, this.frame);
     if (!checked) return null;
-    if (isFiller(checked, chat)) return null;
+    if (isFiller(checked, chat.filter((c) => c.phase !== "count-off"))) return null;
+    this.used++;
     this.perPhrase.set(phrase, (this.perPhrase.get(phrase) ?? 0) + 1);
     this.lastSpoke.set(speaker, phrase);
     return checked;
   }
+}
+
+/** Band talk kept in bar order: a line for an earlier bar that arrives late goes before later bars. */
+export function insertByBar(chat: ChatMessage[], msg: ChatMessage): ChatMessage[] {
+  if (msg.bar === undefined) return [...chat, msg];
+  let i = chat.length;
+  while (i > 0 && chat[i - 1].bar !== undefined && chat[i - 1].bar! > msg.bar) i--;
+  return [...chat.slice(0, i), msg, ...chat.slice(i)];
 }
 
 /** Mostly stock words, or mostly words the band said in its last few lines. */
