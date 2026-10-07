@@ -367,6 +367,10 @@ describe("mergePlan reads what models write", () => {
     const locked = plan[leaderHead].directives!.fox;
     const out = mergePlan(plan, [{ bars: `${leaderHead + 1}`, parts: { fox: "@head 1" } }], frame, band, repairs);
     expect(out[leaderHead].directives?.fox).toBe(locked);
+    // the same idea numbered differently isn't worth a note; something else instead of the head is
+    expect(repairs.join()).not.toMatch(/kept @head/);
+    const other = mergePlan(plan, [{ bars: `${leaderHead + 1}`, parts: { fox: "@line dense" } }], frame, band, repairs);
+    expect(other[leaderHead].directives?.fox).toBe(locked);
     expect(repairs.join()).toMatch(/kept @head/);
   });
 });

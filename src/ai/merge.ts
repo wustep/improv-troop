@@ -344,7 +344,8 @@ export function mergePlan(
         // the bar the code chose (models count "@head 1" from the head, not the chart)
         const locked = base[i]?.directives?.[m.id];
         if (locked && /^@(head|tune)\b/.test(locked) && text.trim().replace(/[\s,.;]+$/, "") !== locked) {
-          repairs.push(`bar ${b1} ${m.name}: kept ${locked} (the tune comes back to the melody here)`);
+          // the same idea numbered its own way ("@tune 5" for the melody's bar 1) isn't worth a note
+          if (text.trim().split(/\s+/)[0] !== locked.split(/\s+/)[0]) repairs.push(`bar ${b1} ${m.name}: kept ${locked} (the tune comes back to the melody here)`);
           continue;
         }
         const role = frame.slots[i]?.[m.id] ?? base[i]?.roles[m.id];
