@@ -13,7 +13,7 @@ import { STYLES } from "@/music/styles";
 import type { ChatMessage, Member, Score, TroopSettings } from "@/music/types";
 import { useDebug } from "./debug";
 import { sharedFromHash, type SharedTake } from "./share";
-import { addTake, loadTakes, saveTakes, type Take } from "./takes";
+import { addTake, cutShortTake, loadTakes, saveTakes, type Take } from "./takes";
 
 interface GenState {
   running: boolean;
@@ -229,6 +229,12 @@ export const useTroop = create<TroopState>((set, get) => {
         set({ playing: false, audioError });
       });
       sketch();
+      // reloaded mid-jam: back to that jam, with what the band said, rather than a sketch of its seed
+      const top = get().takes[0];
+      if (top?.cutAt !== undefined && top.score.settings.seed === settings.seed && top.score.settings.style === settings.style) {
+        set({ current: top.score, isSketch: false, chat: top.score.chat });
+        void troopAudio.prepare(top.score.members, { pianoPack: get().pianoPack, notesHint: notesHintFromScore(top.score) });
+      }
       openSharedLink();
       // a link pasted into a tab that's already open only changes the hash
       window.addEventListener("hashchange", openSharedLink);
@@ -330,6 +336,8 @@ export const useTroop = create<TroopState>((set, get) => {
       void troopAudio.unlock().catch(() => {});
       void troopAudio.prepare(members, { pianoPack: st.pianoPack });
 
+      const label = `${STYLES[settings.style].name} · ${settings.mode === "composer" ? "composed" : "jammed"}`;
+      let cutShort: Take | null = null;
       const hooks: PipelineHooks = {
         runId,
         apiKey: st.apiKey,
@@ -339,6 +347,11 @@ export const useTroop = create<TroopState>((set, get) => {
         onScore: (phrase) => {
           // the band planned at the tempo they were asked for: keep any change made since
           const score = atTempo(phrase, get().settings.tempo);
+          // a reload mid-jam comes back to this jam (finish replaces it under the same id)
+          if (improv && improv.readyBars() > 0) {
+            cutShort = cutShortTake(score, improv.readyBars(), label);
+            saveTakes(addTake(get().takes, cutShort));
+          }
           // live improv: start the band as soon as the first phrase is down
           set({
             current: score,
@@ -357,7 +370,6 @@ export const useTroop = create<TroopState>((set, get) => {
 
       const finish = (done: Score) => {
         const score = atTempo(done, get().settings.tempo);
-        const label = `${STYLES[settings.style].name} · ${settings.mode === "composer" ? "composed" : "jammed"}`;
         const take: Take = { id: score.id, score, label, engine: "ai", createdAt: Date.now() };
         set((s) => ({
           current: score,
@@ -386,6 +398,9 @@ export const useTroop = create<TroopState>((set, get) => {
         const cancelled = err.name === "AbortError";
         useDebug.getState().endRun(runId, cancelled ? "cancelled" : "error");
         set({ gen: { running: false, status: "", runId, mode: settings.mode, error: cancelled ? null : err.message }, readyBars: null });
+        // what the band got through stays a take, as it already is after a reload
+        const kept = cutShort;
+        if (kept) set((s) => ({ takes: addTake(s.takes, kept) }));
       } finally {
         improv = null;
       }

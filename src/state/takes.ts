@@ -1,4 +1,5 @@
 import { ANIMALS, INSTRUMENTS } from "@/music/instruments";
+import { realize } from "@/music/realize";
 import type { Score } from "@/music/types";
 
 export interface Take {
@@ -7,6 +8,8 @@ export interface Take {
   label: string;
   engine: "local" | "ai";
   createdAt: number;
+  /** A jam saved while it was still being played: the band had finished this many bars. */
+  cutAt?: number;
 }
 
 /** How many takes the list keeps: the same number on screen and after a reload. */
@@ -17,6 +20,22 @@ const LS_TAKES = "jamming:takes:v1";
 /** A new take on top (replacing an older copy of the same chart), trimmed to the cap. */
 export function addTake(takes: Take[], take: Take): Take[] {
   return [take, ...takes.filter((t) => t.id !== take.id)].slice(0, MAX_TAKES);
+}
+
+/**
+ * A jam in progress, saved so a reload brings it back with the band's real talk. The bars the
+ * band hadn't finished are played from the same plan and motif, the way autopilot would have.
+ */
+export function cutShortTake(score: Score, readyBars: number, label: string): Take {
+  const rest = Array.from({ length: Math.max(0, score.frame.bars - readyBars) }, (_, i) => readyBars + i);
+  const filled = rest.length
+    ? realize({ frame: score.frame, members: score.members, plan: score.plan, motif: score.motif, seed: score.settings.seed, bars: rest }).parts
+    : {};
+  const parts = Object.fromEntries(
+    Object.entries(score.parts).map(([id, notes]) => [id, [...notes, ...(filled[id] ?? [])].sort((a, b) => a.start - b.start)]),
+  );
+  const notes = [...score.notes.filter((n) => n !== "(still jamming…)"), ...(rest.length ? [`Cut short after bar ${readyBars}: the band's engine played the rest from the same plan.`] : [])];
+  return { id: score.id, score: { ...score, parts, notes }, label: `${label} (cut short)`, engine: "ai", createdAt: score.createdAt, cutAt: readyBars };
 }
 
 function isTake(t: unknown): t is Take {
