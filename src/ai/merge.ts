@@ -90,6 +90,28 @@ export function accompanimentFits(directive: string, member: Member, role?: Role
 }
 
 /**
+ * A dead note written the drum-grid way ("g/16", "x/16") in a bass or comping line: the funk
+ * bassist's muted thump. It becomes a ghost of the pitch before it (or after it, at the top of
+ * the bar); with no pitch around, a rest.
+ */
+export function ghostNotes(text: string): string {
+  const toks = text.split(/(\s+|,)/);
+  const pitchOf = (t: string) => (/^[A-G][#b]?\d/.test(t) || t.startsWith("[") ? t.split("/")[0].replace(/[>'?~]+$/, "") : null);
+  const dead = /^[gx]\/([0-9.t]+)$/i;
+  if (!toks.some((t) => dead.test(t))) return text;
+  return toks
+    .map((t, i) => {
+      const m = dead.exec(t);
+      if (!m) return t;
+      let p: string | null = null;
+      for (let j = i - 1; j >= 0 && !p; j--) p = pitchOf(toks[j]);
+      for (let j = i + 1; j < toks.length && !p; j++) p = pitchOf(toks[j]);
+      return p ? `${p}/${m[1]}?` : `r/${m[1]}`;
+    })
+    .join("");
+}
+
+/**
  * Validate one bar's content for one member. Returns the cleaned text or null (fall back).
  * With a role, a directive for an accompanying player must be one they can play, and a
  * featured player's must be a featured part (not comping or a pattern under someone else).
@@ -149,6 +171,11 @@ export function validateBarText(text: string, member: Member, beats: number, rep
   if (spelled.fixed) {
     repairs.push(`${where}: chord symbols written as notes, spelled out`);
     first = spelled.text;
+  }
+  const dead = ghostNotes(first);
+  if (dead !== first) {
+    repairs.push(`${where}: dead notes written as "g", played as ghosts of the note before`);
+    first = dead;
   }
   let r = parseNotes(first, beats);
   const grouped = fitBeatGroups(first, beats);

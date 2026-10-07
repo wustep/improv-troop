@@ -118,6 +118,12 @@ describe("validateBarText", () => {
     // a horn's short phrase is a phrase, followed by space
     expect(check("C5/4 D5/4", fox).out).toBe("C5/4 D5/4");
   });
+  it("reads a funk bassist's dead notes (g/16) as ghosts of the note before", () => {
+    const r = check("Bb1/16 r/16 Bb2/8 g/16 F1/16 Bb2/8 r/16 Bb1/16 Bb2/8", band[1]);
+    expect(r.repairs.join()).toMatch(/dead notes/);
+    expect(r.repairs.join()).not.toMatch(/bad token/);
+    expect(r.out).toContain("Bb2/16?");
+  });
   it("loops a groove that's a beat or more short instead of leaving the bass silent", () => {
     // Gemini 2.5 Flash's funk bass: 2½ beats of 16ths for a 4-beat bar
     const r = check("Bb2/16 r/16 Bb3/16 r/16 Bb2/8 Bb2/16 r/16 Bb3/16 r/16", band[1]);

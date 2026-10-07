@@ -588,14 +588,16 @@ function durValue(name: string): number {
  */
 export function notesToText(notes: NoteEvent[], beats: number, flats = true): string {
   const sorted = [...notes].sort((a, b) => a.start - b.start || a.pitch - b.pitch);
-  const groups: { start: number; dur: number; pitches: number[] }[] = [];
+  const groups: { start: number; dur: number; pitches: number[]; art?: NoteEvent["art"] }[] = [];
   for (const n of sorted) {
     const g = groups[groups.length - 1];
     if (g && Math.abs(g.start - n.start) < 1e-3) {
       g.pitches.push(n.pitch);
       g.dur = Math.max(g.dur, n.dur);
-    } else groups.push({ start: n.start, dur: n.dur, pitches: [n.pitch] });
+    } else groups.push({ start: n.start, dur: n.dur, pitches: [n.pitch], art: n.art });
   }
+  // accents, staccatos and ghosts survive the round trip (other articulations aren't written in text)
+  const MARK: Partial<Record<NonNullable<NoteEvent["art"]>, string>> = { accent: ">", staccato: "'", ghost: "?" };
   const out: string[] = [];
   let t = 0;
   for (let i = 0; i < groups.length; i++) {
@@ -607,7 +609,7 @@ export function notesToText(notes: NoteEvent[], beats: number, flats = true): st
       g.pitches.length === 1
         ? pitchName(g.pitches[0], flats)
         : `[${g.pitches.map((x) => pitchName(x, flats)).join(" ")}]`;
-    out.push(`${p}/${name}`);
+    out.push(`${p}/${name}${(g.art && MARK[g.art]) ?? ""}`);
     t = g.start + durValue(name);
   }
   out.push(...restsFor(beats - t));

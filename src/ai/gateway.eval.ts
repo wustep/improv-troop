@@ -65,6 +65,7 @@ function bucket(repair: string): string {
   if (r.includes("json")) return "json";
   // bar lengths, by how they were fixed: a beat group or a recount keeps the model's rhythm, a squeeze or pad doesn't
   if (r.includes("gap kept inside its beat")) return "len:beat-fit";
+  if (r.includes("looped to the barline")) return "len:looped";
   if (r.includes("squeezed")) return "len:squeezed";
   if (r.includes("padded")) return "len:padded";
   if (r.includes("still doesn't add up")) return "len:recount-miss";
