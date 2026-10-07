@@ -62,7 +62,12 @@ function bucket(repair: string): string {
   const r = repair.toLowerCase();
   if (r.includes("structured output unavailable")) return "no-structured";
   if (r.includes("json")) return "json";
-  if (r.includes("add up") || r.includes("beats") || r.includes("overflow") || r.includes("short")) return "bar-length";
+  // bar lengths, by how they were fixed: a beat group or a recount keeps the model's rhythm, a squeeze or pad doesn't
+  if (r.includes("gap kept inside its beat")) return "len:beat-fit";
+  if (r.includes("squeezed")) return "len:squeezed";
+  if (r.includes("padded")) return "len:padded";
+  if (r.includes("still doesn't add up")) return "len:recount-miss";
+  if (r.includes("add up") || r.includes("beats") || r.includes("overflow") || r.includes("short")) return "len:other";
   if (r.includes("range") || r.includes("octave")) return "range";
   if (r.includes("missing")) return "missing";
   if (r.includes("outside the") || r.includes("frame")) return "frame";
@@ -99,6 +104,11 @@ function measure(model: string, mode: string, style: StyleId, runId: string, sco
         if (d && !d.startsWith("@")) written++;
       }
   }
+  // where the talk lands: lines per phrase, and the share said in the second half
+  const P = score?.settings.phraseBars || 4;
+  const jamLines = (score?.chat ?? []).filter((c) => c.phase === "jam" && c.bar !== undefined);
+  const perPhrase = score ? Array.from({ length: Math.ceil(score.frame.bars / P) }, (_, i) => jamLines.filter((c) => Math.floor(c.bar! / P) === i).length) : [];
+  const late = score ? jamLines.filter((c) => c.bar! >= score.frame.bars / 2).length : 0;
   const row = {
     model,
     mode,
@@ -114,6 +124,8 @@ function measure(model: string, mode: string, style: StyleId, runId: string, sco
     usd: Math.round(usd * 1000) / 1000,
     director: DIRECTOR || undefined,
     written: `${written}/${cells}`,
+    recounts: mine.filter((c) => c.label.startsWith("recount")).length,
+    talk: mode === "improviser" ? { perPhrase: perPhrase.join(" "), late: `${late}/${jamLines.length}` } : undefined,
     repairs,
     issues,
   };
