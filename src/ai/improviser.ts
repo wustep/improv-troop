@@ -13,6 +13,7 @@ import { useDebug } from "@/state/debug";
 import { chatMsg, type PipelineHooks } from "./composer";
 import { asRecord, asString, extractJson, parseBarRange } from "./json";
 import { callLLM, LlmError, noteRepair, setParsed } from "./llm";
+import { checkChordNames, TalkGate } from "./talk";
 import { accompanimentFits, applyDefault, asDynamic, asTexture, enforceSlots, resolveMember, usualDirective, validateBarText, validateMotif } from "./merge";
 import { barsSchema, countOffSchema, replySchema } from "./schemas";
 import {
@@ -94,6 +95,7 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
   let started = false;
   const phraseDoneAt: number[] = [];
 
+  const talk = new TalkGate(frame, P);
   const say = (msg: ChatMessage) => {
     chat.push(msg);
     hooks.onChat(msg);
@@ -195,7 +197,7 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
           "",
           `Before you count off, give the band the plan. Reply JSON:
 {
-  "say": "what you tell the band (<= 2 short sentences)",
+  "say": "what you tell the band (<= 2 short sentences; name only chords from the changes above)",
   "motif": "the short cell you'll state in the head, compact notes, 1 bar (or 2 bars with |), in your sweet spot, rhythmically characteristic of the style",
   "motifIdea": "a few words",
   "arc": [{"bars": "1-4", "texture": "sparse|groove|build|peak|breakdown|tutti|stoptime|ostinato", "dynamic": "pp|p|mp|mf|f|ff"}, ... covering bars 1-${frame.bars}],
@@ -235,9 +237,12 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
         if (mm && t) asks[mm.id] = t;
       }
       repairs.forEach((x) => noteRepair(call.id, x));
-      const line = asString(o.say, 220);
+      const line = checkChordNames(asString(o.say, 220) ?? "", frame);
       if (line) say(chatMsg(leader.id, line, "count-off", undefined, "band"));
-      for (const [id, t] of Object.entries(asks)) say(chatMsg(leader.id, t, "count-off", undefined, id));
+      for (const [id, t] of Object.entries(asks)) {
+        const ask = checkChordNames(t, frame);
+        if (ask) say(chatMsg(leader.id, ask, "count-off", undefined, id));
+      }
     } catch (e) {
       if ((e as Error).name === "AbortError") throw e;
       // a bad key stops the jam; anything else (an outage, a timeout) and the leader just counts
@@ -287,7 +292,7 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
           const { value } = extractJson(text);
           const o = asRecord(value);
           setParsed(call.id, o);
-          const line = asString(o.say, 200);
+          const line = checkChordNames(asString(o.say, 200) ?? "", frame);
           if (line) say(chatMsg(m.id, line, "count-off", undefined, leader.id));
           const d = asString(o.default, 60)?.trim();
           if (d && d.startsWith("@")) {
@@ -407,7 +412,7 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
             repairs.forEach((x) => noteRepair(call.id, x));
             if (clean && clean !== "@rest") plan[b].directives = { ...plan[b].directives, [id]: clean };
           }
-          const line = asString(o.say, 160)?.trim();
+          const line = talk.allow(id, asString(o.say, 160)?.trim() ?? "", bars[0], true, chat);
           if (line) say(chatMsg(id, line, "jam", bars[0]));
         } catch (e) {
           if (calledOff(e)) return; // autopilot already played these bars
@@ -528,8 +533,9 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
               // the song's pickup and written bars aren't the band's to rewrite
               if (clean && !plan[b].directives?.[id]?.startsWith("@tune")) plan[b].directives = { ...plan[b].directives, [id]: clean };
             }
-            const line = asString(o.say, 160)?.trim();
-            if (line) say(chatMsg(id, line, "jam", bars[Math.min(1, bars.length - 1)]));
+            const at = bars[Math.min(1, bars.length - 1)];
+            const line = talk.allow(id, asString(o.say, 160)?.trim() ?? "", at, false, chat);
+            if (line) say(chatMsg(id, line, "jam", at));
           } catch (e) {
             if (calledOff(e)) return; // autopilot already played these bars
             dbg.step(runId, `${m.name} kept their default on bars ${bars[0] + 1}+ (${(e as Error).message})`);

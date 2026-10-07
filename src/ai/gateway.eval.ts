@@ -126,7 +126,7 @@ function measure(model: string, mode: string, style: StyleId, runId: string, sco
   }
   if (OUT) {
     mkdirSync(OUT, { recursive: true });
-    writeFileSync(`${OUT}/${runId}.json`, JSON.stringify({ row, calls: mine.map((c) => ({ ...c, system: undefined })), issues: run?.issues, notes: score?.notes }, null, 1));
+    writeFileSync(`${OUT}/${runId}.json`, JSON.stringify({ row, calls: mine.map((c) => ({ ...c, system: undefined })), issues: run?.issues, notes: score?.notes, chat: score?.chat.map((c) => `${c.phase}${c.bar !== undefined ? `@${c.bar + 1}` : ""} ${c.from}${c.to ? `→${c.to}` : ""}: ${c.text}`) }, null, 1));
   }
 }
 
