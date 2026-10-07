@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { defaultMembers, INSTRUMENTS } from "@/music/instruments";
 import { defaultSettings, generateLocal } from "@/music/local";
 import { motifFromText } from "@/music/motif";
+import { parseNotes } from "@/music/notation";
 import { isFeaturedRole } from "@/music/realize";
 import type { Member } from "@/music/types";
 import { accompanimentFits, applyDefault, enforceSlots, mergePlan, registerShift, resolveMember, shiftOctaves, usualDirective, validateBarText, validateMotif } from "./merge";
@@ -116,6 +117,18 @@ describe("validateBarText", () => {
     expect(r.out).toBe("Bb2/8 r/8 G2/8 Bb2/8 Bb2/8 r/8 G2/8 Bb2/8");
     // a horn's short phrase is a phrase, followed by space
     expect(check("C5/4 D5/4", fox).out).toBe("C5/4 D5/4");
+  });
+  it("loops a groove that's a beat or more short instead of leaving the bass silent", () => {
+    // Gemini 2.5 Flash's funk bass: 2½ beats of 16ths for a 4-beat bar
+    const r = check("Bb2/16 r/16 Bb3/16 r/16 Bb2/8 Bb2/16 r/16 Bb3/16 r/16", band[1]);
+    expect(r.repairs.join()).toMatch(/looped to the barline/);
+    expect(r.repairs.join()).not.toMatch(/padded/);
+    expect(parseNotes(r.out!, 4).covered).toBe(4);
+    expect(r.out!.startsWith("Bb2/16 r/16 Bb3/16 r/16 Bb2/8")).toBe(true);
+    // half a beat short is a breath, not a lost count
+    expect(check("Bb2/4 F2/4 Bb2/4 r/8", band[1]).repairs.join()).toMatch(/padded/);
+    // and a soloist's short line is a phrase
+    expect(check("C5/4 D5/4 E5/4", fox).repairs.join()).not.toMatch(/looped/);
   });
   it("keeps a short beat's gap inside that beat when the bar is written in beat groups", () => {
     const frog = band[1];

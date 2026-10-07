@@ -177,6 +177,16 @@ export function validateBarText(text: string, member: Member, beats: number, rep
     first = Array.from({ length: Math.round(times) }, () => first).join(" ");
     r = parseNotes(first, beats);
   }
+  // a groove a beat or more short (a 16th riff miscounted) goes round again to the barline rather
+  // than leaving the bass or comping silent for the rest of every bar (Gemini 2.5 Flash's funk charts)
+  if (accompanying && fn !== "melodic" && !r.errors.length && r.notes.length && r.covered >= beats / 2 && beats - r.covered >= 1 - 1e-6) {
+    const looped: NoteEvent[] = [];
+    for (let off = 0; off < beats - 1e-6; off += r.covered)
+      for (const n of r.notes) if (off + n.start < beats - 1e-6) looped.push({ ...n, start: off + n.start, dur: Math.min(n.dur, beats - off - n.start) });
+    repairs.push(`${where}: a ${fmtBeats(r.covered)}-beat groove, looped to the barline`);
+    first = notesToText(looped, beats);
+    r = parseNotes(first, beats);
+  }
   if (r.errors.length) repairs.push(`${where}: ${r.errors.slice(0, 2).join("; ")}`);
   if (r.covered < beats - 1e-6) repairs.push(`${where}: short bar padded with rest`);
   const k = registerShift(r.notes.map((n) => n.pitch), inst.range[0], inst.range[1]);
