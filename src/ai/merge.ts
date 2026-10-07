@@ -102,7 +102,9 @@ export function validateBarText(text: string, member: Member, beats: number, rep
     // "@motif D5/8 F5/8 ...", "@groove light rd:x...": the part written out after a directive is
     // what the player meant (the directive would ignore it). Use it when it reads cleanly.
     const words = t.split("\n")[0].split(/\s+/);
-    const at = words.findIndex((w, i) => i > 0 && (WRITTEN_START.test(w) || /^[a-z0-9]{1,5}:[xXgo.\-|]/.test(w)));
+    // (not @end: the ending is the band's, a held chord the code voices with everyone)
+    if (words[0] === "@end") t = "@end";
+    const at = words[0] === "@end" ? -1 : words.findIndex((w, i) => i > 0 && (WRITTEN_START.test(w) || /^[a-z0-9]{1,5}:[xXgo.\-|]/.test(w)));
     if (at > 0) {
       const written = words.slice(at).join(" ");
       const grid = looksLikeDrumGrid(written);

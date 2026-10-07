@@ -101,6 +101,7 @@ describe("validateBarText", () => {
     // words after a directive that aren't notes stay its business
     expect(check("@comp sparse Bbmaj7 rootless hits", bear).out).toMatch(/^@comp sparse/);
     expect(check("C5/4 D5/4 E5/2 @end", fox)).toEqual({ out: "C5/4 D5/4 E5/2", repairs: [] });
+    expect(check("@end [Bb2 F3 D4]/1", bear).out).toBe("@end");
   });
   it("reads accents written before the duration or on their own", () => {
     expect(check("Bb1>/16 r/16 r/8 r/4 r/2", band[1]).repairs.join()).not.toMatch(/bad token/);
