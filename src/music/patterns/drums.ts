@@ -102,6 +102,20 @@ function gridFor(ctx: BarCtx, which: "base" | "light" | "peak"): string {
   if (ctx.style.id === "bossa" && ctx.beats === 4) {
     text += ctx.bar % 2 === 0 ? " rim:x.....x.....x..." : " rim:....x.....x.....";
   }
+  if (ctx.style.id === "swing") {
+    // the ride pattern breathes bar to bar: now and then the last skip note drops, or one is
+    // added after the one, so a long tune isn't one bar on repeat
+    const vary = hashString(`${ctx.seed}:ride:${ctx.bar}`) % 5;
+    text = text.replace(/rd:(\S+)/, (_, lane: string) => {
+      const steps = lane.split("");
+      const lastSkip = ctx.beats * 4 - 2;
+      if (vary === 1 && steps[lastSkip] !== ".") steps[lastSkip] = ".";
+      if (vary === 2 && steps[2] === ".") steps[2] = "g";
+      return `rd:${steps.join("")}`;
+    });
+    // the head and intro sit on the closed hi-hat; the drummer moves to the ride for the solos
+    if ((ctx.section.kind === "intro" || ctx.section.kind === "head") && which !== "peak") text = text.replace("rd:", "hh:");
+  }
   return text;
 }
 

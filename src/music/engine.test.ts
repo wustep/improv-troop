@@ -237,6 +237,17 @@ describe("melodic hygiene", () => {
 });
 
 describe("style feel in the rhythm section", () => {
+  it("swing: hi-hat under the head, ride under the solos, and the ride varies bar to bar", () => {
+    const { score } = generateLocal({ ...defaultSettings(band), style: "swing", seed: 4, bars: 32 }, band);
+    const drums = score.parts.owl;
+    const inKind = (kind: string) => score.frame.sections.filter((s) => s.kind === kind).flatMap((s) => drums.filter((n) => n.start >= s.start * 4 && n.start < (s.start + s.length) * 4));
+    const head = inKind("head");
+    const solo = inKind("solo");
+    expect(head.filter((n) => n.pitch === DRUM.hatClosed).length).toBeGreaterThan(head.filter((n) => n.pitch === DRUM.ride).length);
+    expect(solo.filter((n) => n.pitch === DRUM.ride).length).toBeGreaterThan(solo.filter((n) => n.pitch === DRUM.hatClosed).length);
+    const ridePerBar = new Set(Array.from({ length: 32 }, (_, b) => drums.filter((n) => n.pitch === DRUM.ride && n.start >= b * 4 && n.start < b * 4 + 4).map((n) => n.start - b * 4).join()));
+    expect(ridePerBar.size).toBeGreaterThan(2);
+  });
   const cat: Member = { id: "cat", animal: "cat", name: "Mochi", instrument: "sax" };
   const gtr: Member = { id: "penguin", animal: "penguin", name: "Pip", instrument: "guitar" };
   const take = (style: StyleId, seed: number, extra: Partial<ReturnType<typeof defaultSettings>> = {}) =>
