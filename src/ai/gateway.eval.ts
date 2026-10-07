@@ -23,12 +23,16 @@ const MODES = (process.env.EVAL_MODES ?? "composer,improviser").split(",");
 const STYLES = (process.env.EVAL_STYLES ?? "swing").split(",") as StyleId[];
 const BARS = Number(process.env.EVAL_BARS ?? 16);
 const OUT = process.env.EVAL_OUT ?? "";
+// the director (composer, improviser's leader) on its own model; players on the model under test
+const DIRECTOR = process.env.EVAL_DIRECTOR ?? "";
+const STANDARD = process.env.EVAL_STANDARD ?? null;
 
 // Rough list prices, $ per million tokens (input, output), for the spend estimate only.
 const PRICE: Record<string, [number, number]> = {
   "anthropic/claude-haiku-4.5": [1, 5],
   "anthropic/claude-sonnet-4.6": [3, 15],
   "anthropic/claude-sonnet-5.5": [3, 15],
+  "anthropic/claude-opus-5.5": [5, 25],
   "google/gemini-2.5-flash": [0.3, 2.5],
   "google/gemini-3.8-flash": [0.5, 3],
   "openai/gpt-5.4-mini": [0.25, 2],
@@ -126,7 +130,7 @@ describe("gateway eval", () => {
     for (const style of STYLES)
       for (const mode of MODES) {
         it(`${mode} · ${style} · ${model}`, { timeout: 600_000 }, async () => {
-          const runId = `${mode}-${style}-${model.replace(/\W+/g, "_")}`;
+          const runId = `${mode}-${STANDARD ?? style}-${DIRECTOR ? `${DIRECTOR.replace(/\W+/g, "_")}+` : ""}${model.replace(/\W+/g, "_")}`;
           const settings = {
             ...defaultSettings(band),
             mode: mode as "composer" | "improviser",
@@ -134,7 +138,8 @@ describe("gateway eval", () => {
             bars: BARS,
             bestOf: 2,
             soloists: ["bear"],
-            directorModel: model,
+            directorModel: DIRECTOR || model,
+            standard: STANDARD,
             playerModel: model,
             seed: 11,
           };

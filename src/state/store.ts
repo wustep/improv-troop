@@ -27,6 +27,8 @@ interface TroopState {
   members: Member[];
   settings: TroopSettings;
   apiKey: string;
+  /** The server has its own gateway key (IMPROV_TROOP_SERVER_KEY), so the band can think without one here. */
+  serverKey: boolean;
   pianoPack: PianoPack;
   current: Score | null;
   /** True when `current` is the local sketch for the current settings. */
@@ -183,6 +185,7 @@ export const useTroop = create<TroopState>((set, get) => {
     members: defaultMembers(),
     settings: defaultSettings(defaultMembers()),
     apiKey: "",
+    serverKey: false,
     pianoPack: "salamander",
     current: null,
     isSketch: true,
@@ -210,6 +213,10 @@ export const useTroop = create<TroopState>((set, get) => {
         /* ignore */
       }
       set({ hydrated: true, members, settings, apiKey: saved.apiKey ?? "", pianoPack: saved.pianoPack ?? "salamander", takes: loadTakes(), seenIntro });
+      void fetch("/api/llm")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d: { serverKey?: boolean } | null) => set({ serverKey: !!d?.serverKey }))
+        .catch(() => {});
       endedUnsub?.();
       endedUnsub = troopAudio.onEnded(() => {
         stopLiveWatch();
@@ -305,7 +312,7 @@ export const useTroop = create<TroopState>((set, get) => {
       persist();
 
       // No key: the stub band plays a fresh local take.
-      if (!st.apiKey) {
+      if (!st.apiKey && !st.serverKey) {
         const { score } = generateLocal(settings, members);
         const take: Take = { id: score.id, score, label: `${STYLES[settings.style].name} sketch`, engine: "local", createdAt: Date.now() };
         set((s) => ({ current: score, isSketch: false, takes: addTake(s.takes, take), chat: [], readyBars: null, autopilotBars: [] }));
@@ -491,3 +498,6 @@ export const useTroop = create<TroopState>((set, get) => {
     },
   };
 });
+
+/** The band can call models: a key in this browser, or one the server lends. */
+export const canThink = (s: Pick<TroopState, "apiKey" | "serverKey">) => !!s.apiKey || s.serverKey;

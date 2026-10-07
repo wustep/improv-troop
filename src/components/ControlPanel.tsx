@@ -123,6 +123,8 @@ export function ControlPanel() {
   const s = useTroop((x) => x.settings);
   const members = useTroop((x) => x.members);
   const apiKey = useTroop((x) => x.apiKey);
+  const serverKey = useTroop((x) => x.serverKey);
+  const thinks = apiKey || serverKey;
   const pianoPack = useTroop((x) => x.pianoPack);
   const set = useTroop((x) => x.setSettings);
   const setStyle = useTroop((x) => x.setStyle);
@@ -144,7 +146,7 @@ export function ControlPanel() {
   return (
     <RoughBox seed="panel" rough={{ weight: "l" }} className="panel-paper w-full p-m" as="aside" aria-label="Band settings">
       <Field>
-        <Label hint={apiKey ? undefined : "how they think, once they have a key"}>Mode</Label>
+        <Label hint={thinks ? undefined : "how they think, once they have a key"}>Mode</Label>
         <div className="grid grid-cols-2 gap-xs">
           <RoughButton seed="mode-imp" active={s.mode === "improviser"} onClick={() => set({ mode: "improviser" })} className="px-xs py-xs text-left">
             <div className="type-label">Improviser</div>
@@ -309,7 +311,7 @@ export function ControlPanel() {
       </Field>
 
       {/* only the model-driven band talks in rounds; without a key it does nothing */}
-      {s.mode === "improviser" && apiKey && (
+      {s.mode === "improviser" && thinks && (
         <Field>
           <Label hint="how much each player writes before the band answers">Phrase</Label>
           <div className="flex gap-xs">
@@ -348,6 +350,10 @@ export function ControlPanel() {
             {apiKey ? (
               <p className="mt-xxs text-xs text-ink-soft">
                 Saved in this browser. The big button now says <b>{s.mode === "composer" ? "Compose!" : "Let them jam!"}</b>, and models are only called when you press it.
+              </p>
+            ) : serverKey ? (
+              <p className="mt-xxs text-xs text-ink-soft">
+                This server lends the band its own key, so they can think already. Add yours to spend your own credits.
               </p>
             ) : (
               <p className="mt-xxs text-xs text-ink-soft">

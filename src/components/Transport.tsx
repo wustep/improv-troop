@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { troopAudio, type LoadState } from "@/audio/engine";
 import { INSTRUMENTS } from "@/music/instruments";
 import { canShare, shareUrl } from "@/state/share";
-import { useTroop } from "@/state/store";
+import { canThink, useTroop } from "@/state/store";
 import { openBrains } from "./ControlPanel";
 import { RoughButton } from "./ui/rough";
 
@@ -25,7 +25,7 @@ export function Transport() {
   const mode = useTroop((s) => s.settings.mode);
   const bestOf = useTroop((s) => s.settings.bestOf);
   const set = useTroop((s) => s.setSettings);
-  const hasKey = useTroop((s) => !!s.apiKey);
+  const hasKey = useTroop(canThink);
   const current = useTroop((s) => s.current);
   const isSketch = useTroop((s) => s.isSketch);
   const audioError = useTroop((s) => s.audioError);

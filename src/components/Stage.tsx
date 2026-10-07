@@ -5,7 +5,7 @@ import { AnimalSprite, IDLE_STATE, isPhrasing, type SpriteHandle } from "@/art/A
 import { troopAudio } from "@/audio/engine";
 import { ANIMALS, INSTRUMENTS } from "@/music/instruments";
 import { useDebug } from "@/state/debug";
-import { useTroop } from "@/state/store";
+import { canThink, useTroop } from "@/state/store";
 import { openBrains } from "./ControlPanel";
 import { FormMap } from "./FormMap";
 import { Bunting } from "./stage/Bunting";
@@ -46,6 +46,7 @@ function bubbleFit(i: number, n: number, perRow: number, spriteW: number, width:
 }
 
 function IntroNote({ onClose }: { onClose: () => void }) {
+  const thinks = useTroop(canThink);
   return (
     <div className="sticky-note relative z-30 mx-auto mt-m w-full max-w-[19rem] -rotate-[1deg] px-s py-xs text-m lg:max-w-[46rem] lg:-rotate-[0.6deg]" role="note">
       <button type="button" onClick={onClose} className="absolute right-xs top-xxs text-l text-ink-soft transition-colors duration-(--motion-duration) hover:text-ink" aria-label="Dismiss">
@@ -58,12 +59,18 @@ function IntroNote({ onClose }: { onClose: () => void }) {
           <span className="lg:hidden">(just below)</span>
         </li>
         <li>Press ▶ to hear their sketch</li>
-        <li>
-          <button type="button" className="text-action" onClick={openBrains}>
-            Add a gateway key
-          </button>
-          , then <b>Let them jam!</b> to make them think it through
-        </li>
+        {thinks ? (
+          <li>
+            <b>Let them jam!</b> to make them think it through
+          </li>
+        ) : (
+          <li>
+            <button type="button" className="text-action" onClick={openBrains}>
+              Add a gateway key
+            </button>
+            , then <b>Let them jam!</b> to make them think it through
+          </li>
+        )}
       </ol>
       <div className="mt-xxs text-xs text-ink-soft">Tap a name to mute them. Tap the form strip to jump around.</div>
     </div>

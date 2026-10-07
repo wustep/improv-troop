@@ -46,6 +46,11 @@ function isAuthError(e: CallError) {
   return status === 401 || status === 403 || /unauthenticated|invalid api key|authentication/i.test(e.message ?? "");
 }
 
+/** Whether this server lends the band its own key (never the key itself), so the UI can let them think without one. */
+export async function GET() {
+  return Response.json({ serverKey: !!process.env.IMPROV_TROOP_SERVER_KEY?.trim() });
+}
+
 export async function POST(req: Request) {
   const t0 = performance.now();
   let body: Body;
