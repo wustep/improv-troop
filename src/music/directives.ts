@@ -16,7 +16,7 @@ import type { NoteEvent } from "./types";
 // The vocabulary planners use for each bar. Models see DIRECTIVE_HELP verbatim.
 
 export const DIRECTIVE_HELP = `Each bar of each player's part is ONE of:
-- explicit notes: "E4/8 G4/8 Bb4/4 r/4 [C4 E4 G4]/4" (pitch/duration; 1 2 4 8 16; "." dotted; "t" triplet; "r" rest; [..] chord; "~" tie; ">" accent; "'" staccato). Durations must add up to the bar: 4 = 1 beat, 8 = ½, 16 = ¼, 2 = 2. One bar per string, never two bars' worth.
+- explicit notes: "E4/8 G4/8 Bb4/4 r/4 [C4 E4 G4]/4" (pitch/duration; 1 2 4 8 16; "." dotted; "t" triplet; "r" rest; [..] chord; "~" tie; ">" accent; "'" staccato). Durations must add up to the bar: 4 = 1 beat, 8 = ½, 16 = ¼, 2 = 2. One bar per string, never two bars' worth. Busy 16ths: commas between beats, each group one beat.
 - drum grid (drums only): "rd:x...x.x.x...x.x. ph:....x.......x... sd:..g.......X..... bd:x.......x......." lanes bd sd hh oh ph rd cr t1 t2 ft rim sh tamb cb; x hit, X accent, g ghost, . rest; 16 steps = 16ths in 4/4 (12 in 3/4).
 - a directive the band's engine realizes in style:
   @motif [up N|down N|seq N|invert|retro|aug|dim|frag N|displace 0.5|ornament|rhythm] [bar2]  — the shared motif or a transform of it (up/down/seq count scale steps: 7 = an octave; "bar2" = 2nd bar of a 2-bar statement)

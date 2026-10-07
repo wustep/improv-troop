@@ -260,6 +260,42 @@ function durSpecOf(beats: number): string {
 
 const pcOfName = (name: string) => parsePitch(`${name}4`)!;
 
+/**
+ * A bar written in beat groups ("Bb2/16 r/16 F3/16, G3/16 Ab3/16 G3/16, ...") where a group came
+ * up short or long: the gap is a rest inside that beat (an extra is squeezed out of it), so every
+ * later group still starts on its beat.
+ * Counting a long run of 16ths, models drop one here and there; padding at the end of the bar
+ * instead shifts everything after the slip off the grid. Null when the bar isn't in beat groups
+ * (more groups than beats, a group that won't fit its beat) or every group fit.
+ */
+export function fitBeatGroups(text: string, beats: number): string | null {
+  if (!text.includes(",")) return null;
+  const groups = text.split(",").map((g) => g.trim()).filter(Boolean);
+  if (groups.length < 2 || groups.length > beats) return null;
+  let changed = false;
+  const out: string[] = [];
+  for (const g of groups) {
+    const r = parseNotes(g, 8);
+    if (r.errors.length) return null;
+    if (r.covered > 1 + 1e-6) {
+      // a beat with too much in it gives up the extra inside the beat
+      const squeezed = squeezeBar(g, 1);
+      if (!squeezed) return null;
+      out.push(squeezed);
+      changed = true;
+      continue;
+    }
+    const gap = 1 - r.covered;
+    if (gap > 1e-6) {
+      const spec = specFor(gap) ?? (Math.abs(gap - 0.25 * 3) < 1e-6 ? "8." : null);
+      if (!spec) return null;
+      out.push(`${g} r/${spec}`);
+      changed = true;
+    } else out.push(g);
+  }
+  return changed ? out.join(", ") : null;
+}
+
 const CHORD_SYMBOL = /^([A-G][#b]?)(m|maj|min|dim|aug|sus|add|ø|°|\+|-|6|7|9|11|13)[A-Za-z0-9#b+°ø()]*(\/[A-G][#b]?)?$/;
 
 /**
@@ -269,7 +305,7 @@ const CHORD_SYMBOL = /^([A-G][#b]?)(m|maj|min|dim|aug|sus|add|ø|°|\+|-|6|7|9|1
  * "Cm2" (a minor-chord letter with an octave) is read as the pitch C2, and "[Bb D F A]" (no
  * octaves) is stacked up from `low`.
  */
-export function spellChordSymbols(text: string, low: number, bassist: boolean): { text: string; fixed: number } {
+export function spellChordSymbols(text: string, low: number, bassist: boolean, high?: number): { text: string; fixed: number } {
   let fixed = 0;
   let prev: number | null = null;
   const voice = (sym: string): string => {
@@ -288,7 +324,9 @@ export function spellChordSymbols(text: string, low: number, bassist: boolean): 
     return `[${out.map((x) => pitchName(x, true)).join(" ")}]`;
   };
   const one = (word: string): string | null => {
-    if (parsePitch(word) !== null) return null;
+    const asPitch = parsePitch(word);
+    // "F7", "Bb9" far above the part's register are chords, not notes (MIDI 101, 130)
+    if (asPitch !== null && !(high !== undefined && asPitch > high && /^[A-G][#b]?(6|7|9|11|13)$/.test(word))) return null;
     const octave = /^([A-G][#b]?)m([0-5])$/.exec(word);
     if (octave) return `${octave[1]}${octave[2]}`;
     return CHORD_SYMBOL.test(word) ? voice(word) : null;
@@ -302,7 +340,7 @@ export function spellChordSymbols(text: string, low: number, bassist: boolean): 
     const head = durAt > 0 ? body.slice(0, durAt) : body;
     const tail = durAt > 0 ? body.slice(durAt) : "";
     const p = parsePitch(head);
-    if (p !== null) prev = p;
+    if (p !== null && (high === undefined || p <= high)) prev = p;
     if (head.startsWith("[")) {
       const words = head.replace(/^\[|\]$/g, "").trim().split(/\s+/).filter(Boolean);
       const pitches = words.filter((w) => parsePitch(w) !== null);

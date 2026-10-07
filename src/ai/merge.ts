@@ -1,6 +1,6 @@
 import { INSTRUMENTS } from "@/music/instruments";
 import { motifFromText } from "@/music/motif";
-import { looksLikeDrumGrid, notesToText, parseDrumGrid, parseNotes, spellChordSymbols, squeezeBar } from "@/music/notation";
+import { fitBeatGroups, looksLikeDrumGrid, notesToText, parseDrumGrid, parseNotes, spellChordSymbols, squeezeBar } from "@/music/notation";
 import { isFeaturedRole } from "@/music/realize";
 import { fold, keyPrefersFlats } from "@/music/theory";
 import type { BarPlan, Dynamic, Frame, InstrumentFunction, Member, Motif, NoteEvent, Role, Texture } from "@/music/types";
@@ -142,12 +142,21 @@ export function validateBarText(text: string, member: Member, beats: number, rep
   // a multi-bar string in one cell: keep the first bar; a directive tacked on the end ("... @end") goes
   let first = t.split("|")[0].replace(/\s@\w[^]*$/, "").trim();
   const inst = INSTRUMENTS[member.instrument];
-  const spelled = spellChordSymbols(first, fn === "bass" || role === "bass" ? inst.sweet[0] : Math.max(inst.sweet[0], 55), fn === "bass" || role === "bass");
+  const bassist = fn === "bass" || role === "bass";
+  // an accompanying bassist or comper can't mean F7 (MIDI 101) as a note: that's the chord
+  const comping = (bassist || fn === "chordal") && !isFeaturedRole(role);
+  const spelled = spellChordSymbols(first, bassist ? inst.sweet[0] : Math.max(inst.sweet[0], 55), bassist, comping ? inst.sweet[1] : undefined);
   if (spelled.fixed) {
     repairs.push(`${where}: chord symbols written as notes, spelled out`);
     first = spelled.text;
   }
   let r = parseNotes(first, beats);
+  const grouped = fitBeatGroups(first, beats);
+  if (grouped) {
+    repairs.push(`${where}: a beat came up short; the gap kept inside its beat`);
+    first = grouped;
+    r = parseNotes(first, beats);
+  }
   if (r.covered > beats + 1e-6) {
     const squeezed = squeezeBar(first, beats);
     if (squeezed) {

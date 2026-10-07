@@ -92,6 +92,10 @@ describe("validateBarText", () => {
     expect(check("[Gm7 B3 D4]/8 r/8 Cm7/4 r/2", bear).out).toBe("[B3 D4]/8 r/8 [C4 Eb4 G4 Bb4]/4 r/2");
     expect(check("[Gm7 B3 D4]/8 r/8 r/4 r/2", bear).repairs.join()).toMatch(/chord symbols/);
     expect(check("[Bb D F A]/8 r/8 r/4 r/2", bear).out).toBe("[Bb3 D4 F4 A4]/8 r/8 r/4 r/2");
+    // a comper's "F7" or "Bb9" is a chord (as a note it would be MIDI 101 or 130); a soloist's C6 is a note
+    const comp = (t: string) => validateBarText(t, bear, 4, [], "bar 1", "comp");
+    expect(comp("Bb9/16 r/16 F7/16 r/16 r/4 r/2")).toBe("[Bb3 D4 F4 Ab4]/16 r/16 [F4 A4 C5 Eb5]/16 r/16 r/4 r/2");
+    expect(validateBarText("C6/4 B5/4 A5/2", bear, 4, [], "bar 1", "solo")).toBe("C6/4 B5/4 A5/2");
   });
   it("plays a part written out after its directive, and drops a directive tacked on the end", () => {
     const r = check("@motif D5/8 F5/8 r/8 F5/8 D5/8 C5/8 r/8 Bb4/8", fox);
@@ -112,6 +116,17 @@ describe("validateBarText", () => {
     expect(r.out).toBe("Bb2/8 r/8 G2/8 Bb2/8 Bb2/8 r/8 G2/8 Bb2/8");
     // a horn's short phrase is a phrase, followed by space
     expect(check("C5/4 D5/4", fox).out).toBe("C5/4 D5/4");
+  });
+  it("keeps a short beat's gap inside that beat when the bar is written in beat groups", () => {
+    const frog = band[1];
+    // the second beat has three 16ths: the slip stays in beat 2, beats 3 and 4 stay on their beats
+    const r = check("Bb2/16 r/16 F3/16 G3/16, Ab3/16 G3/16 F3/16, Bb2/16 C3/16 D3/16 C3/16, Bb2/16 r/16 Bb3/8", frog);
+    expect(r.out).toBe("Bb2/16 r/16 F3/16 G3/16, Ab3/16 G3/16 F3/16 r/16, Bb2/16 C3/16 D3/16 C3/16, Bb2/16 r/16 Bb3/8");
+    expect(r.repairs.join()).toMatch(/inside its beat/);
+    // a beat with too much in it is squeezed inside the beat
+    expect(check("Bb4/16 r/16 Bb4/8 C5/16 Bb4/16, F4/8 r/8, Bb4/8 C5/8, F4/8 D4/8", fox).out).toBe("Bb4/16 Bb4/16 C5/16 Bb4/16, F4/8 r/8, Bb4/8 C5/8, F4/8 D4/8");
+    // a note held across a beat isn't beat groups: left to the usual checks
+    expect(check("C5/8 D5/4, E5/8 F5/2", fox).out).toBe("C5/8 D5/4, E5/8 F5/2");
   });
   it("leaves a line alone when moving it wouldn't fit more notes", () => {
     expect(check("C5/4 D5/4 E5/4 G5/4", fox).repairs).toEqual([]);
