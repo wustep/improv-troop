@@ -57,7 +57,7 @@ function describeBars(bars: number[], frame: Frame, plan: BarPlan[], memberId: s
     .join("\n");
 }
 
-const REPLY_SHAPE = (bars: number[]) => `{"bars": {${bars.map((b) => `"${b + 1}": "..."`).join(", ")}}, "say": "optional: a short line to the band or a bandmate (<= 12 words), or \\"\\""}`;
+const REPLY_SHAPE = (bars: number[]) => `{"bars": {${bars.map((b) => `"${b + 1}": "..."`).join(", ")}}, "say": "optional: a short line to the band or a bandmate (<= 12 words) about something you just heard or are about to play, or \\"\\" (most phrases need none)"}`;
 
 export function startImproviser(settings: TroopSettings, members: Member[], hooks: PipelineHooks): ImprovController {
   const { runId, apiKey, signal } = hooks;
@@ -274,7 +274,7 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
               "",
               `Your usual accompaniment directive right now: ${usualDirective(plan, m.id) ?? "@rest"}`,
               "Directives you can use when accompanying: @walk @two @bossa @funk @baroque @pedal @pump (bass) · @comp [sparse|busy] @pulse [sparse|busy] @stride @arp @prelude @continuo @pad @shimmer (chords) · @guide @harmony @canon @riff @counter (horns/strings) · @pizz [sparse|busy] @arco (cello) · @groove [light|peak] (drums).",
-              `Reply JSON: {"say": "<= 1 short sentence back to ${leader.name} or the band", "default": "your go-to directive when you're accompanying"}`,
+              `Reply JSON: {"say": "<= 1 short sentence back to ${leader.name} or the band, in your own voice, about something specific in the plan (no stock opener like \"Got it\")", "default": "your go-to directive when you're accompanying"}`,
             ]
               .filter(Boolean)
               .join("\n"),
