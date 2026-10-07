@@ -47,6 +47,10 @@ interface BowGeo {
   bowDir: Pt;
   tilt: number; // degrees between outer strings
   bowLen: number;
+  /** Where the bowing hand plucks string i (pizz), in local coords. */
+  pluck: (i: number) => Pt;
+  /** World direction the tucked bow points while plucking. */
+  park: Pt;
   place: (c: RigCtx, f: Frame) => Mat;
 }
 
@@ -73,7 +77,13 @@ function bowedUpdate(geo: BowGeo, c: RigCtx, f: Frame) {
     m.bs = 0.3;
     m.travel = 0.4;
   }
+  if (m.pluckT === undefined) m.pluckT = -Infinity;
   newOnsets(c, f, (o) => {
+    // a plucked note doesn't move the bow
+    if (o.art === "pizz") {
+      m.pluckT = f.t - o.age;
+      return;
+    }
     m.dir = -m.dir;
     m.s0 = m.bs;
     const sounding = f.s.active.find((a) => a.pitch === o.pitch && Math.abs(a.age - o.age) < 0.03);
@@ -83,7 +93,12 @@ function bowedUpdate(geo: BowGeo, c: RigCtx, f: Frame) {
     if (m.dir > 0 && m.s0 + m.travel > 0.95) m.s0 = Math.max(0.05, 0.95 - m.travel);
     if (m.dir < 0 && m.s0 - m.travel < 0.05) m.s0 = Math.min(0.95, 0.05 + m.travel);
   });
-  if (n) {
+  // Pizz or arco? Follow the newest note (or the most recent onset).
+  const lastArt = n?.art ?? f.s.recent[0]?.art;
+  const pizzNow = lastArt === "pizz" && (!!n || (f.s.recent[0]?.age ?? Infinity) < 1.5);
+  m.pz = (m.pz ?? 0) + ((pizzNow ? 1 : 0) - (m.pz ?? 0)) * approach(f.dt, pizzNow ? 0.06 : 0.18);
+  const pz = m.pz;
+  if (n && n.art !== "pizz") {
     const target = m.s0 + m.dir * m.travel * Math.min(1, n.progress * 1.05);
     m.bs = clamp(target, 0.04, 0.96);
   }
@@ -94,10 +109,21 @@ function bowedUpdate(geo: BowGeo, c: RigCtx, f: Frame) {
   // Lift the bow off the string when silent for a while.
   const quiet = !n && f.s.nextOnsetIn > 0.5;
   m.lift = (m.lift ?? 0) + ((quiet ? 1 : 0) - (m.lift ?? 0)) * approach(f.dt, 0.12);
-  const perp = { x: u.y, y: -u.x };
-  const off = { x: perp.x * m.lift * 7, y: perp.y * m.lift * 7 };
-  const frog = { x: Cs.x - u.x * m.bs * geo.bowLen + off.x, y: Cs.y - u.y * m.bs * geo.bowLen + off.y };
-  const tip = { x: frog.x + u.x * geo.bowLen, y: frog.y + u.y * geo.bowLen };
+  const perp0 = { x: u.y, y: -u.x };
+  const off = { x: perp0.x * m.lift * 7, y: perp0.y * m.lift * 7 };
+  const arcoFrog = { x: Cs.x - u.x * m.bs * geo.bowLen + off.x, y: Cs.y - u.y * m.bs * geo.bowLen + off.y };
+  // pizz: the bowing hand plucks at the end of the fingerboard, the bow tucked in its palm
+  const pAge = f.t - m.pluckT;
+  const pull = pAge < 0.1 ? Math.sin((pAge / 0.1) * (Math.PI / 2)) : Math.exp(-(pAge - 0.1) / 0.12);
+  const ready = f.s.nextOnsetIn < 0.15 ? 1 - f.s.nextOnsetIn / 0.15 : 0;
+  const flick = Math.max(0, pull * (1 - ready)) * 5;
+  const pl = geo.pluck(Math.round(m.strS));
+  const pluck = ap(W, pl.x, pl.y + flick);
+  const bowHand = { x: arcoFrog.x + (pluck.x - arcoFrog.x) * pz, y: arcoFrog.y + (pluck.y - arcoFrog.y) * pz };
+  const dn = norm(u.x + (geo.park.x - u.x) * pz, u.y + (geo.park.y - u.y) * pz);
+  const perp = { x: dn.y, y: -dn.x };
+  const frog = { x: bowHand.x - dn.x * 4 * pz, y: bowHand.y - dn.y * 4 * pz };
+  const tip = { x: frog.x + dn.x * geo.bowLen, y: frog.y + dn.y * geo.bowLen };
   c.bag.set("hair", "x1", frog.x);
   c.bag.set("hair", "y1", frog.y);
   c.bag.set("hair", "x2", tip.x);
@@ -117,7 +143,7 @@ function bowedUpdate(geo: BowGeo, c: RigCtx, f: Frame) {
   // vibrato on long notes
   const vib = n && n.durSec > 0.5 && n.progress > 0.2 ? Math.sin(f.t * 34) * 1.2 : 0;
   f.arms.R = { hand: { x: hand.x + vib, y: hand.y }, bend: -16, pawRot: -30 };
-  f.arms.L = { hand: frog, bend: 18, pawRot: 10 };
+  f.arms.L = { hand: bowHand, bend: 18, pawRot: 10 + pz * 40 };
 
   // String shimmer.
   for (let i = 0; i < 4; i++) {
@@ -126,7 +152,7 @@ function bowedUpdate(geo: BowGeo, c: RigCtx, f: Frame) {
     c.bag.op("str" + i, on ? 1 : 0.8);
   }
   f.look.bliss = !!n && n.durSec > 0.9 && n.progress > 0.2;
-  f.look.lean = (m.bs - 0.5) * -4;
+  f.look.lean = (m.bs - 0.5) * -4 * (1 - pz);
 }
 
 function bowParts(c: RigCtx) {
@@ -148,6 +174,8 @@ const VIOLIN: BowGeo = {
   bowDir: norm(1, 0.25),
   tilt: -16,
   bowLen: 98,
+  pluck: (i) => ({ x: 0, y: 2.4 - i * 1.6 }),
+  park: norm(-0.86, 0.5),
   place: (c, f) => {
     const m = c.mem;
     const sway = Math.sin(f.t * 1.4) * (f.s.active.length ? 2 : 0.6);
@@ -577,6 +605,7 @@ export const guitar: Rig = {
         if (T - m.sT > 0.03) {
           m.sdir = -m.sdir;
           m.sT = T;
+          m.sFrom = m.hyLast ?? -12 * m.sdir;
         }
       } else {
         m.pT = T;
@@ -596,17 +625,23 @@ export const guitar: Rig = {
 
     const sAge = f.t - m.sT;
     const pAge = f.t - m.pT;
+    // Strums cross the strings over the sound hole and follow through a little; between
+    // strums the hand drifts back to hover just past the strings, not parked at the body's edge.
     let hy: number;
-    let hx = -10;
+    let hx = 0;
     if (sAge <= pAge) {
       const k = clamp(sAge / 0.085, 0, 1);
       const e = 1 - (1 - k) * (1 - k);
-      hy = m.sdir > 0 ? -16 + 32 * e : 16 - 32 * e;
+      const settle = clamp((sAge - 0.12) / 0.3, 0, 1);
+      const reach = 12 - 6 * settle * settle * (3 - 2 * settle);
+      const from = m.sFrom ?? -12 * m.sdir;
+      hy = from + (m.sdir * reach - from) * e;
     } else {
       const flick = hit(pAge, 0.06);
       hy = GTR_Y(m.pStr) + 2 + flick * 4;
-      hx = -10 + flick * 3;
+      hx = -4 + flick * 3;
     }
+    m.hyLast = hy;
     f.arms.L = { hand: ap(W, hx, hy), bend: 16, pawRot: 40 };
     for (let i = 0; i < 6; i++) {
       const ring = f.s.active.length && Math.min(sAge, pAge) < 1.5 ? hit(Math.min(sAge, pAge), 0.3) : 0;
