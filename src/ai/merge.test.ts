@@ -93,6 +93,25 @@ describe("validateBarText", () => {
     expect(check("[Gm7 B3 D4]/8 r/8 r/4 r/2", bear).repairs.join()).toMatch(/chord symbols/);
     expect(check("[Bb D F A]/8 r/8 r/4 r/2", bear).out).toBe("[Bb3 D4 F4 A4]/8 r/8 r/4 r/2");
   });
+  it("plays a part written out after its directive, and drops a directive tacked on the end", () => {
+    const r = check("@motif D5/8 F5/8 r/8 F5/8 D5/8 C5/8 r/8 Bb4/8", fox);
+    expect(r.out).toBe("D5/8 F5/8 r/8 F5/8 D5/8 C5/8 r/8 Bb4/8");
+    expect(r.repairs.join()).toMatch(/played as written/);
+    expect(check("@groove light rd:x...x.x.x...x.x. sd:....x.......x...", owl).out).toBe("rd:x...x.x.x...x.x. sd:....x.......x...");
+    // words after a directive that aren't notes stay its business
+    expect(check("@comp sparse Bbmaj7 rootless hits", bear).out).toMatch(/^@comp sparse/);
+    expect(check("C5/4 D5/4 E5/2 @end", fox)).toEqual({ out: "C5/4 D5/4 E5/2", repairs: [] });
+  });
+  it("reads accents written before the duration or on their own", () => {
+    expect(check("Bb1>/16 r/16 r/8 r/4 r/2", band[1]).repairs.join()).not.toMatch(/bad token/);
+    expect(check("C5/4 D5/4 E5/2 >", fox).repairs).toEqual([]);
+  });
+  it("goes round again with a bass figure that fills half the bar", () => {
+    const r = check("Bb2/8 r/8 G2/8 Bb2/8", band[1]);
+    expect(r.out).toBe("Bb2/8 r/8 G2/8 Bb2/8 Bb2/8 r/8 G2/8 Bb2/8");
+    // a horn's short phrase is a phrase, followed by space
+    expect(check("C5/4 D5/4", fox).out).toBe("C5/4 D5/4");
+  });
   it("leaves a line alone when moving it wouldn't fit more notes", () => {
     expect(check("C5/4 D5/4 E5/4 G5/4", fox).repairs).toEqual([]);
     // one stray low note: shifting the rest up would push them out instead

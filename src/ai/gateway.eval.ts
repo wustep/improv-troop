@@ -117,7 +117,7 @@ function measure(model: string, mode: string, style: StyleId, runId: string, sco
   }
   if (OUT) {
     mkdirSync(OUT, { recursive: true });
-    writeFileSync(`${OUT}/${runId}.json`, JSON.stringify({ row, calls: mine.map(({ system: _s, ...c }) => c), issues: run?.issues, notes: score?.notes }, null, 1));
+    writeFileSync(`${OUT}/${runId}.json`, JSON.stringify({ row, calls: mine.map((c) => ({ ...c, system: undefined })), issues: run?.issues, notes: score?.notes }, null, 1));
   }
 }
 

@@ -1,6 +1,6 @@
 import { INSTRUMENTS } from "@/music/instruments";
 import { motifFromText } from "@/music/motif";
-import { looksLikeDrumGrid, notesToText, parseNotes, spellChordSymbols, squeezeBar } from "@/music/notation";
+import { looksLikeDrumGrid, notesToText, parseDrumGrid, parseNotes, spellChordSymbols, squeezeBar } from "@/music/notation";
 import { isFeaturedRole } from "@/music/realize";
 import { fold, keyPrefersFlats } from "@/music/theory";
 import type { BarPlan, Dynamic, Frame, InstrumentFunction, Member, Motif, NoteEvent, Role, Texture } from "@/music/types";
@@ -66,7 +66,7 @@ function movedWords(octaves: number): string {
 const ACCOMPANIMENT: Record<InstrumentFunction, RegExp> = {
   rhythm: /^@(groove)$/,
   bass: /^@(walk|two|bossa|funk|baroque|pedal|pump|groove)$/,
-  chordal: /^@(comp|pulse|stride|arp|prelude|continuo|pad|shimmer|bossa|funk|groove)$/,
+  chordal: /^@(comp|pulse|stride|arp|prelude|continuo|pad|shimmer|bossa|funk|groove|guide)$/,
   melodic: /^@(guide|harmony|canon|riff|counter|pad|arp|comp|shimmer)$/,
 };
 // cellos also pluck and bow
@@ -74,6 +74,8 @@ const CELLO_EXTRA = /^@(pizz|arco)$/;
 // anyone can rest, fill, hit with the band, end, or bring the tune back
 const ANYONE = /^@(rest|end|fill|hits|head|tune)$/;
 // what a featured player can play in their own bars (the last bar can also @end)
+// where written notes start: a pitch, a rest, or a chord
+const WRITTEN_START = /^([A-G][#b]{0,2}-?\d|[rR]\/|\[)/;
 const FEATURED_VOCAB = /^@(motif|line|answer|solo|trade|head|tune|fill|rest|end)$/;
 
 /**
@@ -93,10 +95,24 @@ export function accompanimentFits(directive: string, member: Member, role?: Role
  * featured player's must be a featured part (not comping or a pattern under someone else).
  */
 export function validateBarText(text: string, member: Member, beats: number, repairs: string[], where: string, role?: Role): string | null {
-  const t = text.trim();
+  let t = text.trim();
   if (!t) return null;
   const fn = INSTRUMENTS[member.instrument].fn;
   if (t.startsWith("@")) {
+    // "@motif D5/8 F5/8 ...", "@groove light rd:x...": the part written out after a directive is
+    // what the player meant (the directive would ignore it). Use it when it reads cleanly.
+    const words = t.split("\n")[0].split(/\s+/);
+    const at = words.findIndex((w, i) => i > 0 && (WRITTEN_START.test(w) || /^[a-z0-9]{1,5}:[xXgo.\-|]/.test(w)));
+    if (at > 0) {
+      const written = words.slice(at).join(" ");
+      const grid = looksLikeDrumGrid(written);
+      const readable = grid ? fn === "rhythm" && !parseDrumGrid(written, beats).errors.length : fn !== "rhythm" && !parseNotes(written.split("|")[0], beats).errors.some((e) => /^bad/.test(e));
+      if (readable) {
+        repairs.push(`${where}: ${words[0]} with the part written out; played as written`);
+        return validateBarText(written, member, beats, repairs, where, role);
+      }
+      t = words.slice(0, at).join(" ");
+    }
     const d = t.split("\n")[0].slice(0, 80);
     if (role && !isFeaturedRole(role) && !ANYONE.test(d.split(/\s+/)[0]) && !accompanimentFits(d, member, role)) {
       repairs.push(`${where}: ${d.split(/\s+/)[0]} isn't something ${member.name} plays while accompanying; kept the plan`);
@@ -119,8 +135,8 @@ export function validateBarText(text: string, member: Member, beats: number, rep
     repairs.push(`${where}: notes for drums ignored`);
     return null;
   }
-  // a multi-bar string in one cell: keep the first bar
-  let first = t.split("|")[0].trim();
+  // a multi-bar string in one cell: keep the first bar; a directive tacked on the end ("... @end") goes
+  let first = t.split("|")[0].replace(/\s@\w[^]*$/, "").trim();
   const inst = INSTRUMENTS[member.instrument];
   const spelled = spellChordSymbols(first, fn === "bass" || role === "bass" ? inst.sweet[0] : Math.max(inst.sweet[0], 55), fn === "bass" || role === "bass");
   if (spelled.fixed) {
@@ -139,6 +155,14 @@ export function validateBarText(text: string, member: Member, beats: number, rep
   if (!r.notes.length && !/^(r\/\S+\s*)+$/.test(first)) {
     repairs.push(`${where}: unreadable notes "${first.slice(0, 40)}" (${r.errors[0] ?? "empty"})`);
     return null;
+  }
+  // a bass or comping figure that fills half (or a quarter) of the bar is a riff: it goes round again
+  const accompanying = role ? !isFeaturedRole(role) : fn !== "melodic";
+  const times = beats / r.covered;
+  if (accompanying && fn !== "melodic" && !r.errors.length && r.covered > 0 && times > 1.5 && Math.abs(times - Math.round(times)) < 1e-6) {
+    repairs.push(`${where}: a ${fmtBeats(r.covered)}-beat figure, repeated to fill the bar`);
+    first = Array.from({ length: Math.round(times) }, () => first).join(" ");
+    r = parseNotes(first, beats);
   }
   if (r.errors.length) repairs.push(`${where}: ${r.errors.slice(0, 2).join("; ")}`);
   if (r.covered < beats - 1e-6) repairs.push(`${where}: short bar padded with rest`);

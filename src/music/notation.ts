@@ -74,6 +74,12 @@ export function parseNotes(text: string, beats: number): ParseResult {
 
   for (const tok of tokenize(text)) {
     if (tok === "|") continue;
+    // a mark standing on its own ("F5/4 >") belongs to the note before it
+    if (/^[>'?]+$/.test(tok)) {
+      const last = notes[notes.length - 1];
+      if (last) last.art = tok.endsWith(">") ? "accent" : tok.endsWith("'") ? "staccato" : "ghost";
+      continue;
+    }
     let body = tok;
     let art: NoteEvent["art"] | undefined;
     let tie = false;
@@ -94,6 +100,12 @@ export function parseNotes(text: string, beats: number): ParseResult {
     if (slash > 0) {
       pitchPart = body.slice(0, slash);
       durPart = body.slice(slash + 1);
+    }
+    // marks written before the duration ("Bb1>/16")
+    const early = /[>'?]+$/.exec(pitchPart);
+    if (early) {
+      pitchPart = pitchPart.slice(0, early.index);
+      art ??= early[0].endsWith(">") ? "accent" : early[0].endsWith("'") ? "staccato" : "ghost";
     }
     let dur = lastDur;
     if (durPart !== null) {
