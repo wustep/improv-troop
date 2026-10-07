@@ -10,7 +10,7 @@ import type { ChordChange, Frame, Member, Role, Section, TroopSettings } from ".
 // lead/solo slots are decided here in code; planners (local or model) only fill
 // inside it and are never allowed to change the bar count.
 
-export const FREE_LENGTHS = [8, 12, 16, 24, 32];
+export const FREE_LENGTHS = [8, 16, 24, 32, 48, 64];
 
 /** Styles whose bands count off into a rhythm-section intro before the head. */
 const INTRO_STYLES = new Set<string>(["swing", "bossa", "neworleans", "pop", "funk"]);
@@ -48,7 +48,8 @@ export function defaultStandardLength(standardId: string | null, soloists = 1): 
 export function snapLength(standardId: string | null, bars: number): number {
   const opts = lengthOptions(standardId);
   let best = opts[0];
-  for (const o of opts) if (Math.abs(o - bars) < Math.abs(best - bars)) best = o;
+  // a tie goes to the longer take (a saved 12 from before 12 was dropped becomes 16)
+  for (const o of opts) if (Math.abs(o - bars) <= Math.abs(best - bars)) best = o;
   return best;
 }
 
@@ -270,7 +271,9 @@ export function buildFrame(input: TroopSettings, members: Member[]): Frame {
     if (halfTrade) tradeLen = 0;
     const soloLen = length - tradeLen;
     if (soloLen > 0) {
-      const who = melodicSoloists.length ? melodicSoloists : [leaderId];
+      const named = melodicSoloists.length ? melodicSoloists : [leaderId];
+      // a long original: rather than one soloist stretching past 16 bars, the leader takes a turn first
+      const who = !std && soloLen / named.length > 16 && !named.includes(leaderId) && leaderId !== drummer ? [leaderId, ...named] : named;
       const plans = (std && assignChorusSolos(start, soloLen, who, formLen, std.form)) || assignSolos(start, soloLen, who, soloLen >= 8 ? 4 : 2);
       if (halfTrade && plans.length) {
         const last = plans[plans.length - 1];

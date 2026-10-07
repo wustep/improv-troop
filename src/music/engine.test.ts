@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildFrame, defaultStandardLength, lengthOptions } from "./form";
+import { buildFrame, defaultStandardLength, FREE_LENGTHS, lengthOptions, snapLength } from "./form";
 import { DRUM, INSTRUMENTS, defaultMembers } from "./instruments";
 import { defaultSettings, generateLocal } from "./local";
 import { parseDrumGrid, parseNotes } from "./notation";
@@ -52,7 +52,7 @@ describe("theory", () => {
 
 describe("frame", () => {
   it("locks length and covers every bar with a section", () => {
-    for (const bars of [8, 12, 16, 24, 32]) {
+    for (const bars of FREE_LENGTHS) {
       const s = { ...defaultSettings(band), bars };
       const f = buildFrame(s, band);
       expect(f.bars).toBe(bars);
@@ -61,6 +61,33 @@ describe("frame", () => {
       for (const sec of f.sections) for (let b = sec.start; b < sec.start + sec.length; b++) covered.add(b);
       expect(covered.size).toBe(bars);
     }
+  });
+  it("offers 8 to 64 bars for an original, and no 12", () => {
+    expect(FREE_LENGTHS).toEqual([8, 16, 24, 32, 48, 64]);
+    // a 12 saved before it was dropped comes back as 16
+    expect(snapLength(null, 12)).toBe(16);
+    expect(snapLength(null, 100)).toBe(64);
+  });
+  it("plays a 64-bar jam in every style: every bar played and a solo section", () => {
+    for (const style of STYLE_LIST) {
+      const { score } = generateLocal({ ...defaultSettings(band), style, bars: 64, seed: 3 }, band);
+      expect(score.frame.bars).toBe(64);
+      const beats = score.frame.meter.beats;
+      const end = 64 * beats;
+      const all = Object.values(score.parts).flat();
+      expect(all.every((n) => n.start < end + 1e-6)).toBe(true);
+      // no long hole: every 4 bars someone plays
+      for (let b = 0; b < 64; b += 4) expect(all.some((n) => n.start >= b * beats && n.start < (b + 4) * beats)).toBe(true);
+      expect(score.frame.sections.filter((s) => s.kind === "solo" || s.kind === "trade").length).toBeGreaterThan(0);
+    }
+  });
+  it("shares a long original's solos with the leader instead of one 40-bar solo", () => {
+    const s = { ...defaultSettings(band), bars: 64, soloists: ["bear"] };
+    const solos = buildFrame(s, band).sections.filter((x) => x.kind === "solo");
+    expect(solos.map((x) => x.featured![0])).toEqual([s.leaderId, "bear"]);
+    expect(Math.max(...solos.map((x) => x.length))).toBeLessThanOrEqual(24);
+    // 16 bars: the named soloist alone, as before
+    expect(buildFrame({ ...s, bars: 16 }, band).sections.filter((x) => x.kind === "solo").map((x) => x.featured![0])).toEqual(["bear"]);
   });
   it("snaps standards to whole choruses", () => {
     expect(lengthOptions("f-blues")).toEqual([12, 24, 36, 48, 60, 72]);
