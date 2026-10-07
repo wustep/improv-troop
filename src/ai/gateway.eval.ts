@@ -141,7 +141,7 @@ describe("gateway eval", () => {
             directorModel: DIRECTOR || model,
             standard: STANDARD,
             playerModel: model,
-            seed: 11,
+            seed: Number(process.env.EVAL_SEED ?? 11),
           };
           const t0 = performance.now();
           let score: Score | null = null;

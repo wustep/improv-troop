@@ -32,3 +32,15 @@ pnpm test
 ```
 
 In development, the gateway key `mock` answers with a canned band so you can try the model flows offline.
+
+To let the band think without a key in the browser (your own deployment), set `IMPROV_TROOP_SERVER_KEY` in `.env.local`. Anyone who can reach the server then spends that key, so leave it unset on a public deployment.
+
+### Real-model runs
+
+`pnpm eval:gateway` plays the composer and improviser on real models through the same route and scores each take with the app's own validators (repairs by kind, realize issues, structured-output rate, tokens, a rough cost). It uses `IMPROV_TROOP_SERVER_KEY` and spends credits, so it isn't part of `pnpm test`.
+
+```bash
+EVAL_MODELS=google/gemini-3.8-flash,anthropic/claude-haiku-4.5 \
+EVAL_STYLES=swing,funk EVAL_MODES=composer EVAL_OUT=/tmp/takes pnpm eval:gateway
+# also: EVAL_DIRECTOR (a separate director model), EVAL_STANDARD, EVAL_BARS, EVAL_SEED
+```
