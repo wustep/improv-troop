@@ -1250,6 +1250,8 @@ describe("drum grids from models", () => {
 describe("notes and grids from models, loosely written", () => {
   it("skip unnamed placeholder lanes and join a duration set apart from its pitch", () => {
     expect(parseDrumGrid("cr:x............... ................ ................", 4).errors).toEqual([]);
+    expect(parseNotes(">Eb5/8' F5/8 G5/4 r/2", 4).errors).toEqual([]);
+    expect(parseNotes(">Eb5/8 F5/8 G5/4 r/2", 4).notes[0].art).toBe("accent");
     const r = parseNotes("C5/4 D5 /8~ D5/8 E5/2", 4);
     expect(r.errors).toEqual([]);
     expect(r.covered).toBe(4);

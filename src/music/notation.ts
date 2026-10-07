@@ -84,6 +84,12 @@ export function parseNotes(text: string, beats: number): ParseResult {
     }
     let body = tok;
     let art: NoteEvent["art"] | undefined;
+    // a mark written in front of the note (">Eb5/8")
+    const lead = /^[>'?]+(?=[A-Ga-grR[])/.exec(body);
+    if (lead) {
+      art = lead[0].startsWith(">") ? "accent" : lead[0].startsWith("'") ? "staccato" : "ghost";
+      body = body.slice(lead[0].length);
+    }
     let tie = false;
     // suffixes, in any order
     for (;;) {
