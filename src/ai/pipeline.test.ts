@@ -245,3 +245,28 @@ describe("band talk", () => {
     expect(trimSpeech("short")).toBe("short");
   });
 });
+
+describe("the judge", () => {
+  it("can't favour a plan by its label: 'candidate 1' is whichever plan was shown first", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body ?? "{}"));
+        // a judge that always loves candidate 1
+        const text = body.schemaName === "judgement"
+          ? JSON.stringify({ scores: [{ candidate: 1, distinctiveness: 9, coherence: 9, note: "" }, { candidate: 2, distinctiveness: 5, coherence: 5, note: "" }], best: 1, summary: "" })
+          : fakeModel(body);
+        return new Response(JSON.stringify({ text, serverMs: 5 }), { status: 200 });
+      }),
+    );
+    const chosen = new Set<number>();
+    for (let seed = 1; seed <= 8; seed++) {
+      const settings = { ...defaultSettings(band), mode: "composer" as const, bestOf: 2, seed, soloists: ["bear"] };
+      const score = await runComposer(settings, band, hooks(`t-judge-${seed}`));
+      chosen.add(score.critic!.chosen);
+      // the scores are filed under the plans they were about
+      expect(score.critic!.scores.find((s) => s.candidate === score.critic!.chosen)!.score).toBe(9);
+    }
+    expect([...chosen].sort()).toEqual([1, 2]);
+  });
+});

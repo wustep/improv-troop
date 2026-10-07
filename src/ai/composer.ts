@@ -182,29 +182,34 @@ export function pickCandidate(scores: CriticScore[], best: number, indexes: numb
   return leaders.includes(best) ? best : Math.min(...leaders);
 }
 
-function criticPrompt(frame: ReturnType<typeof buildFrame>, cands: Candidate[], seed: number): string {
+/**
+ * The judge's prompt, the candidates shuffled and numbered in the order shown: judges favour
+ * "candidate 1" (gateway models picked #1 in 10 of 12 takes when it was always the first plan),
+ * so the label carries no history. `order[k]` is the candidate shown as k + 1.
+ */
+function criticPrompt(frame: ReturnType<typeof buildFrame>, cands: Candidate[], seed: number): { prompt: string; order: Candidate[] } {
   const style = STYLES[frame.style];
-  // shown in a shuffled order (labels kept) so the judge's position bias doesn't pick for it
   const order = [...cands];
   const rng = makeRng(seed).fork("judge");
   for (let i = order.length - 1; i > 0; i--) {
     const j = rng.int(0, i);
     [order[i], order[j]] = [order[j], order[i]];
   }
-  const blocks = order.map((c) =>
+  const blocks = order.map((c, k) =>
     [
-      `CANDIDATE ${c.index}: "${c.concept}"`,
+      `CANDIDATE ${k + 1}: "${c.concept}"`,
       `  motif: ${c.motif.text}`,
       c.features ?? "",
     ].join("\n"),
   );
-  return [
+  const prompt = [
     `Requested style: ${style.name}. Texture priors: ${style.texture}`,
     "",
     ...blocks,
     "",
     `Reply: {"scores": [{"candidate": 1, "distinctiveness": 0-10, "coherence": 0-10, "note": "<= 15 words"}], "best": <candidate number>, "summary": "<= 25 words on why"}`,
   ].join("\n");
+  return { prompt, order };
 }
 
 /** Composer: a director writes the chart (best-of-N with a judge), then featured parts. */
@@ -281,6 +286,9 @@ export async function runComposer(settings: TroopSettings, members: Member[], ho
       const r = realize({ frame, members, plan: c.plan, motif: c.motif, seed: settings.seed });
       c.features = textureFeatures(frame, members, c.plan, r.parts);
     }
+    const judging = criticPrompt(frame, cands, settings.seed);
+    // the judge's numbers are positions in the shuffled order; map them back to candidates
+    const real = (shown: unknown) => judging.order[(Number(shown) || 0) - 1]?.index ?? 0;
     try {
       const t2 = performance.now();
       const { text, call } = await callLLM({
@@ -291,7 +299,7 @@ export async function runComposer(settings: TroopSettings, members: Member[], ho
         agent: "critic",
         model: settings.directorModel,
         system: CRITIC_SYSTEM,
-        prompt: criticPrompt(frame, cands, settings.seed),
+        prompt: judging.prompt,
         temperature: 0.2,
         maxOutputTokens: 800,
         reasoning: "none",
@@ -307,9 +315,9 @@ export async function runComposer(settings: TroopSettings, members: Member[], ho
         const clamp = (v: unknown) => Math.max(0, Math.min(10, Number(v) || 0));
         const d = clamp(o.distinctiveness);
         const co = clamp(o.coherence);
-        return { candidate: Number(o.candidate) || 0, distinctiveness: d, coherence: co, score: Math.round((d * 0.6 + co * 0.4) * 10) / 10, notes: asString(o.note, 120) ?? "" };
+        return { candidate: real(o.candidate), distinctiveness: d, coherence: co, score: Math.round((d * 0.6 + co * 0.4) * 10) / 10, notes: asString(o.note, 120) ?? "" };
       });
-      const picked = pickCandidate(scores, Number(obj.best), cands.map((c) => c.index));
+      const picked = pickCandidate(scores, real(obj.best), cands.map((c) => c.index));
       const pick = cands.find((c) => c.index === picked) ?? cands[0];
       chosen = pick;
       critic = { scores, chosen: pick.index, summary: asString(obj.summary, 200) ?? "" };
