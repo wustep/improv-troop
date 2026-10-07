@@ -686,7 +686,7 @@ export function cadenceLine(ctx: BarCtx, opts: LineOpts = {}): NoteEvent[] {
 
 /** A scalar run through the bar (baroque spinning-out, or a dense flourish): straight up or down the scale. */
 export function runLine(ctx: BarCtx, opts: LineOpts = {}): NoteEvent[] {
-  const sixteenths = ctx.style.id === "baroque" || ctx.style.id === "funk" || ctx.style.line.density >= 2;
+  const sixteenths = ctx.style.id === "baroque" || ctx.style.id === "funk" || ctx.style.lineDensity >= 2;
   const step = sixteenths ? 0.25 : 0.5;
   const featured = ctx.role === "solo" || ctx.role === "lead";
   const [lo, hi] = [opts.lo ?? (featured ? (ctx.inst.solo ?? ctx.inst.sweet)[0] : ctx.inst.sweet[0]), opts.hi ?? (featured ? (ctx.inst.solo ?? ctx.inst.sweet)[1] : ctx.inst.sweet[1])];

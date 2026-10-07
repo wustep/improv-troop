@@ -4,25 +4,6 @@ import type { InstrumentFunction, SectionKind, StyleId } from "./types";
 // function in the band actually does), not from the style's name. Prompts quote
 // `texture`, never just the label.
 
-export interface LinePrior {
-  /** Average notes per beat for improvised lines. */
-  density: number;
-  /** Rhythm cells (compact durations, "r" prefix = rest) a line is assembled from. */
-  cells: string[];
-  /** 0..1 chance of chromatic approach / enclosure into target tones. */
-  chromatic: number;
-  /** 0..1 chance of a leap instead of a step. */
-  leap: number;
-  /** Typical phrase length in beats before a breath. */
-  phrase: [number, number];
-  /** Scale flavour for lines over dominant/minor chords. */
-  flavor: "bebop" | "diatonic" | "pentatonic" | "blues" | "arpeggio" | "lydian";
-  /** Prefer starting phrases off the beat. */
-  offbeatStarts: number;
-  /** Probability a note is shortened (staccato). */
-  staccato: number;
-}
-
 export interface StyleDef {
   id: StyleId;
   name: string;
@@ -37,13 +18,12 @@ export interface StyleDef {
   progressions: { major: string[][]; minor: string[][] };
   /** Default directive per function per section kind. */
   section: Record<SectionKind, Partial<Record<InstrumentFunction | "melodic-support", string>>>;
-  line: LinePrior;
+  /** Average notes per beat for improvised lines (the line feel itself lives in phrase.ts). */
+  lineDensity: number;
   /** Motif rhythm cells (compact durations; motif pitches are generated). */
   motifCells: string[];
   /** Motif contour templates (diatonic steps relative to the first note). */
   contours: number[][];
-  /** Everyone keeps playing during solos (collective improvisation). */
-  collective: boolean;
   /** Drum fill density 0..1 */
   fills: number;
   /** Comp voicing family. */
@@ -83,16 +63,7 @@ export const STYLES: Record<StyleId, StyleDef> = {
       // the tag: the turnaround again (and again), everyone in, before the last chord
       tag: { bass: "@walk", chordal: "@comp", rhythm: "@groove peak", melodic: "@riff", "melodic-support": "@riff" },
     },
-    line: {
-      density: 2,
-      cells: ["8 8 8 8", "8 8 8 8 8 8 8 8", "r/8 8 8 8 4", "8t 8t 8t 8 8", "4 8 8", "8 8 4 r/4", "8. 16 8 8"],
-      chromatic: 0.4,
-      leap: 0.22,
-      phrase: [5, 10],
-      flavor: "bebop",
-      offbeatStarts: 0.65,
-      staccato: 0.2,
-    },
+    lineDensity: 2,
     motifCells: ["r/8 8 8 8 4 4", "8 8 4 r/8 8 4", "4 8 8 4. 8", "r/4 8 8 8 8 4"],
     contours: [
       [0, 1, 2, 4, 3],
@@ -100,7 +71,6 @@ export const STYLES: Record<StyleId, StyleDef> = {
       [0, 2, 4, 3, 1],
       [0, 3, 2, 1, -1],
     ],
-    collective: false,
     fills: 0.5,
     voicing: "rootless",
     feelLabel: "Swing",
@@ -133,16 +103,7 @@ export const STYLES: Record<StyleId, StyleDef> = {
       out: { bass: "@bossa", chordal: "@comp", rhythm: "@groove", melodic: "@harmony", "melodic-support": "@harmony" },
       tag: { bass: "@end", chordal: "@end", rhythm: "@end", melodic: "@end" },
     },
-    line: {
-      density: 1.1,
-      cells: ["4 4 4 4", "4. 8 2", "8 4 8 4 4", "2 4 4", "r/8 8 4 4 4", "4 8 8 2"],
-      chromatic: 0.1,
-      leap: 0.3,
-      phrase: [6, 12],
-      flavor: "diatonic",
-      offbeatStarts: 0.4,
-      staccato: 0.05,
-    },
+    lineDensity: 1.1,
     motifCells: ["4. 8 4 4", "8 4 8 4 4", "4 4 4. 8", "2 8 8 4"],
     contours: [
       [0, -1, -2, 2],
@@ -150,7 +111,6 @@ export const STYLES: Record<StyleId, StyleDef> = {
       [0, 2, 1, -1],
       [0, 5, 4, 2],
     ],
-    collective: false,
     fills: 0.15,
     voicing: "open",
     feelLabel: "Bossa (straight 8ths)",
@@ -183,23 +143,13 @@ export const STYLES: Record<StyleId, StyleDef> = {
       out: { bass: "@funk", chordal: "@comp", rhythm: "@groove peak", melodic: "@riff", "melodic-support": "@riff" },
       tag: { bass: "@end", chordal: "@end", rhythm: "@end", melodic: "@end" },
     },
-    line: {
-      density: 2.2,
-      cells: ["16 16 r/8 16 16 r/8", "8 16 16 r/8 8", "r/16 16 16 16 8 8", "8 8 r/8 8", "16 16 16 16 r/4", "8. 16 r/4"],
-      chromatic: 0.12,
-      leap: 0.35,
-      phrase: [2, 6],
-      flavor: "pentatonic",
-      offbeatStarts: 0.6,
-      staccato: 0.55,
-    },
+    lineDensity: 2.2,
     motifCells: ["16 16 r/8 16 16 8 r/4 4", "8 16 16 r/8 8 r/4 8 8", "r/16 16 16 16 8 8 r/2"],
     contours: [
       [0, 0, 2, 0, -1, 0],
       [0, 3, 2, 0, 0],
       [0, -1, 0, 3, 4],
     ],
-    collective: false,
     fills: 0.35,
     voicing: "shell",
     feelLabel: "Funk (straight 16ths)",
@@ -234,16 +184,7 @@ export const STYLES: Record<StyleId, StyleDef> = {
       out: { bass: "@pump", chordal: "@pulse busy", rhythm: "@groove peak", melodic: "@pad", "melodic-support": "@harmony" },
       tag: { bass: "@end", chordal: "@end", rhythm: "@end", melodic: "@end" },
     },
-    line: {
-      density: 1.3,
-      cells: ["8 8 4 4 4", "4 8 8 2", "r/8 8 8 8 4 4", "4. 8 4 4", "8 8 8 8 2", "r/4 8 8 4 4"],
-      chromatic: 0.03,
-      leap: 0.2,
-      phrase: [4, 8],
-      flavor: "pentatonic",
-      offbeatStarts: 0.35,
-      staccato: 0.06,
-    },
+    lineDensity: 1.3,
     motifCells: [
       "8 8 4 8 8 4 r/4 4 2",
       "4 8 8 4 4 r/2 4 4",
@@ -263,7 +204,6 @@ export const STYLES: Record<StyleId, StyleDef> = {
       [4, 3, 2, 0, 2, 0],
       [0, 0, 2, 0, -1, -3],
     ],
-    collective: false,
     fills: 0.3,
     voicing: "triad",
     feelLabel: "Pop (straight 8ths)",
@@ -297,23 +237,13 @@ export const STYLES: Record<StyleId, StyleDef> = {
       out: { bass: "@two", chordal: "@stride", rhythm: "@groove peak", melodic: "@counter", "melodic-support": "@counter" },
       tag: { bass: "@two", chordal: "@stride", rhythm: "@groove peak", melodic: "@counter", "melodic-support": "@counter" },
     },
-    line: {
-      density: 1.6,
-      cells: ["8 8 4 8 8", "4 8 8 4 4", "8 4 8 4", "4t 4t 4t 4", "r/8 8 8 8 4"],
-      chromatic: 0.2,
-      leap: 0.25,
-      phrase: [4, 8],
-      flavor: "blues",
-      offbeatStarts: 0.5,
-      staccato: 0.15,
-    },
+    lineDensity: 1.6,
     motifCells: ["8 4 8 4 4", "4 8 8 4 r/4", "r/8 8 8 4 8 4"],
     contours: [
       [0, 2, 0, 2, 4],
       [0, 0, 1, 2, 0],
       [0, -2, 0, 2],
     ],
-    collective: true,
     fills: 0.45,
     voicing: "triad",
     feelLabel: "Two-beat strut",
@@ -346,23 +276,13 @@ export const STYLES: Record<StyleId, StyleDef> = {
       out: { bass: "@pedal", chordal: "@arp", rhythm: "@groove peak", melodic: "@riff", "melodic-support": "@arp" },
       tag: { bass: "@end", chordal: "@end", rhythm: "@end", melodic: "@end" },
     },
-    line: {
-      density: 2,
-      cells: ["8 8 8 8 8 8 8 8", "8 8 8 8 4 4", "4 8 8 4 8 8"],
-      chromatic: 0,
-      leap: 0.55,
-      phrase: [8, 16],
-      flavor: "arpeggio",
-      offbeatStarts: 0,
-      staccato: 0.1,
-    },
+    lineDensity: 2,
     motifCells: ["8 8 8 8 8 8 8 8", "8 8 8 8 8 8 4", "4 8 8 8 8 4"],
     contours: [
       [0, 2, 4, 2, 0, 2, 4, 2],
       [0, 4, 2, 4, 0, 4, 2, 4],
       [0, 2, 4, 7, 4, 2],
     ],
-    collective: true,
     fills: 0,
     voicing: "triad",
     feelLabel: "Straight 8ths, steady",
@@ -395,23 +315,13 @@ export const STYLES: Record<StyleId, StyleDef> = {
       out: { bass: "@baroque", chordal: "@prelude", rhythm: "@groove", melodic: "@canon", "melodic-support": "@harmony" },
       tag: { bass: "@end", chordal: "@end", rhythm: "@end", melodic: "@end" },
     },
-    line: {
-      density: 3.2,
-      cells: ["16 16 16 16 16 16 16 16", "16 16 16 16 8 8", "8 8 16 16 16 16", "8 8 8 8"],
-      chromatic: 0.05,
-      leap: 0.3,
-      phrase: [8, 16],
-      flavor: "diatonic",
-      offbeatStarts: 0.1,
-      staccato: 0.1,
-    },
+    lineDensity: 3.2,
     motifCells: ["16 16 16 16 8 8 4 4", "8 16 16 8 8 4 4", "16 16 8 16 16 8 2"],
     contours: [
       [0, 1, 2, 0, 4, 3, 2, 1],
       [0, -1, 0, 2, 4, 3, 1],
       [0, 2, 1, 3, 2, 4, 0],
     ],
-    collective: true,
     fills: 0,
     voicing: "triad",
     feelLabel: "Allegro",
@@ -445,23 +355,13 @@ export const STYLES: Record<StyleId, StyleDef> = {
       out: { bass: "@pedal", chordal: "@shimmer", rhythm: "@groove", melodic: "@pad", "melodic-support": "@pad" },
       tag: { bass: "@end", chordal: "@end", rhythm: "@end", melodic: "@end" },
     },
-    line: {
-      density: 0.45,
-      cells: ["2 2", "1", "2. 4", "4 2.", "r/2 2", "r/4 4 2"],
-      chromatic: 0,
-      leap: 0.6,
-      phrase: [6, 12],
-      flavor: "lydian",
-      offbeatStarts: 0.2,
-      staccato: 0,
-    },
+    lineDensity: 0.45,
     motifCells: ["2 4 4", "2. 4", "4 4 2", "2 2"],
     contours: [
       [0, 4, 3],
       [0, -3, 1],
       [0, 3, 2, 4],
     ],
-    collective: true,
     fills: 0,
     voicing: "quartal",
     feelLabel: "Floating",

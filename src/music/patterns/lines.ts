@@ -316,8 +316,8 @@ export function melodicFill(ctx: BarCtx): NoteEvent[] {
   const out: NoteEvent[] = [];
   const nh = ctx.harmony.at(ctx.start + ctx.beats);
   const target = nearestIn(ctx.mem.lastPitch ?? (ctx.inst.sweet[0] + ctx.inst.sweet[1]) / 2, nh.tones);
-  const n = ctx.style.line.density > 2 ? 4 : 2;
-  const step = ctx.style.line.density > 2 ? 0.25 : 0.5;
+  const n = ctx.style.lineDensity > 2 ? 4 : 2;
+  const step = ctx.style.lineDensity > 2 ? 0.25 : 0.5;
   const h = harmAt(ctx, ctx.beats - n * step);
   let p = stepIn(target, -n, h.scale);
   const vel = velFor(ctx, 0.75);

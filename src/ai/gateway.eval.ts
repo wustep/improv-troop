@@ -61,6 +61,7 @@ function hooks(runId: string): PipelineHooks {
 function bucket(repair: string): string {
   const r = repair.toLowerCase();
   if (r.includes("structured output unavailable")) return "no-structured";
+  if (r.includes("played as written")) return "written-out";
   if (r.includes("json")) return "json";
   // bar lengths, by how they were fixed: a beat group or a recount keeps the model's rhythm, a squeeze or pad doesn't
   if (r.includes("gap kept inside its beat")) return "len:beat-fit";
