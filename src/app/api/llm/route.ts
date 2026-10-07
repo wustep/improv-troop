@@ -15,6 +15,11 @@ import { callParams, type ReasoningLevel } from "@/ai/models";
 
 export const maxDuration = 120;
 
+// Thinking counts against maxOutputTokens with every provider, so a step's budget is for its
+// answer and reasoning gets room on top. Without it Haiku spent a count-off's 1200 tokens
+// thinking and the plan came back cut off mid-JSON.
+const THINKING_ROOM: Record<ReasoningLevel, number> = { none: 0, minimal: 1024, low: 2048, medium: 4096, high: 8192 };
+
 const MODEL_RE = /^[a-z0-9-]+\/[a-z0-9.\-]+$/i;
 const KEY_REJECTED = "The AI Gateway rejected that key — check it in “Brains & sounds”.";
 
@@ -75,7 +80,7 @@ export async function POST(req: Request) {
     model: gateway(body.model),
     system: body.system,
     prompt: body.prompt,
-    maxOutputTokens: Math.min(body.maxOutputTokens ?? 2000, 8000),
+    maxOutputTokens: Math.min(body.maxOutputTokens ?? 2000, 8000) + (params.reasoning ? (THINKING_ROOM[params.reasoning] ?? 4096) : 0),
     maxRetries: 1,
     ...params,
   };

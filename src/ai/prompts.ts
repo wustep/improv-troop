@@ -102,7 +102,7 @@ export function motifBlock(m: Motif): string {
 
 export const GRAMMAR = DIRECTIVE_HELP;
 
-export const NOTES_ONLY = `Notes: "pitch/duration" e.g. "Bb4/8 C5/8 D5/4 r/4 F5/4"; durations 1 2 4 8 16, "." dotted, "t" triplet (three 8t = one beat), "r" rest, "~" ties to the next note; chords as [C4 E4 G4]/2. Sounding pitch, octave numbers with C4 = middle C. Each bar's durations must add up exactly to the bar.`;
+export const NOTES_ONLY = `Notes: "pitch/duration" e.g. "Bb4/8 C5/8 D5/4 r/4 F5/4"; durations 1 2 4 8 16, "." dotted, "t" triplet (three 8t = one beat), "r" rest, "~" ties to the next note; chords as [C4 E4 G4]/2. Sounding pitch, octave numbers with C4 = middle C. Each bar's durations must add up exactly to the bar, so count as you write: 1 = 4 beats, 2 = 2, 4 = 1, 8 = ½, 16 = ¼, "." adds half again, three "t" notes take the time of two. "Bb4/8 C5/8 D5/4 r/4 F5/4" = ½+½+1+1+1 = 4 beats; a 4/4 bar holds eight 8ths, never more. Each bar's string is that one bar, never two bars' worth, even when it has two chords (each gets half the bar).`;
 
 /** What a member played in some bars, compactly, for listening. */
 export function playedBlock(

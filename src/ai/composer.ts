@@ -52,6 +52,32 @@ export function chatMsg(from: string, text: string, phase: ChatMessage["phase"],
   return { id: `m${Date.now().toString(36)}${++msgSeq}`, from, text: text.slice(0, 220), phase, bar, to };
 }
 
+/**
+ * Who is featured where, spelled out per member id. Models given only the form ("7-12 Solo ·
+ * Bruno") kept writing @comp for the pianist in his own solo and @motif for the trumpet under it.
+ */
+function featuredBlock(frame: ReturnType<typeof buildFrame>, members: Member[]): string {
+  const runs: { from: number; to: number; who: string[] }[] = [];
+  for (let b = 0; b < frame.bars; b++) {
+    const who = members.filter((m) => isFeaturedRole(frame.slots[b]?.[m.id])).map((m) => m.id);
+    const last = runs[runs.length - 1];
+    if (last && last.to === b - 1 && last.who.join() === who.join()) last.to = b;
+    else runs.push({ from: b, to: b, who });
+  }
+  const lines = runs.map(({ from, to, who }) => {
+    const bars = from === to ? `bar ${from + 1}` : `bars ${from + 1}-${to + 1}`;
+    if (!who.length) return `  ${bars}: nobody featured — everyone accompanies`;
+    const role = frame.slots[from][who[0]];
+    const rest = members.filter((m) => !who.includes(m.id)).map((m) => m.id);
+    return `  ${bars}: ${who.join(" & ")} ${role === "lead" ? "leads" : role === "trade" ? "trades" : "solos"}; ${rest.join(", ")} accompany`;
+  });
+  return [
+    "WHO'S FEATURED (locked, by id):",
+    ...lines,
+    "A featured player's part in their bars: @motif ..., @line ..., @answer, @head N, @tune N, or notes. Everyone else plays their own accompaniment vocabulary; a horn that isn't featured lays out (@rest) or backs quietly (@guide, @riff, @counter).",
+  ].join("\n");
+}
+
 function directorPrompt(settings: TroopSettings, members: Member[], frameText: string, frame: ReturnType<typeof buildFrame>, localMotif: Motif): string {
   const leader = members.find((m) => m.id === frame.leaderId);
   const ids = members.map((m) => `"${m.id}"`).join(", ");
@@ -61,6 +87,8 @@ function directorPrompt(settings: TroopSettings, members: Member[], frameText: s
     chartBlock(frame, members),
     "",
     bandBlock(members, frame),
+    "",
+    featuredBlock(frame, members),
     "",
     GRAMMAR,
     "",

@@ -91,6 +91,7 @@ describe("validateBarText", () => {
     // a symbol in front of real pitches just goes; on its own it's voiced
     expect(check("[Gm7 B3 D4]/8 r/8 Cm7/4 r/2", bear).out).toBe("[B3 D4]/8 r/8 [C4 Eb4 G4 Bb4]/4 r/2");
     expect(check("[Gm7 B3 D4]/8 r/8 r/4 r/2", bear).repairs.join()).toMatch(/chord symbols/);
+    expect(check("[Bb D F A]/8 r/8 r/4 r/2", bear).out).toBe("[Bb3 D4 F4 A4]/8 r/8 r/4 r/2");
   });
   it("leaves a line alone when moving it wouldn't fit more notes", () => {
     expect(check("C5/4 D5/4 E5/4 G5/4", fox).repairs).toEqual([]);
@@ -314,5 +315,23 @@ describe("a bandmate's go-to directive", () => {
     expect(shaped).toBeGreaterThan(0);
     applyDefault(plan, "owl", "@groove");
     expect(plan.filter((b) => /@groove (light|peak)/.test(b.directives?.owl ?? "")).length).toBe(shaped);
+  });
+});
+
+describe("mergePlan reads what models write", () => {
+  const leaderHead = plan.findIndex((b) => b.directives?.fox?.startsWith("@head"));
+  it("splits a range written bar by bar", () => {
+    const repairs: string[] = [];
+    const i = free;
+    const out = mergePlan(plan, [{ bars: `${i + 1}-${i + 2}`, parts: { bear: "@comp sparse | @pad" } }], frame, band, repairs);
+    expect(out[i].directives?.bear).toBe("@comp sparse");
+    expect(out[i + 1].directives?.bear).toBe(plan[i + 1].directives?.bear?.startsWith("@head") ? plan[i + 1].directives?.bear : "@pad");
+  });
+  it("keeps the code's bar for a head coming back, whatever bar the model counted from", () => {
+    const repairs: string[] = [];
+    const locked = plan[leaderHead].directives!.fox;
+    const out = mergePlan(plan, [{ bars: `${leaderHead + 1}`, parts: { fox: "@head 1" } }], frame, band, repairs);
+    expect(out[leaderHead].directives?.fox).toBe(locked);
+    expect(repairs.join()).toMatch(/kept @head/);
   });
 });

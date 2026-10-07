@@ -111,6 +111,7 @@ export async function callLLM(o: LlmOptions): Promise<{ text: string; call: LlmC
         serverMs?: number;
         structured?: boolean;
         fallbackReason?: string;
+        finishReason?: string;
         params?: LlmCall["params"];
       };
       const ms = performance.now() - t0;
@@ -127,7 +128,11 @@ export async function callLLM(o: LlmOptions): Promise<{ text: string; call: LlmC
         attempt,
         structured: data.structured,
         params: data.params,
-        repairs: data.fallbackReason ? [...call.repairs, `structured output unavailable, parsed text instead (${data.fallbackReason})`] : call.repairs,
+        repairs: [
+          ...call.repairs,
+          ...(data.fallbackReason ? [`structured output unavailable, parsed text instead (${data.fallbackReason})`] : []),
+          ...(data.finishReason === "length" ? ["reply cut off at the token limit"] : []),
+        ],
       };
       useDebug.getState().upsertCall(call);
       return { text: data.text, call };

@@ -275,7 +275,7 @@ export function mergePlan(
       repairs.push(`entry without a bar number skipped`);
       continue;
     }
-    for (const b1 of bars) {
+    for (const [at, b1] of bars.entries()) {
       const i = b1 - 1;
       if (i < 0 || i >= frame.bars) {
         repairs.push(`bar ${b1} is outside the ${frame.bars}-bar frame; ignored (length is locked)`);
@@ -298,11 +298,15 @@ export function mergePlan(
           continue;
         }
         if (opts.onlyMembers && !opts.onlyMembers.includes(m.id)) continue;
-        const text = asString(v, 600);
+        let text = asString(v, 600);
         if (!text) continue;
-        // the out head (and a repeated A) comes back to the melody: those bars stay locked
+        // a range written bar by bar ("bars": "7-8", "@motif invert | @line sparse"): each bar its own
+        const each = text.split("|").map((x) => x.trim()).filter(Boolean);
+        if (bars.length > 1 && each.length > 1) text = each[Math.min(at, each.length - 1)];
+        // the out head (and a repeated A) comes back to the melody: those bars stay locked, to
+        // the bar the code chose (models count "@head 1" from the head, not the chart)
         const locked = base[i]?.directives?.[m.id];
-        if (locked && /^@(head|tune)\b/.test(locked) && !text.trim().startsWith(locked.split(/\s+/)[0])) {
+        if (locked && /^@(head|tune)\b/.test(locked) && text.trim().replace(/[\s,.;]+$/, "") !== locked) {
           repairs.push(`bar ${b1} ${m.name}: kept ${locked} (the tune comes back to the melody here)`);
           continue;
         }

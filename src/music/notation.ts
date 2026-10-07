@@ -244,13 +244,16 @@ function durSpecOf(beats: number): string {
   return "4";
 }
 
+const pcOfName = (name: string) => parsePitch(`${name}4`)!;
+
 const CHORD_SYMBOL = /^([A-G][#b]?)(m|maj|min|dim|aug|sus|add|ø|°|\+|-|6|7|9|11|13)[A-Za-z0-9#b+°ø()]*(\/[A-G][#b]?)?$/;
 
 /**
  * Chord symbols written where notes belong ("Gm7/4", "[Cm7 C4 Eb4]/8", "Cm2/4"): models
  * comping from a lead sheet do this. A bassist gets the root, anyone else the chord's tones
  * stacked up from `low` (a bassist's root beside the note before); inside a bracket the symbol just goes when real pitches are there.
- * "Cm2" (a minor-chord letter with an octave) is read as the pitch C2.
+ * "Cm2" (a minor-chord letter with an octave) is read as the pitch C2, and "[Bb D F A]" (no
+ * octaves) is stacked up from `low`.
  */
 export function spellChordSymbols(text: string, low: number, bassist: boolean): { text: string; fixed: number } {
   let fixed = 0;
@@ -291,6 +294,16 @@ export function spellChordSymbols(text: string, low: number, bassist: boolean): 
       const pitches = words.filter((w) => parsePitch(w) !== null);
       if (pitches.length === words.length) return tok;
       fixed++;
+      // "[Bb D F A]": note names without octaves, stacked up from the bottom
+      if (!pitches.length && words.every((w) => /^[A-G][#b]?$/.test(w))) {
+        let p = low - 1;
+        const stack = words.map((w) => {
+          p++;
+          while (mod(p, 12) !== mod(pcOfName(w), 12)) p++;
+          return pitchName(p, true);
+        });
+        return `[${stack.join(" ")}]${tail}${suffix}`;
+      }
       if (pitches.length) return `[${pitches.join(" ")}]${tail}${suffix}`;
       const sym = words.map(one).find(Boolean);
       return sym ? `${sym}${tail}${suffix}` : tok;
