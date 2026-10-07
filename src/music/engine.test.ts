@@ -805,6 +805,23 @@ describe("pop", () => {
   });
 });
 
+describe("jazz waltz", () => {
+  it("is played in three: a swing chart in 3/4 with the bass and ride in three", () => {
+    const std = STANDARDS.find((s) => s.id === "jazz-waltz")!;
+    const { score } = generateLocal({ ...defaultSettings(band), standard: std.id, key: std.key, style: std.style, bars: 48, meter: { beats: 3 }, soloists: ["bear"], seed: 2 }, band);
+    expect(score.frame.meter.beats).toBe(3);
+    // whole 16-bar choruses: head, a solo, the head out
+    expect(score.frame.sections.filter((s) => ["head", "solo", "out"].includes(s.kind)).map((s) => s.length)).toEqual([16, 16, 16]);
+    const total = score.frame.bars * 3;
+    for (const notes of Object.values(score.parts)) expect(notes.every((n) => n.start < total)).toBe(true);
+    // the bass sounds in every bar, and the ride (or the head's hi-hat) keeps time on beat one
+    for (let b = 1; b < score.frame.bars - 1; b++) {
+      expect(score.parts.frog.some((n) => n.start >= b * 3 && n.start < b * 3 + 3), `bass in bar ${b + 1}`).toBe(true);
+      expect(score.parts.owl.some((n) => Math.abs(n.start - b * 3) < 1e-6 && ([DRUM.ride, DRUM.hatClosed, DRUM.crash] as number[]).includes(n.pitch)), `time in bar ${b + 1}`).toBe(true);
+    }
+  });
+});
+
 describe("standards with a written melody", () => {
   it("the leader plays the tune as written on the head and the head out, in any key", () => {
     for (const id of STANDARDS.filter((s) => s.melody).map((s) => s.id)) {

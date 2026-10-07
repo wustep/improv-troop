@@ -128,6 +128,21 @@ export const STANDARDS: Standard[] = [
     note: "Coltrane changes: three tonal centers a major 3rd apart.",
   },
   {
+    id: "jazz-waltz",
+    name: "Jazz Waltz in Bb (changes)",
+    key: { tonic: "Bb", mode: "major" },
+    meter: 3,
+    // a 3/4 swing tune: the A section walks down through ii–Vs, the B section climbs back home
+    bars: [
+      "Bbmaj7", "Bbmaj7", "Gm7", "Gm7", "Cm7", "F7", "Dm7", "G7",
+      "Cm7", "F7", "Bbmaj7", "Eb7", "Dm7 G7", "Cm7 F7", "Bb6", "Bb6",
+    ],
+    form: [["A", 8], ["B", 8]],
+    style: "swing",
+    tempo: 150,
+    note: "A jazz waltz: the comping and the bass speak in three.",
+  },
+  {
     id: "saints",
     name: "When the Saints Go Marching In",
     key: { tonic: "F", mode: "major" },
@@ -168,8 +183,10 @@ export const STANDARDS: Standard[] = [
     form: [["Ground", 8]],
     style: "baroque",
     tempo: 84,
-    motif: "F#5/4 E5/4 D5/4 C#5/4 | B4/4 A4/4 B4/4 C#5/4",
-    note: "Pachelbel's ground bass, public domain.",
+    // the violin's line: one half note per chord, each a tone of the chord under it
+    motif: "F#5/2 E5/2 | D5/2 C#5/2",
+    melody: ["F#5/2 E5/2", "D5/2 C#5/2", "B4/2 A4/2", "B4/2 C#5/2", "F#5/2 E5/2", "D5/2 C#5/2", "B4/2 A4/2", "B4/2 C#5/2"],
+    note: "Pachelbel's ground bass and the violin's line, public domain.",
   },
   {
     id: "greensleeves",
