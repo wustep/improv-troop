@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { AnimalPortrait } from "@/art/AnimalPortrait";
 import { InstrumentIcon } from "@/art/InstrumentIcon";
 import { modelsByProvider, PROVIDER_LABEL } from "@/ai/models";
 import { lengthOptions } from "@/music/form";
 import { ANIMAL_LIST, ANIMALS, INSTRUMENT_LIST, INSTRUMENTS } from "@/music/instruments";
-import { STANDARDS, getStandard } from "@/music/standards";
+import { STANDARDS, getStandard, searchStandards } from "@/music/standards";
 import { STYLE_LIST, STYLES } from "@/music/styles";
 import type { AnimalId, InstrumentId, Member } from "@/music/types";
 import { useTroop } from "@/state/store";
@@ -119,6 +119,78 @@ export function openBrains() {
   document.getElementById("gateway-key")?.focus({ preventScroll: true });
 }
 
+/**
+ * The tune dropdown with a search box over it: typing narrows the list (the tune already picked
+ * always stays in it), Enter picks the first match, the down arrow drops into the list, Escape clears.
+ */
+function TunePicker({ value, onChange }: { value: string | null; onChange: (id: string | null) => void }) {
+  const [query, setQuery] = useState("");
+  const listRef = useRef<HTMLSelectElement>(null);
+  const matches = searchStandards(query);
+  const searching = query.trim().length > 0;
+  const shown = (t: (typeof STANDARDS)[number]) => t.id === value || matches.includes(t);
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && searching && matches.length) {
+      e.preventDefault();
+      onChange(matches[0].id);
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      listRef.current?.focus();
+    } else if (e.key === "Escape" && query) {
+      e.preventDefault();
+      setQuery("");
+    }
+  };
+
+  return (
+    <div>
+      <input
+        type="search"
+        className="sketch-input mb-xxs w-full"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={onKeyDown}
+        placeholder={`Search ${STANDARDS.length} tunes: name, key, feel…`}
+        aria-label="Search tunes"
+        aria-controls="tune-list"
+        aria-describedby={searching ? "tune-search-status" : undefined}
+        autoComplete="off"
+        spellCheck={false}
+        enterKeyHint="go"
+      />
+      <select id="tune-list" ref={listRef} className="sketch-select w-full" value={value ?? ""} onChange={(e) => onChange(e.target.value || null)} aria-label="Tune">
+        <option value="">An original (the band writes the changes)</option>
+        {TUNE_GROUPS.map((g) => {
+          const tunes = STANDARDS.filter((t) => g.has(t) && shown(t));
+          return tunes.length ? (
+            <optgroup key={g.label} label={g.label}>
+              {tunes.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </optgroup>
+          ) : null;
+        })}
+      </select>
+      <div id="tune-search-status" role="status" aria-live="polite" className="mt-xxs text-s text-ink-soft">
+        {searching &&
+          (matches.length ? (
+            `${matches.length} of ${STANDARDS.length} tunes match · Enter picks ${matches[0].name}`
+          ) : (
+            <>
+              No tunes match “{query.trim()}”.{" "}
+              <button type="button" className="text-action" onClick={() => setQuery("")}>
+                Clear search
+              </button>
+            </>
+          ))}
+      </div>
+    </div>
+  );
+}
+
 export function ControlPanel() {
   const s = useTroop((x) => x.settings);
   const members = useTroop((x) => x.members);
@@ -202,26 +274,7 @@ export function ControlPanel() {
 
       <Field>
         <Label hint={std?.note}>Tune</Label>
-        <select
-          className="sketch-select w-full"
-          value={s.standard ?? ""}
-          onChange={(e) => setStandard(e.target.value || null)}
-          aria-label="Tune"
-        >
-          <option value="">An original (the band writes the changes)</option>
-          {TUNE_GROUPS.map((g) => {
-            const tunes = STANDARDS.filter(g.has);
-            return tunes.length ? (
-              <optgroup key={g.label} label={g.label}>
-                {tunes.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </optgroup>
-            ) : null;
-          })}
-        </select>
+        <TunePicker value={s.standard} onChange={setStandard} />
       </Field>
 
       <Field>
