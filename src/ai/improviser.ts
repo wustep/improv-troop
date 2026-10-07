@@ -10,7 +10,7 @@ import { makeRng } from "@/music/rng";
 import { STYLES, swingAt } from "@/music/styles";
 import type { BarPlan, ChatMessage, Frame, Member, Motif, NoteEvent, Score, TroopSettings } from "@/music/types";
 import { useDebug } from "@/state/debug";
-import { chatMsg, type PipelineHooks } from "./composer";
+import { chatMsg, trimSpeech, type PipelineHooks } from "./composer";
 import { asRecord, asString, extractJson, parseBarRange } from "./json";
 import { callLLM, LlmError, noteRepair, setParsed } from "./llm";
 import { checkChordNames, TalkGate } from "./talk";
@@ -57,6 +57,8 @@ function describeBars(bars: number[], frame: Frame, plan: BarPlan[], memberId: s
     })
     .join("\n");
 }
+
+const BANDMATE_LINE = 120;
 
 const REPLY_SHAPE = (bars: number[]) => `{"bars": {${bars.map((b) => `"${b + 1}": "..."`).join(", ")}}, "say": "optional: a short line to the band or a bandmate (<= 12 words) about something you just heard or are about to play, or \\"\\" (most phrases need none)"}`;
 
@@ -292,7 +294,8 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
           const { value } = extractJson(text);
           const o = asRecord(value);
           setParsed(call.id, o);
-          const line = checkChordNames(asString(o.say, 200) ?? "", frame);
+          // a bandmate's answer is one short line: long ones covered their neighbours on a phone
+          const line = checkChordNames(trimSpeech(asString(o.say, 300) ?? "", BANDMATE_LINE), frame);
           if (line) say(chatMsg(m.id, line, "count-off", undefined, leader.id));
           const d = asString(o.default, 60)?.trim();
           if (d && d.startsWith("@")) {
@@ -412,7 +415,7 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
             repairs.forEach((x) => noteRepair(call.id, x));
             if (clean && clean !== "@rest") plan[b].directives = { ...plan[b].directives, [id]: clean };
           }
-          const line = talk.allow(id, asString(o.say, 160)?.trim() ?? "", bars[0], true, chat);
+          const line = talk.allow(id, trimSpeech(asString(o.say, 300) ?? "", BANDMATE_LINE), bars[0], true, chat);
           if (line) say(chatMsg(id, line, "jam", bars[0]));
         } catch (e) {
           if (calledOff(e)) return; // autopilot already played these bars
@@ -534,7 +537,7 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
               if (clean && !plan[b].directives?.[id]?.startsWith("@tune")) plan[b].directives = { ...plan[b].directives, [id]: clean };
             }
             const at = bars[Math.min(1, bars.length - 1)];
-            const line = talk.allow(id, asString(o.say, 160)?.trim() ?? "", at, false, chat);
+            const line = talk.allow(id, trimSpeech(asString(o.say, 300) ?? "", BANDMATE_LINE), at, false, chat);
             if (line) say(chatMsg(id, line, "jam", at));
           } catch (e) {
             if (calledOff(e)) return; // autopilot already played these bars
