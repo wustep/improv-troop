@@ -36,6 +36,8 @@ export function durationBeats(spec: string): number | null {
 
 function tokenize(text: string): string[] {
   const out: string[] = [];
+  // "C5 /8~": a duration set apart from its pitch belongs to it
+  text = text.replace(/([A-Ga-g][#b]{0,2}-?\d|[rR]|\])\s+(\/\d)/g, "$1$2");
   let i = 0;
   while (i < text.length) {
     const ch = text[i];
@@ -405,6 +407,8 @@ export function parseDrumGrid(text: string, beats: number): ParseResult {
   const notes: NoteEvent[] = [];
   const lanes = text.trim().split(/[\s;,]+/).filter(Boolean);
   for (const lane of lanes) {
+    // an unnamed lane of nothing but rests is a placeholder ("cr:x... ................")
+    if (/^[.\-~_|]+$/.test(lane)) continue;
     const m = /^([a-zA-Z0-9]+):(.+)$/.exec(lane);
     if (!m) {
       errors.push(`bad drum lane "${lane}"`);

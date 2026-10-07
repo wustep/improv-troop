@@ -115,7 +115,9 @@ export function validateBarText(text: string, member: Member, beats: number, rep
       }
       t = words.slice(0, at).join(" ");
     }
-    const d = t.split("\n")[0].slice(0, 80);
+    let d = t.split("\n")[0].slice(0, 80);
+    // a bassist bowing (ambient, minimal) holds the root: that's the pedal
+    if (/^@arco\b/.test(d) && (fn === "bass" || role === "bass") && member.instrument !== "cello") d = "@pedal";
     if (role && !isFeaturedRole(role) && !ANYONE.test(d.split(/\s+/)[0]) && !accompanimentFits(d, member, role)) {
       repairs.push(`${where}: ${d.split(/\s+/)[0]} isn't something ${member.name} plays while accompanying; kept the plan`);
       return null;

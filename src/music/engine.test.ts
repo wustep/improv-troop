@@ -1246,3 +1246,12 @@ describe("drum grids from models", () => {
     expect(r.notes.length).toBe(2);
   });
 });
+
+describe("notes and grids from models, loosely written", () => {
+  it("skip unnamed placeholder lanes and join a duration set apart from its pitch", () => {
+    expect(parseDrumGrid("cr:x............... ................ ................", 4).errors).toEqual([]);
+    const r = parseNotes("C5/4 D5 /8~ D5/8 E5/2", 4);
+    expect(r.errors).toEqual([]);
+    expect(r.covered).toBe(4);
+  });
+});

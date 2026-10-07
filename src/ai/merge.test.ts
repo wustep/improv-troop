@@ -355,3 +355,10 @@ describe("mergePlan reads what models write", () => {
     expect(repairs.join()).toMatch(/kept @head/);
   });
 });
+
+describe("more shapes from real models", () => {
+  const repairs: string[] = [];
+  it("a bowed upright bass holds a pedal", () => {
+    expect(validateBarText("@arco", band[1], 4, repairs, "bar 1", "bass")).toBe("@pedal");
+  });
+});
