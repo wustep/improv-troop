@@ -86,7 +86,7 @@ function featuredBlock(frame: ReturnType<typeof buildFrame>, members: Member[]):
   return [
     "WHO'S FEATURED (locked, by id):",
     ...lines,
-    "A featured player's part in their bars: @motif ..., @line ..., @answer, @head N, @tune N, or notes. Everyone else plays their own accompaniment vocabulary; a horn that isn't featured lays out (@rest) or backs quietly (@guide, @riff, @counter). Where the written melody or the head comes back, the leader's notes are already fixed: just write "@tune" or "@head" there.",
+    "A featured player's part in their bars: @motif ..., @line ..., @answer, @head N, @tune N, or notes. Everyone else plays their own accompaniment vocabulary; a horn that isn't featured lays out (@rest) or backs quietly (@guide, @riff, @counter). Where the written melody or the head comes back, the leader's notes are already fixed: just write @tune or @head there.",
   ].join("\n");
 }
 
