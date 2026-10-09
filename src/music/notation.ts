@@ -382,7 +382,7 @@ export function splitBars(text: string): string[] {
 
 // ─── Drum grids ──────────────────────────────────────────────────────────────
 
-const LANES: Record<string, number> = {
+export const LANES: Record<string, number> = {
   bd: DRUM.kick,
   kick: DRUM.kick,
   k: DRUM.kick,

@@ -4,7 +4,8 @@ import { create } from "zustand";
 import { runComposer, type PipelineHooks } from "@/ai/composer";
 import { insertByBar } from "@/ai/talk";
 import { startImproviser, type ImprovController } from "@/ai/improviser";
-import { notesHintFromScore, troopAudio, type PianoPack } from "@/audio/engine";
+import { notesHintFromScore, troopAudio } from "@/audio/engine";
+import { DEFAULT_SOUNDS, readSounds, type Sounds } from "@/audio/packs";
 import { defaultStandardLength, snapLength } from "@/music/form";
 import { ANIMALS, defaultMembers, INSTRUMENTS } from "@/music/instruments";
 import { defaultSettings, generateLocal } from "@/music/local";
@@ -30,7 +31,8 @@ interface TroopState {
   apiKey: string;
   /** The server has its own gateway key (IMPROV_TROOP_SERVER_KEY), so the band can think without one here. */
   serverKey: boolean;
-  pianoPack: PianoPack;
+  /** Which piano and drum kit the band plays (saved in this browser). */
+  sounds: Sounds;
   current: Score | null;
   /** True when `current` is the local sketch for the current settings. */
   isSketch: boolean;
@@ -63,7 +65,7 @@ interface TroopState {
   setStandard(id: string | null): void;
   setMembers(members: Member[]): void;
   setApiKey(key: string): void;
-  setPianoPack(p: PianoPack): void;
+  setSounds(patch: Partial<Sounds>): void;
   generate(): Promise<void>;
   cancel(): void;
   /** After a failed model run: drop the error and play the local band's take for these settings. */
@@ -76,7 +78,7 @@ interface TroopState {
 const LS = "improv-troop:v1";
 const LS_INTRO = "jamming:intro-seen";
 
-function load(): Partial<Pick<TroopState, "members" | "settings" | "apiKey" | "pianoPack">> {
+function load(): Partial<Pick<TroopState, "members" | "settings" | "apiKey" | "sounds">> & { pianoPack?: unknown } {
   try {
     const raw = localStorage.getItem(LS);
     return raw ? JSON.parse(raw) : {};
@@ -85,9 +87,9 @@ function load(): Partial<Pick<TroopState, "members" | "settings" | "apiKey" | "p
   }
 }
 
-function save(s: Pick<TroopState, "members" | "settings" | "apiKey" | "pianoPack">) {
+function save(s: Pick<TroopState, "members" | "settings" | "apiKey" | "sounds">) {
   try {
-    localStorage.setItem(LS, JSON.stringify({ members: s.members, settings: s.settings, apiKey: s.apiKey, pianoPack: s.pianoPack }));
+    localStorage.setItem(LS, JSON.stringify({ members: s.members, settings: s.settings, apiKey: s.apiKey, sounds: s.sounds }));
   } catch {
     /* private mode etc. */
   }
@@ -148,7 +150,7 @@ export const useTroop = create<TroopState>((set, get) => {
     set({ current: score, isSketch: true, chat: [] });
     // switching character while playing starts the new chart
     if (wasPlaying) void get().play();
-    else void troopAudio.prepare(members, { pianoPack: get().pianoPack, notesHint: notesHintFromScore(score) });
+    else void troopAudio.prepare(members, { sounds: get().sounds, notesHint: notesHintFromScore(score) });
   };
 
   // A shared link (#t=…): replay that take without touching the visitor's own band.
@@ -167,7 +169,7 @@ export const useTroop = create<TroopState>((set, get) => {
     const take: Take = { id: score.id, score, label: `Shared · ${STYLES[settings.style].name}`, engine: "local", createdAt: Date.now() };
     set((s) => ({ current: score, isSketch: false, takes: addTake(s.takes, take), chat: [], sharedArrival: { takeId: take.id } }));
     saveTakes(get().takes);
-    void troopAudio.prepare(score.members, { pianoPack: get().pianoPack, notesHint: notesHintFromScore(score) });
+    void troopAudio.prepare(score.members, { sounds: get().sounds, notesHint: notesHintFromScore(score) });
   };
 
   let persistTimer: ReturnType<typeof setTimeout> | null = null;
@@ -187,7 +189,7 @@ export const useTroop = create<TroopState>((set, get) => {
     settings: defaultSettings(defaultMembers()),
     apiKey: "",
     serverKey: false,
-    pianoPack: "salamander",
+    sounds: DEFAULT_SOUNDS,
     current: null,
     isSketch: true,
     takes: [],
@@ -213,7 +215,7 @@ export const useTroop = create<TroopState>((set, get) => {
       } catch {
         /* ignore */
       }
-      set({ hydrated: true, members, settings, apiKey: saved.apiKey ?? "", pianoPack: saved.pianoPack ?? "salamander", takes: loadTakes(), seenIntro });
+      set({ hydrated: true, members, settings, apiKey: saved.apiKey ?? "", sounds: readSounds(saved.sounds, saved.pianoPack), takes: loadTakes(), seenIntro });
       void fetch("/api/llm")
         .then((r) => (r.ok ? r.json() : null))
         .then((d: { serverKey?: boolean } | null) => set({ serverKey: !!d?.serverKey }))
@@ -233,7 +235,7 @@ export const useTroop = create<TroopState>((set, get) => {
       const top = get().takes[0];
       if (top?.cutAt !== undefined && top.score.settings.seed === settings.seed && top.score.settings.style === settings.style) {
         set({ current: top.score, isSketch: false, chat: top.score.chat });
-        void troopAudio.prepare(top.score.members, { pianoPack: get().pianoPack, notesHint: notesHintFromScore(top.score) });
+        void troopAudio.prepare(top.score.members, { sounds: get().sounds, notesHint: notesHintFromScore(top.score) });
       }
       openSharedLink();
       // a link pasted into a tab that's already open only changes the hash
@@ -303,10 +305,11 @@ export const useTroop = create<TroopState>((set, get) => {
       persist();
     },
 
-    setPianoPack(pianoPack) {
-      set({ pianoPack });
+    setSounds(patch) {
+      const sounds = { ...get().sounds, ...patch };
+      set({ sounds });
       persist();
-      void troopAudio.prepare(get().members, { pianoPack });
+      void troopAudio.prepare(get().members, { sounds });
     },
 
     async generate() {
@@ -334,7 +337,7 @@ export const useTroop = create<TroopState>((set, get) => {
       useDebug.getState().startRun(runId, settings.mode);
       set({ gen: { running: true, status: "Tuning up…", runId, mode: settings.mode, error: null }, chat: [], readyBars: settings.mode === "improviser" ? 0 : null, autopilotBars: [] });
       void troopAudio.unlock().catch(() => {});
-      void troopAudio.prepare(members, { pianoPack: st.pianoPack });
+      void troopAudio.prepare(members, { sounds: st.sounds });
 
       const label = `${STYLES[settings.style].name} · ${settings.mode === "composer" ? "composed" : "jammed"}`;
       let cutShort: Take | null = null;
@@ -424,7 +427,7 @@ export const useTroop = create<TroopState>((set, get) => {
       let started = false;
       try {
         await troopAudio.unlock();
-        void troopAudio.prepare(score.members, { pianoPack: get().pianoPack, notesHint: notesHintFromScore(score) });
+        void troopAudio.prepare(score.members, { sounds: get().sounds, notesHint: notesHintFromScore(score) });
         for (const m of score.members) troopAudio.setMute(m.id, get().muted.includes(m.id));
         started = troopAudio.play(score, { fromBar, countIn: fromBar === 0 });
       } catch (e) {

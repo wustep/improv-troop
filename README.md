@@ -15,7 +15,7 @@ Live: https://jamming-wustep.vercel.app
   - **Improviser:** the leader counts off with a motif and a plan. Bandmates reply, then trade phrases. In each round the featured player goes first and the band answers what it heard. Playback starts after the first phrase.
   - **Composer:** a director writes the chart. "Best of 4" drafts four charts and a judge picks the most distinctive. Featured parts are then written note by note.
 - **Without a key** the band plays from its own engine, and models are only called when you press the big button.
-- **Sound:** sampled instruments via [smplr](https://github.com/danigb/smplr): Salamander Grand piano (with fallbacks), the Smolken double bass, LinnDrum, VCSL vibraphone, and MusyngKite soundfonts, including pizzicato strings.
+- **Sound:** sampled instruments via [smplr](https://github.com/danigb/smplr): Salamander Grand piano (with fallbacks) or a Wurlitzer or CP80 electric piano, the Smolken double bass, an acoustic drum kit built from VCSL (or a LinnDrum), the VCSL vibraphone, and MusyngKite soundfonts, including pizzicato strings. Sources and licenses are listed in [docs/SOUNDS.md](docs/SOUNDS.md).
 - **Sheet music:** [VexFlow](https://www.vexflow.com/) charts with follow-scroll. The cello switches to tenor clef for high passages, and pizz./arco changes are marked.
 - **Under the hood:** the debug panel shows every model call (prompt, raw reply, repairs, timings), the plan, the judge's scores, and instrument loading.
 

@@ -9,6 +9,7 @@ import { ANIMAL_LIST, ANIMALS, INSTRUMENT_LIST, INSTRUMENTS } from "@/music/inst
 import { STANDARDS, getStandard, searchStandards } from "@/music/standards";
 import { STYLE_LIST, STYLES } from "@/music/styles";
 import type { AnimalId, InstrumentId, Member } from "@/music/types";
+import type { Sounds } from "@/audio/packs";
 import { useTroop } from "@/state/store";
 import { RoughBox, RoughButton } from "./ui/rough";
 
@@ -197,13 +198,13 @@ export function ControlPanel() {
   const apiKey = useTroop((x) => x.apiKey);
   const serverKey = useTroop((x) => x.serverKey);
   const thinks = apiKey || serverKey;
-  const pianoPack = useTroop((x) => x.pianoPack);
+  const sounds = useTroop((x) => x.sounds);
   const set = useTroop((x) => x.setSettings);
   const setStyle = useTroop((x) => x.setStyle);
   const setStandard = useTroop((x) => x.setStandard);
   const setMembers = useTroop((x) => x.setMembers);
   const setApiKey = useTroop((x) => x.setApiKey);
-  const setPianoPack = useTroop((x) => x.setPianoPack);
+  const setSounds = useTroop((x) => x.setSounds);
   const [showKey, setShowKey] = useState(false);
   const std = getStandard(s.standard);
   const lengths = lengthOptions(s.standard);
@@ -428,13 +429,28 @@ export function ControlPanel() {
               <ModelSelect value={s.playerModel} onChange={(id) => set({ playerModel: id })} label="Bandmates model" />
             </div>
           )}
-          <div>
-            <Label hint="others: open sampled packs">Piano samples</Label>
-            <select className="sketch-select w-full" value={pianoPack} onChange={(e) => setPianoPack(e.target.value as typeof pianoPack)} aria-label="Piano samples">
-              <option value="salamander">Salamander Grand (heavier, richest)</option>
-              <option value="splendid">Splendid Grand</option>
-              <option value="soundfont">General MIDI piano (lightest)</option>
-            </select>
+          <div className="grid grid-cols-2 gap-s">
+            <div>
+              <Label>Piano sound</Label>
+              <select className="sketch-select w-full" value={sounds.piano} onChange={(e) => setSounds({ piano: e.target.value as Sounds["piano"] })} aria-label="Piano sound">
+                <optgroup label="Grand piano">
+                  <option value="salamander">Salamander (richest)</option>
+                  <option value="splendid">Splendid</option>
+                  <option value="soundfont">General MIDI (lightest)</option>
+                </optgroup>
+                <optgroup label="Electric">
+                  <option value="wurlitzer">Wurlitzer</option>
+                  <option value="cp80">Yamaha CP80</option>
+                </optgroup>
+              </select>
+            </div>
+            <div>
+              <Label>Drum kit</Label>
+              <select className="sketch-select w-full" value={sounds.drums} onChange={(e) => setSounds({ drums: e.target.value as Sounds["drums"] })} aria-label="Drum kit">
+                <option value="acoustic">Acoustic kit</option>
+                <option value="lm2">LinnDrum machine</option>
+              </select>
+            </div>
           </div>
         </div>
       </details>

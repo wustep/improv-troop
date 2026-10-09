@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { troopAudio, type LoadState, type PianoPack, type PlaybackStats } from "@/audio/engine";
+import { troopAudio, type DrumKit, type LoadState, type PianoPack, type PlaybackStats } from "@/audio/engine";
+import { DRUM_KITS, PIANO_PACKS } from "@/audio/packs";
 import { notesHintFromScore } from "@/audio/engine";
 import { AUDIO_FIXTURE } from "@/audio/fixture";
 
 export default function AudioLab() {
   const [pack, setPack] = useState<PianoPack>("salamander");
+  const [kit, setKit] = useState<DrumKit>("acoustic");
   const [loads, setLoads] = useState<LoadState[]>([]);
   const [state, setState] = useState("stopped");
   const [stats, setStats] = useState<PlaybackStats | null>(null);
@@ -45,7 +47,7 @@ export default function AudioLab() {
 
   const prepare = () =>
     troopAudio.prepare(AUDIO_FIXTURE.members, {
-      pianoPack: pack,
+      sounds: { piano: pack, drums: kit },
       notesHint: notesHintFromScore(AUDIO_FIXTURE),
     });
 
@@ -60,9 +62,21 @@ export default function AudioLab() {
             value={pack}
             onChange={(e) => setPack(e.target.value as PianoPack)}
           >
-            <option value="salamander">salamander</option>
-            <option value="splendid">splendid</option>
-            <option value="soundfont">soundfont</option>
+            {PIANO_PACKS.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          drum kit{" "}
+          <select data-testid="kit" value={kit} onChange={(e) => setKit(e.target.value as DrumKit)}>
+            {DRUM_KITS.map((k) => (
+              <option key={k} value={k}>
+                {k}
+              </option>
+            ))}
           </select>
         </label>
         <button data-testid="prepare" onClick={() => void prepare()}>

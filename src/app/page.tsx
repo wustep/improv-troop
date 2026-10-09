@@ -107,7 +107,7 @@ export default function Home() {
         </div>
       </div>
       <footer className="mt-xl text-center text-s text-ink-soft">
-        Samples: Salamander Grand Piano, Splendid Grand, Smolken double bass, LinnDrum (LM-2), VCSL, MusyngKite soundfonts — via smplr. Notation by VexFlow.
+        Samples: Salamander Grand Piano (Alexander Holm), Splendid Grand, Greg Sullivan’s Wurlitzer and CP80, Smolken double bass, VCSL drums and vibraphone, LinnDrum (LM-2), MusyngKite and FluidR3 soundfonts — via smplr. Notation by VexFlow.
       </footer>
     </div>
   );

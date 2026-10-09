@@ -36,8 +36,8 @@ export function Transport() {
   const loadPct = loads.length ? Math.round((loads.reduce((s, l) => s + (l.ready || l.error ? 1 : l.total ? l.loaded / l.total : 0), 0) / loads.length) * 100) : 100;
   const members = useTroop((s) => s.members);
   const retryLoads = () => {
-    const { members, pianoPack } = useTroop.getState();
-    void troopAudio.prepare(members, { pianoPack });
+    const { members, sounds } = useTroop.getState();
+    void troopAudio.prepare(members, { sounds });
   };
 
   const goLabel = hasKey ? (mode === "composer" ? "Compose!" : "Let them jam!") : "Sketch a new take";

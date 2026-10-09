@@ -1,5 +1,6 @@
 import {
   DrumMachine,
+  ElectricPiano,
   Mallet,
   Sampler,
   Soundfont,
@@ -15,7 +16,29 @@ import { CountingStorage } from "./storage";
 // One open sampled instrument per animal. Each instrument has a fallback chain; the first
 // pack that actually delivers samples wins. Packs are swappable without touching the engine.
 
-export type PianoPack = "salamander" | "splendid" | "soundfont";
+export type PianoPack = "salamander" | "splendid" | "soundfont" | "wurlitzer" | "cp80";
+export type DrumKit = "acoustic" | "lm2";
+
+/** Which sampled sound the piano and the drums use. */
+export interface Sounds {
+  piano: PianoPack;
+  drums: DrumKit;
+}
+
+export const DEFAULT_SOUNDS: Sounds = { piano: "salamander", drums: "acoustic" };
+
+export const PIANO_PACKS: PianoPack[] = ["salamander", "splendid", "soundfont", "wurlitzer", "cp80"];
+export const DRUM_KITS: DrumKit[] = ["acoustic", "lm2"];
+
+/** A saved or shared value read back as a sound we have (anything else is the default). */
+export function readSounds(raw: unknown, legacyPiano?: unknown): Sounds {
+  const o = (raw && typeof raw === "object" ? raw : {}) as Partial<Record<keyof Sounds, unknown>>;
+  const piano = o.piano ?? legacyPiano;
+  return {
+    piano: PIANO_PACKS.includes(piano as PianoPack) ? (piano as PianoPack) : DEFAULT_SOUNDS.piano,
+    drums: DRUM_KITS.includes(o.drums as DrumKit) ? (o.drums as DrumKit) : DEFAULT_SOUNDS.drums,
+  };
+}
 
 export interface PackContext {
   ctx: AudioContext;
@@ -254,6 +277,141 @@ const vibes: PackSpec = {
   },
 };
 
+// ─── Electric pianos (Greg Sullivan, CC-BY 3.0) ──────────────────────────────
+
+// Their samples are normalized, ~15 dB hotter than Salamander's (measured at C4, mezzo): this
+// is the piano's level-matched volume brought down by that much.
+export const EPIANO_VOLUME = 45;
+
+function epiano(name: "WurlitzerEP200" | "CP80", pack: string): PackSpec {
+  return {
+    pack,
+    create(p) {
+      return ElectricPiano(p.ctx, {
+        instrument: name,
+        destination: p.destination,
+        storage: p.storage,
+        volume: EPIANO_VOLUME,
+        pan: p.pan,
+        onLoadProgress: ({ loaded, total }) => p.onProgress(loaded, total),
+      });
+    },
+  };
+}
+
+// ─── Acoustic kit (Versilian Community Sample Library, CC0) ─────────────────
+// Built from VCSL's kick, snare, toms, hi-hat and two suspended cymbals played with a stick
+// (one rides, one crashes): velocity layers, two round-robins where VCSL has them, and the
+// open hat choked by the closed and pedal hat. Keyed by General MIDI drum note, like the parts.
+
+export const VCSL_BASE = "https://smpldsnds.github.io/sgossner-vcsl";
+const IDIO = "Idiophones/Struck Idiophones";
+const MEMB = "Membranophones/Struck Membranophones";
+
+type KitLayer = { file: string; vel?: [number, number]; rr?: number; trim: number };
+interface KitPiece {
+  keys: number[];
+  /** The note the samples sound at (toms are retuned from it); defaults to each key. */
+  pitch?: number;
+  layers: KitLayer[];
+  group?: number;
+  offBy?: number;
+  release?: number;
+}
+
+/**
+ * Velocity layers splitting 1..127, from soft to hard, each with `rr` round-robins. `peaks` is
+ * each layer's measured peak (dBFS): VCSL records its layers at their natural level (a snare's
+ * softest tap peaks 27 dB under its hardest), and smplr scales by velocity on top of that, so
+ * each layer is trimmed onto a gentle curve, -13 dB for the softest up to -1 dB for the hardest
+ * (a single-layer piece sits at -3, like the LinnDrum the drum parts were balanced on).
+ */
+function layers(peaks: number[], file: (layer: number, rr: number) => string, rr = 2): KitLayer[] {
+  const n = peaks.length;
+  const out: KitLayer[] = [];
+  peaks.forEach((peak, i) => {
+    const vel: [number, number] = [i === 0 ? 1 : Math.round((127 * i) / n) + 1, Math.round((127 * (i + 1)) / n)];
+    const target = n === 1 ? -3 : -13 + (12 * i) / (n - 1);
+    const trim = Math.round(Math.min(24, target - peak) * 10) / 10;
+    for (let k = 1; k <= rr; k++) out.push({ file: file(i, k), vel: n > 1 ? vel : undefined, rr: rr > 1 ? k : undefined, trim });
+  });
+  return out;
+}
+
+const HAT = `${IDIO}/Hi-Hat Cymbal`;
+const RIDE = `${IDIO}/Suspended Cymbal 2/susCymb2_hit`;
+const CRASH = `${IDIO}/Suspended Cymbal 1/susCymb1_hit`;
+const HIGH_TOM = (i: number, k: number) => `${MEMB}/Tom 1/Stick/TomH_HitS_v${i + 2}_rr${k}_Mid`;
+const LOW_TOM = (i: number, k: number) => `${MEMB}/Tom 2/Stick/TomL_HitS_v${i + 2}_rr${k}_Mid`;
+
+// peaks measured in the browser from the decoded samples (round-robins sit within 2 dB)
+export const ACOUSTIC_KIT: KitPiece[] = [
+  { keys: [35, 36], pitch: 36, layers: layers([-22.3, -16.9, -9.8, -4.6], (i, k) => `${MEMB}/Bass Drum 1/BDrumNew_hit_v${[2, 3, 5, 7][i]}_rr${k}_Sum`) },
+  { keys: [38, 40], pitch: 38, layers: layers([-29.6, -21.8, -7, -2.8], (i, k) => `${MEMB}/Snare Drum, Modern 1/Snare2_HitSN_v${[3, 5, 7, 9][i]}_rr${k}_Mid`) },
+  { keys: [37], layers: layers([-21.2], (_, k) => `${MEMB}/Snare Drum, Modern 2/Snare3M_Xstick_v2_rr${k}_Mid`) },
+  { keys: [39], layers: layers([-0.5], (_, k) => `${IDIO}/Claps/Clap_rr${k}`) },
+  { keys: [42], group: 1, layers: layers([-36.3, -24.1, -13.7, -8.3], (i, k) => `${HAT}/HiHat_HitC_v${i + 1}_rr${k}_Mid`) },
+  { keys: [44], group: 1, layers: layers([-21.7], (_, k) => `${HAT}/HiHat_Close_rr${k}_Mid`) },
+  { keys: [46], offBy: 1, release: 0.08, layers: layers([-10.4], (_, k) => `${HAT}/HiHat_HitO_rr${k}_Mid`) },
+  { keys: [51, 59], pitch: 51, release: 1.2, layers: layers([-32.5, -18.8, -18.1], (i) => `${RIDE}_stick_${["pp1", "mp1", "mf1"][i]}`, 1) },
+  { keys: [53], release: 1.2, layers: layers([-16.9, -12.5], (i) => `${RIDE}_bell_${["p1", "f1"][i]}`, 1) },
+  { keys: [49, 57], pitch: 49, release: 1.5, layers: layers([-34.1, -25.3, -15.5], (i) => `${CRASH}_stick_${["pp1", "mp1", "f1"][i]}`, 1) },
+  // the rack toms are VCSL's high tom, the floor toms its low one, each retuned a little
+  { keys: [48, 50], pitch: 50, layers: layers([-26.3, -16, -9.6], HIGH_TOM) },
+  { keys: [47], pitch: 49, layers: layers([-26.3, -16, -9.6], HIGH_TOM) },
+  { keys: [41, 43, 45], pitch: 45, layers: layers([-24.6, -13.8, -8.6], LOW_TOM) },
+  { keys: [54], layers: layers([-28.2, -17.3], (i) => `${IDIO}/Tambourine 1/Tamb1_Hit_v${i + 1}_rr1_Mid`, 1) },
+  { keys: [56], layers: layers([-24.6, -18.3], (i) => `${IDIO}/Cowbells/Cowbell1_Hit_v${i + 2}_rr1_Mid`, 1) },
+  { keys: [69, 70], pitch: 70, layers: layers([-29], (_, k) => `${IDIO}/Shaker, Small/Mid_Shaker_Slap_rr${k}`) },
+  { keys: [62], layers: layers([-26.8], (_, k) => `${MEMB}/Conga/Conga_HitFM_v1_rr${k}_Sum`) },
+  { keys: [63], layers: layers([-34.3, -20.8, -16.3], (i) => `${MEMB}/Conga/Conga_HitN_v${i + 1}_rr1_Sum`, 1) },
+  { keys: [64], layers: layers([-58, -30.2, -24.8], (i) => `${MEMB}/Conga/Tumba_HitN_v${i + 1}_rr1_Sum`, 1) },
+];
+
+export function acousticKitPreset(): SmplrPreset {
+  const groups: SmplrPreset["groups"] = [];
+  for (const piece of ACOUSTIC_KIT) {
+    const seq = piece.layers.some((l) => l.rr !== undefined);
+    for (const key of piece.keys) {
+      groups.push({
+        seqLength: seq ? 2 : undefined,
+        group: piece.group,
+        offBy: piece.offBy,
+        ampRelease: piece.release,
+        regions: piece.layers.map((l) => ({
+          sample: encodeURI(l.file),
+          keyRange: [key, key] as [number, number],
+          pitch: piece.pitch ?? key,
+          velRange: l.vel,
+          seqPosition: seq ? l.rr : undefined,
+          volume: l.trim,
+        })),
+      });
+    }
+  }
+  return {
+    meta: { name: "VCSL acoustic kit", license: "CC0 1.0", source: "https://github.com/sgossner/VCSL" },
+    samples: { baseUrl: VCSL_BASE, formats: ["ogg", "m4a"] },
+    defaults: { ampRelease: 0.4 },
+    groups,
+  };
+}
+
+const acousticKit: PackSpec = {
+  pack: "vcsl:acoustic-kit",
+  create(p) {
+    return Sampler(p.ctx, {
+      preset: acousticKitPreset(),
+      destination: p.destination,
+      scheduler: p.scheduler,
+      storage: p.storage,
+      volume: p.volume,
+      pan: p.pan,
+      onLoadProgress: ({ loaded, total }) => p.onProgress(loaded, total),
+    });
+  },
+};
+
 /** Level-matched volume for the pizzicato voice (that pack runs ~3 dB quieter than arco). */
 export const PIZZ_VOLUME = 121;
 
@@ -263,18 +421,20 @@ export function pizzChain(): PackSpec[] {
 }
 
 /** Fallback chain per instrument, best first. */
-export function packChain(instrument: InstrumentId, pianoPack: PianoPack = "salamander"): PackSpec[] {
+export function packChain(instrument: InstrumentId, sounds: Sounds = DEFAULT_SOUNDS): PackSpec[] {
   switch (instrument) {
     case "piano": {
       const sf = soundfont("acoustic_grand_piano", "MusyngKite");
-      if (pianoPack === "soundfont") return [sf, soundfont("acoustic_grand_piano", "FluidR3_GM")];
-      if (pianoPack === "splendid") return [splendid, sf];
+      if (sounds.piano === "soundfont") return [sf, soundfont("acoustic_grand_piano", "FluidR3_GM")];
+      if (sounds.piano === "splendid") return [splendid, sf];
+      if (sounds.piano === "wurlitzer") return [epiano("WurlitzerEP200", "gs:wurlitzer"), soundfont("electric_piano_1", "MusyngKite"), sf];
+      if (sounds.piano === "cp80") return [epiano("CP80", "gs:cp80"), soundfont("electric_grand_piano", "MusyngKite"), sf];
       return [salamander, splendid, sf];
     }
     case "bass":
       return [smolkenPizz, soundfont("acoustic_bass", "MusyngKite"), soundfont("acoustic_bass", "FluidR3_GM")];
     case "drums":
-      return [lm2];
+      return sounds.drums === "lm2" ? [lm2] : [acousticKit, lm2];
     case "vibes":
       return [vibes, soundfont("vibraphone", "MusyngKite"), soundfont("vibraphone", "FluidR3_GM")];
     default: {

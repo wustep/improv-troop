@@ -10,8 +10,11 @@ import {
   packChain,
   pizzChain,
   PIZZ_VOLUME,
+  DEFAULT_SOUNDS,
+  type DrumKit,
   type PackSpec,
   type PianoPack,
+  type Sounds,
 } from "./packs";
 import { CountingStorage } from "./storage";
 
@@ -42,7 +45,6 @@ export interface PlaybackStats {
 interface InstEntry {
   key: string;
   instrument: InstrumentId;
-  pianoPack: PianoPack;
   chain: PackSpec[];
   spec: PackSpec | null;
   inst: Smplr | null;
@@ -186,7 +188,7 @@ export class TroopAudio {
   private failListeners = new Set<(message: string) => void>();
   private muted = new Set<string>();
   private masterVolume = 0.85;
-  private pianoPack: PianoPack = "salamander";
+  private sounds: Sounds = DEFAULT_SOUNDS;
 
   private click: Smplr | null = null;
   private clickReady: Promise<void> | null = null;
@@ -281,11 +283,11 @@ export class TroopAudio {
 
   async prepare(
     members: Member[],
-    opts?: { pianoPack?: PianoPack; notesHint?: Record<string, number[]> },
+    opts?: { sounds?: Sounds; notesHint?: Record<string, number[]> },
   ): Promise<void> {
     const ctx = this.ensureContext();
     if (!ctx) return;
-    if (opts?.pianoPack) this.pianoPack = opts.pianoPack;
+    if (opts?.sounds) this.sounds = opts.sounds;
     this.currentMembers = members.slice();
     this.assignEntries(members);
     this.ensureClick();
@@ -364,7 +366,7 @@ export class TroopAudio {
     members.forEach((m, i) => {
       const k = seen.get(m.instrument) ?? 0;
       seen.set(m.instrument, k + 1);
-      const pack = m.instrument === "piano" ? this.pianoPack : "default";
+      const pack = m.instrument === "piano" ? this.sounds.piano : m.instrument === "drums" ? this.sounds.drums : "default";
       const key = `${m.instrument}:${pack}#${k}`;
       this.memberEntry.set(m.id, key);
       for (const e of [this.entries.get(key), this.entries.get(`${key}|pizz`)]) if (e) e.used = used;
@@ -386,8 +388,7 @@ export class TroopAudio {
     const entry: InstEntry = {
       key,
       instrument,
-      pianoPack: this.pianoPack,
-      chain: chain ?? packChain(instrument, this.pianoPack),
+      chain: chain ?? packChain(instrument, this.sounds),
       spec: null,
       inst: null,
       storage: null,
@@ -946,7 +947,10 @@ export class TroopAudio {
     vel = clamp(vel, 0.02, 1);
 
     try {
-      if (isDrum) {
+      if (isDrum && entry.pack !== "lm-2") {
+        // the acoustic kit is keyed by General MIDI drum note; the hats choke in its own preset
+        inst.start({ note: note.pitch, velocity: Math.round(1 + vel * 126), time });
+      } else if (isDrum) {
         const sample = lm2Sample(note.pitch, vel, note.art);
         if (!sample) {
           this.stats.dropped++;
@@ -992,4 +996,4 @@ export class TroopAudio {
  * the AudioContext is created lazily on the first unlock/prepare/play. */
 export const troopAudio: TroopAudio = new TroopAudio();
 
-export type { PianoPack };
+export type { DrumKit, PianoPack, Sounds };
