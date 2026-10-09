@@ -50,3 +50,15 @@ Ranked: (1) a solo ends and nobody acknowledges it, (2) the take ends and the ba
 - The art lab's glitch check uses the shoulders where they're drawn (`SpriteHandle.shoulders()`): a bow moves the body, and fixed shoulders flagged Rusty's trumpet hold as crossed.
 
 Still rough: nothing yet for trading fours specifically (the traders glance at each other only through the spotlight), and the reactions haven't been tuned by watching a long take at full speed.
+
+## Round 4: the heuristic band's solos
+
+Measured, since I can't listen: 32-bar takes in all 8 styles (two seeds each) and 9 standards, with Rusty on trumpet soloing. Per part: bass root on each chord change, a soloist's chord tones on strong beats, steps vs leaps, onset spacing, and the comping's top-voice motion.
+
+Ranked: (1) a third of a busy soloist's bars ran straight up (or up and down) the scale for the whole bar, in 16ths in swing, so 52% of a swing solo's onsets were 16ths; (2) ambient comping's top voice moved more than a 4th between voicings 22–32% of the time; (3) bossa, pop and ambient solos put chord tones on strong beats only 60–77% of the time.
+
+**Runs** (`runLine`). Rusty's taste for flurries asks for `@line run` every third solo bar. Outside baroque (whose spinning-out 16ths stay as they were), a run is now a flourish: it starts after a breath (half a beat or a beat), turns once on the way, skips through the chord now and then, puts chord tones on beats 1 and 3, encloses its arrival (the step above, the semitone below; from below first if the line is already above), and holds a chord tone through the last beat, with a crescendo into it. Swing runs in 8th-note triplets as often as in 16ths. Swing solos went from 52% 16th-note onsets to 2–29%, with chord tones on 92–100% of strong beats. A test checks every run bar in four styles: it breathes, turns and lands, and fails on the old runs.
+
+Not changed: ambient comping turned out to be smooth pads holding common tones; the top-voice figure counted the single "shimmer" notes above them. The bossa and pop strong-beat figures come from the general phrase generator, not runs, and are left for another round.
+
+Still rough: those bossa and pop strong beats; the run's shape is fixed (one turn) rather than drawn from a vocabulary of bebop cells.

@@ -684,10 +684,66 @@ export function cadenceLine(ctx: BarCtx, opts: LineOpts = {}): NoteEvent[] {
   return out;
 }
 
-/** A scalar run through the bar (baroque spinning-out, or a dense flourish): straight up or down the scale. */
+/**
+ * A run through the bar. Baroque spins out a whole bar of 16ths straight up or down the scale.
+ * Anywhere else it's a flourish, not a scale exercise: a breath first, one turn, a skip through
+ * the chord now and then, an enclosure (the step above, the semitone below), and a held chord
+ * tone on the last beat. Played straight up the scale for a whole bar, a third of a busy
+ * soloist's bars sounded like practising.
+ */
 export function runLine(ctx: BarCtx, opts: LineOpts = {}): NoteEvent[] {
-  const sixteenths = ctx.style.id === "baroque" || ctx.style.id === "funk" || ctx.style.lineDensity >= 2;
-  const step = sixteenths ? 0.25 : 0.5;
+  if (ctx.style.id === "baroque") return spinOut(ctx, opts);
+  const rng = ctx.rng;
+  const fast = ctx.style.id === "funk" || ctx.style.lineDensity >= 2;
+  // swing runs in triplets as often as in double time
+  const triplets = fast && ctx.style.swing > 0.55 && rng.chance(0.5);
+  const step = triplets ? 1 / 3 : fast ? 0.25 : 0.5;
+  const featured = ctx.role === "solo" || ctx.role === "lead";
+  const [lo, hi] = [opts.lo ?? (featured ? (ctx.inst.solo ?? ctx.inst.sweet)[0] : ctx.inst.sweet[0]), opts.hi ?? (featured ? (ctx.inst.solo ?? ctx.inst.sweet)[1] : ctx.inst.sweet[1])];
+  const startAt = triplets || rng.chance(0.4) ? 1 : 0.5;
+  const landAt = ctx.beats - 1;
+  const n = Math.round((landAt - startAt) / step);
+  let p = ctx.mem.lastPitch !== null && ctx.mem.lastPitch >= lo && ctx.mem.lastPitch <= hi ? ctx.mem.lastPitch : Math.round((lo + hi) / 2);
+  // head for the side with more room, and turn back once on the way
+  let dir: 1 | -1 = hi - p >= p - lo ? 1 : -1;
+  const turnAt = Math.round(n * (0.55 + rng.next() * 0.25));
+  const vel = velFor(ctx, 0.8) * (opts.vel ?? 1);
+  const onBeat = (t: number) => Math.abs(t - Math.round(t)) < EPS;
+  const out: NoteEvent[] = [];
+  // the last two notes enclose the arrival, so the line leaves room for them
+  const body = Math.max(1, n - 2);
+  for (let i = 0; i < body; i++) {
+    const t = startAt + i * step;
+    const h = harmAt(ctx, t);
+    if (i === 0) p = nearestIn(p, h.tones);
+    else {
+      if (i === turnAt || p + dir * 3 > hi || p + dir * 3 < lo) dir = (-dir) as 1 | -1;
+      // now and then skip through the chord instead of stepping
+      p = onBeat(t) && rng.chance(0.3) ? nearestIn(p + dir * 3, h.tones, dir) : stepIn(p, dir, h.scale);
+    }
+    // strong beats (1 and 3) sit on the chord; the others on the scale at least
+    if (i > 0 && onBeat(t) && Math.round(t) % 2 === 0 && !h.tones.includes(mod(p, 12))) p = nearestIn(p, h.tones, dir);
+    else if (i > 0 && onBeat(t) && !h.scale.includes(mod(p, 12))) p = nearestIn(p, h.scale, dir);
+    // a crescendo through the run into the arrival
+    out.push({ pitch: p, start: t, dur: step, vel: vel * (0.88 + 0.1 * (i / n)) * (onBeat(t) ? 1.04 : 0.96) });
+  }
+  // the arrival: the chord tone nearest where the line is, held through the last beat
+  const hl = harmAt(ctx, landAt);
+  const target = Math.max(lo + 1, Math.min(hi - 2, nearestIn(p + dir, hl.tones, dir)));
+  const tgt = hl.tones.includes(mod(target, 12)) ? target : nearestIn(target, hl.tones);
+  // from above (a step) then below (a semitone); from below first if the line is already up there
+  const above = stepIn(tgt, 1, hl.scale);
+  const encl = n - body === 2 ? (p === above ? [stepIn(tgt, -1, hl.scale), above] : [above, tgt - 1]) : n - body === 1 ? [tgt - 1] : [];
+  encl.forEach((q, k) => out.push({ pitch: q, start: startAt + (body + k) * step, dur: step, vel: vel * 0.97 }));
+  out.push({ pitch: tgt, start: landAt, dur: ctx.beats - landAt - 0.05, vel: vel * 1.02 });
+  ctx.mem.phrase = null;
+  ctx.mem.lastPitch = tgt;
+  return out;
+}
+
+/** Baroque spinning-out: a whole bar of 16ths straight up or down the scale, landing on a chord tone. */
+function spinOut(ctx: BarCtx, opts: LineOpts = {}): NoteEvent[] {
+  const step = 0.25;
   const featured = ctx.role === "solo" || ctx.role === "lead";
   const [lo, hi] = [opts.lo ?? (featured ? (ctx.inst.solo ?? ctx.inst.sweet)[0] : ctx.inst.sweet[0]), opts.hi ?? (featured ? (ctx.inst.solo ?? ctx.inst.sweet)[1] : ctx.inst.sweet[1])];
   const n = Math.round(ctx.beats / step);

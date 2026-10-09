@@ -343,6 +343,29 @@ describe("solos build", () => {
       expect(Math.max(...sparse), style).toBeLessThanOrEqual(5);
     }
   });
+  it("a busy soloist's run breathes, turns and lands, instead of running the scale for a whole bar", () => {
+    // Rusty's taste for flurries asks for "@line run" every third solo bar
+    let runs = 0;
+    for (const style of ["swing", "bossa", "funk", "neworleans"] as StyleId[])
+      for (let seed = 1; seed <= 4; seed++) {
+        const { score } = generateLocal({ ...defaultSettings(band), style, seed, bars: 32, soloists: ["fox"] }, band);
+        for (let b = 0; b < score.frame.bars; b++) {
+          if (score.plan[b].directives?.fox !== "@line run") continue;
+          const notes = score.parts.fox.filter((x) => Math.floor(x.start / 4 + 1e-9) === b).sort((x, y) => x.start - y.start);
+          if (notes.length < 4) continue;
+          runs++;
+          const at = `${style} ${seed} bar ${b + 1}`;
+          expect(notes[0].start - b * 4, at).toBeGreaterThanOrEqual(0.5);
+          const last = notes.at(-1)!;
+          expect(last.dur, at).toBeGreaterThan(0.9);
+          const chord = score.frame.chords[b].filter((c) => c.beat <= last.start - b * 4 + 1e-6).at(-1)!;
+          expect(chordPcs(parseChord(chord.symbol)), at).toContain(mod(last.pitch, 12));
+          const dirs = notes.slice(1).map((x, i) => Math.sign(x.pitch - notes[i].pitch)).filter(Boolean);
+          expect(new Set(dirs).size, `${at} turns`).toBe(2);
+        }
+      }
+    expect(runs).toBeGreaterThan(5);
+  });
 });
 
 describe("slow harmony", () => {
