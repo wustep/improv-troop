@@ -1,7 +1,7 @@
 import { L, S, ellipsePath, hash, mix, rectPath } from "../sketch";
-import { approach, clamp } from "../affine";
+import { clamp } from "../affine";
 import { isBlack, keyUnits } from "../fingering";
-import { type Frame, type Rig, type RigCtx, hit, strokeLift } from "./types";
+import { type Frame, type Rig, type RigCtx, slewTo, hit, strokeLift } from "./types";
 
 // Bars F3 (53) … F6 (89).
 const LO = 53;
@@ -156,12 +156,16 @@ export const vibes: Rig = {
       const nx = next[k] && (lastAge > 0.07 || next[k]!.inSec < 0.1) ? next[k] : undefined;
       const pitch = nx ? nx.pitch : m["p" + k];
       let lift = strokeLift(lastAge, nx?.strike ? nx.inSec : Infinity, s.playing ? 0.6 : 0.3);
-      // an outer mallet that isn't playing rides a little higher, out of the way
-      if (k.endsWith("0") && !(nx?.strike) && lastAge > 0.15) lift = Math.max(lift, 0.75);
+      // an outer mallet that isn't playing rides a little higher, out of the way (eased, or it pops up)
+      const park = k.endsWith("0") && !nx?.strike && lastAge > 0.15 ? 0.75 : 0;
+      m["park" + k] = slewTo(m["park" + k] ?? park, park, f.dt, 0.05, 4);
+      lift = Math.max(lift, m["park" + k]);
       const kx = "x" + k;
       if (m[kx] === undefined) m[kx] = barX(pitch);
-      m[kx] += (barX(pitch) - m[kx]) * approach(f.dt, 0.03);
-      heads[k] = { x: m[kx], y: barY(pitch) - lift * 22 };
+      m[kx] = slewTo(m[kx], barX(pitch), f.dt, 0.03, 1100);
+      // the accidental row sits higher than the naturals: ease between them too
+      m["y" + k] = slewTo(m["y" + k] ?? barY(pitch), barY(pitch), f.dt, 0.03, 600);
+      heads[k] = { x: m[kx], y: m["y" + k] - lift * 22 };
       c.bag.tf("mb" + k, `translate(${heads[k].x.toFixed(1)} ${heads[k].y.toFixed(1)})`);
     }
     for (const arm of ["L", "R"] as const) {

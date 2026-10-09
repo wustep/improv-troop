@@ -1,12 +1,14 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type { AnimalId, InstrumentId, MemberFrameState, NoteEvent } from "@/music/types";
 import { ANIMALS, ANIMAL_LIST, DRUM, INSTRUMENTS, INSTRUMENT_LIST } from "@/music/instruments";
 import { AnimalSprite, type SpriteHandle } from "@/art/AnimalSprite";
+import type { Pt } from "@/art/affine";
 import { AnimalPortrait } from "@/art/AnimalPortrait";
 import { InstrumentIcon } from "@/art/InstrumentIcon";
+import { glitchesOf, type Glitch } from "@/art/glitch";
 import { DoodleDefs } from "@/art/DoodleDefs";
 
 const BPM = 108;
@@ -181,11 +183,25 @@ export default function ArtLabPage() {
   );
 }
 
+const FPS = 60;
+const SPB = 60 / BPM;
+const FRAME_BEATS = 1 / FPS / SPB;
+const END = BARS * 4;
+/** Frames replayed before a seek, so smoothed motion arrives settled rather than from rest. */
+const PREROLL_SEC = 1.5;
+
+function fmt(beat: number) {
+  const bar = Math.floor(beat / 4) + 1;
+  return `bar ${bar} · beat ${((beat % 4) + 1).toFixed(2)} · frame ${Math.round(beat / FRAME_BEATS)}`;
+}
+
 function ArtLab() {
-  // ?speed=0.25&beat=12&inst=guitar,cello&paused=1&row=1&feat=3 for deterministic screenshots
+  // ?speed=0.25&beat=12&inst=guitar,cello&paused=1&row=1&feat=3 for deterministic screenshots:
+  // paused holds the playing pose at that beat (add &stopped=1 for the band at rest)
   const q = useSearchParams();
   const row = !!q.get("row");
   const [playing, setPlaying] = useState(() => !q.get("paused"));
+  const [stopped, setStopped] = useState(() => !!q.get("stopped"));
   const [insts, setInsts] = useState<InstrumentId[]>(() => {
     const list = (q.get("inst") ?? "").split(",").filter((x): x is InstrumentId => (INSTRUMENT_LIST as string[]).includes(x));
     return [...list, ...DEFAULT_INSTRUMENTS.slice(list.length)].slice(0, ANIMAL_LIST.length);
@@ -194,30 +210,115 @@ function ArtLab() {
   const [speed, setSpeed] = useState(() => Number(q.get("speed")) || 1);
   const sprites = useRef<(SpriteHandle | null)[]>([]);
   const parts = useMemo(() => insts.map((i, k) => fakePart(i, k + 1)), [insts]);
-  const clock = useRef({ beat: 0, last: 0 });
+  // the lab's own clock: the sprites see beat × seconds-per-beat as time, so a frame replays exactly
+  const startBeat = Number(q.get("beat")) || 0;
+  const clock = useRef<{ beat: number; last: number; seekTo: number | null }>({ beat: startBeat, last: 0, seekTo: startBeat });
+  const prevHands = useRef<(Record<"L" | "R", Pt> | null)[]>([]);
+  const [readout, setReadout] = useState({ beat: startBeat, glitches: [] as Glitch[][] });
 
-  useEffect(() => {
-    const b = Number(q.get("beat"));
-    if (b > 0) clock.current.beat = b;
-  }, [q]);
+  /** Draw every sprite at `beat`; `step` says the previous frame was one frame before (for jump checks). */
+  const draw = useCallback(
+    (beat: number, opts: { reset?: boolean; step?: boolean } = {}) => {
+      const glitches: Glitch[][] = [];
+      parts.forEach((notes, i) => {
+        const sp = sprites.current[i];
+        if (!sp) return;
+        const look = featured < 0 || featured === i ? 0 : Math.max(-1, Math.min(1, (featured - i) / 4));
+        const s = stateAt(notes, beat, true, featured === i, look);
+        sp.update(stopped ? { ...s, playing: false, active: [], nextOnsetIn: Infinity, nextPitch: null, upcoming: [] } : s, { t: 10 + beat * SPB, reset: opts.reset });
+        const h = sp.hands();
+        glitches[i] = glitchesOf(h, opts.step ? prevHands.current[i] : null);
+        prevHands.current[i] = h;
+      });
+      return glitches;
+    },
+    [parts, featured, stopped],
+  );
+
+  /** Jump to a beat, replaying the frames just before it so eased motion is where it would be. */
+  const seek = useCallback(
+    (beat: number) => {
+      const target = Math.max(0, Math.min(END - FRAME_BEATS, beat));
+      const from = Math.max(0, target - PREROLL_SEC / SPB);
+      draw(from, { reset: true });
+      let b = from;
+      while (b + FRAME_BEATS < target) draw((b += FRAME_BEATS), { step: true });
+      const glitches = draw(target, { step: true });
+      clock.current.beat = target;
+      setReadout({ beat: target, glitches });
+    },
+    [draw],
+  );
+
+  const stepFrames = useCallback(
+    (n: number) => {
+      setPlaying(false);
+      const c = clock.current;
+      if (n < 0) return seek(c.beat + n * FRAME_BEATS);
+      let glitches: Glitch[][] = [];
+      for (let k = 0; k < n; k++) glitches = draw((c.beat = Math.min(END - FRAME_BEATS, c.beat + FRAME_BEATS)), { step: true });
+      setReadout({ beat: c.beat, glitches });
+    },
+    [draw, seek],
+  );
+
+  /** Step forward until some sprite shows a glitch (up to 16 bars), and stop on that frame. */
+  const nextGlitch = useCallback(() => {
+    setPlaying(false);
+    const c = clock.current;
+    const limit = Math.min(END - FRAME_BEATS, c.beat + 64);
+    let glitches: Glitch[][] = [];
+    while (c.beat < limit) {
+      glitches = draw((c.beat += FRAME_BEATS), { step: true });
+      if (glitches.some((g) => g?.length)) break;
+    }
+    setReadout({ beat: c.beat, glitches });
+  }, [draw]);
 
   useEffect(() => {
     let raf = 0;
+    let shown = -1;
     const loop = (now: number) => {
       const c = clock.current;
-      const dt = c.last ? (now - c.last) / 1000 : 0;
+      const dt = c.last ? Math.min(0.1, (now - c.last) / 1000) : 0;
       c.last = now;
-      if (playing) c.beat = (c.beat + dt * (BPM / 60) * speed) % (BARS * 4);
-      parts.forEach((notes, i) => {
-        const look = featured < 0 || featured === i ? 0 : Math.max(-1, Math.min(1, (featured - i) / 4));
-        const s = stateAt(notes, c.beat, playing, featured === i, look);
-        sprites.current[i]?.update(playing ? s : { ...s, playing: false, active: [], nextOnsetIn: Infinity, nextPitch: null });
-      });
+      if (c.seekTo !== null) {
+        seek(c.seekTo);
+        c.seekTo = null;
+      } else if (playing) {
+        const next = c.beat + (dt / SPB) * speed;
+        if (next >= END) seek(0);
+        else {
+          c.beat = next;
+          draw(next);
+        }
+      } else draw(c.beat); // paused: hold this exact frame (the sprites would otherwise drift to idle)
+      // the readout follows playback a few times a second, not every frame
+      if (playing && Math.abs(c.beat - shown) > 0.25) {
+        shown = c.beat;
+        setReadout((r) => ({ ...r, beat: c.beat }));
+      }
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [parts, playing, featured, speed]);
+  }, [draw, seek, playing, speed]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement).closest("select, input[type=text]")) return;
+      if (e.key === "ArrowRight" || e.key === ".") stepFrames(e.shiftKey ? Math.round(1 / FRAME_BEATS) : 1);
+      else if (e.key === "ArrowLeft" || e.key === ",") stepFrames(e.shiftKey ? -Math.round(1 / FRAME_BEATS) : -1);
+      else if (e.key === " ") setPlaying((p) => !p);
+      else if (e.key === "g") nextGlitch();
+      else return;
+      e.preventDefault();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [stepFrames, nextGlitch]);
+
+  const btn = "rounded-xs px-s py-xxs text-l shadow-[inset_0_0_0_var(--border-l)_var(--border-default-color)]";
 
   return (
     <main className="min-h-screen p-6" style={{ background: "var(--cte-canvas)" }}>
@@ -226,7 +327,7 @@ function ArtLab() {
         <h1 className="font-brand text-xxl font-heavy">
           Art lab
         </h1>
-        <button className="rounded-xs px-s py-xxs text-l shadow-[inset_0_0_0_var(--border-l)_var(--border-default-color)]" onClick={() => setPlaying((p) => !p)} data-testid="toggle">
+        <button className={btn} onClick={() => setPlaying((p) => !p)} data-testid="toggle">
           {playing ? "Pause" : "Play"}
         </button>
         <label className="text-l">
@@ -239,6 +340,9 @@ function ArtLab() {
             ))}
           </select>
         </label>
+        <label className="text-l">
+          <input type="checkbox" checked={stopped} onChange={(e) => setStopped(e.target.checked)} /> band stopped
+        </label>
         <div className="flex gap-2">
           {ANIMAL_LIST.map((a) => (
             <AnimalPortrait key={a} animal={a} size={44} />
@@ -249,6 +353,40 @@ function ArtLab() {
             <InstrumentIcon key={i} instrument={i} size={34} />
           ))}
         </div>
+      </div>
+      {/* frame by frame: step, scrub, or run to the next frame where a pose looks wrong */}
+      <div className="sticky top-0 z-10 mb-4 flex flex-wrap items-center gap-2 py-xs" style={{ background: "var(--cte-canvas)" }} aria-label="Frame scrubber">
+        <button className={btn} onClick={() => stepFrames(-Math.round(1 / FRAME_BEATS))} title="Back a beat (shift + ←)">
+          ⏮ beat
+        </button>
+        <button className={btn} onClick={() => stepFrames(-1)} title="Back a frame (← or ,)">
+          ◀ frame
+        </button>
+        <button className={btn} onClick={() => stepFrames(1)} title="Forward a frame (→ or .)" data-testid="frame-next">
+          frame ▶
+        </button>
+        <button className={btn} onClick={() => stepFrames(Math.round(1 / FRAME_BEATS))} title="Forward a beat (shift + →)">
+          beat ⏭
+        </button>
+        <button className={btn} onClick={nextGlitch} title="Step until a pose looks wrong: crossed arms, or a paw jumping (g)" data-testid="next-glitch">
+          next glitch
+        </button>
+        <input
+          type="range"
+          className="min-w-[12rem] flex-1"
+          min={0}
+          max={END}
+          step={FRAME_BEATS}
+          value={readout.beat}
+          onChange={(e) => {
+            setPlaying(false);
+            seek(Number(e.target.value));
+          }}
+          aria-label="Scrub"
+        />
+        <span className="text-m tabular-nums" data-testid="readout">
+          {fmt(readout.beat)}
+        </span>
       </div>
       <div className={row ? "flex items-end justify-center gap-1" : "grid grid-cols-2 gap-6 md:grid-cols-3"}>
         {ANIMAL_LIST.map((a: AnimalId, i) => (
@@ -280,6 +418,11 @@ function ArtLab() {
               <label className="text-s">
                 <input type="radio" name="feat" checked={featured === i} onChange={() => setFeatured(i)} /> solo
               </label>
+              {!playing && readout.glitches[i]?.length ? (
+                <span className="text-s text-(--error)" data-testid={`glitch-${a}`}>
+                  {readout.glitches[i].join(", ")}
+                </span>
+              ) : null}
             </div>
           </div>
         ))}

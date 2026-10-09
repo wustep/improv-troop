@@ -4,7 +4,7 @@
 import { L, S, ellipsePath, hash, mix } from "../sketch";
 import { type Mat, type Pt, ap, approach, attr, chain, clamp, rot, scl, tr } from "../affine";
 import { OPEN, stopFrac, stringFor } from "../fingering";
-import { type Frame, type Rig, type RigCtx, hit, newOnsets } from "./types";
+import { type Frame, type Rig, type RigCtx, hit, newOnsets, slewTo } from "./types";
 
 const WOOD = "#c0712f";
 const WOOD_HATCH = "#e29a55";
@@ -25,11 +25,18 @@ function rotV(v: Pt, deg: number): Pt {
 }
 
 /** Newest sounding note (the one the hands care about), if any. */
+/** The newest sounding note; of a chord struck together, the longest, which carries the bow stroke. */
 function lead(f: Frame) {
-  const a = f.s.active;
-  if (!a.length) return null;
-  let best = a[0];
-  for (const n of a) if (n.age < best.age) best = n;
+  return longestOf(f.s.active.filter((n) => n.age - Math.min(...f.s.active.map((a) => a.age)) < 0.03));
+}
+
+/**
+ * The longest of notes struck together. A double- or triple-stop's notes can end at different
+ * times; the bow follows the one still sounding to the end, or it jumps when a short one stops.
+ */
+function longestOf<T extends { durSec: number }>(notes: T[]): T | null {
+  let best: T | null = null;
+  for (const n of notes) if (!best || n.durSec > best.durSec) best = n;
   return best;
 }
 
@@ -52,6 +59,18 @@ interface BowGeo {
   /** World direction the tucked bow points while plucking. */
   park: Pt;
   place: (c: RigCtx, f: Frame) => Mat;
+}
+
+/**
+ * The next bow stroke from bow position `at` (0 frog … 1 tip): the alternating direction `dir`,
+ * using as much of `want` as the bow has left that way. With almost none left, it keeps the
+ * direction that has room instead. The stroke always starts where the bow is: jumping to the
+ * other end for a long note teleported the bow arm in one frame.
+ */
+export function nextStroke(at: number, dir: number, want: number): [number, number] {
+  const room = (d: number) => (d > 0 ? 0.95 - at : at - 0.05);
+  const d = room(dir) >= Math.min(want, 0.2) ? dir : -dir;
+  return [d, clamp(Math.min(want, room(d)), 0.04, 0.85)];
 }
 
 function bowedUpdate(geo: BowGeo, c: RigCtx, f: Frame) {
@@ -84,14 +103,10 @@ function bowedUpdate(geo: BowGeo, c: RigCtx, f: Frame) {
       m.pluckT = f.t - o.age;
       return;
     }
-    m.dir = -m.dir;
-    m.s0 = m.bs;
-    const sounding = f.s.active.find((a) => a.pitch === o.pitch && Math.abs(a.age - o.age) < 0.03);
+    const sounding = longestOf(f.s.active.filter((a) => Math.abs(a.age - o.age) < 0.03));
     const dur = sounding ? sounding.durSec : 0.4;
-    m.travel = clamp(0.12 + dur * 0.32, 0.12, 0.85);
-    // don't run off the bow: if it would, start the stroke from the other end
-    if (m.dir > 0 && m.s0 + m.travel > 0.95) m.s0 = Math.max(0.05, 0.95 - m.travel);
-    if (m.dir < 0 && m.s0 - m.travel < 0.05) m.s0 = Math.min(0.95, 0.05 + m.travel);
+    m.s0 = m.bs;
+    [m.dir, m.travel] = nextStroke(m.bs, -m.dir, clamp(0.12 + dur * 0.32, 0.12, 0.85));
   });
   // Pizz or arco? Follow the newest note (or the most recent onset).
   const lastArt = n?.art ?? f.s.recent[0]?.art;
@@ -369,16 +384,14 @@ export const cello: Rig = {
         m.pluckT = f.t - o.age;
         return;
       }
-      m.dir = -m.dir;
-      m.b0 = m.bs;
-      const sounding = s.active.find((a) => a.pitch === o.pitch && Math.abs(a.age - o.age) < 0.03);
+      const sounding = longestOf(s.active.filter((a) => Math.abs(a.age - o.age) < 0.03));
       const dur = sounding ? sounding.durSec : 0.4;
-      m.travel = clamp(0.12 + dur * 0.3, 0.12, 0.85);
-      if (m.dir > 0 && m.b0 + m.travel > 0.95) m.b0 = Math.max(0.05, 0.95 - m.travel);
-      if (m.dir < 0 && m.b0 - m.travel < 0.05) m.b0 = Math.min(0.95, 0.05 + m.travel);
+      m.b0 = m.bs;
+      [m.dir, m.travel] = nextStroke(m.bs, -m.dir, clamp(0.12 + dur * 0.3, 0.12, 0.85));
       m.loud = o.vel;
     });
-    const arcoNote = group.length && group[0].art !== "pizz" ? group[0] : null;
+    const held = longestOf(group);
+    const arcoNote = held && held.art !== "pizz" ? held : null;
     if (arcoNote) m.bs = clamp(m.b0 + m.dir * m.travel * Math.min(1, arcoNote.progress * 1.05), 0.04, 0.96);
     const toBridge = clamp(((m.loud ?? 0.6) - 0.5) * 2, 0, 1);
     const cy = 12 + toBridge * 6;
@@ -544,7 +557,10 @@ export const bass: Rig = {
     const py = CB.fbEnd - 10;
     const pluckLocal = { x: CB.sx(m.strS, py) - 4 + flick, y: py + flick * 0.3 };
     f.arms.L = { hand: ap(W, pluckLocal.x, pluckLocal.y), bend: 14, pawRot: 60 };
-    const stopY = CB.nut + (CB.bridge - CB.nut) * stopFrac(m.semisS);
+    // a shift up or down the neck travels at a hand's speed, however far it goes
+    const wantY = CB.nut + (CB.bridge - CB.nut) * stopFrac(m.semisS);
+    m.stopY = slewTo(m.stopY ?? wantY, wantY, f.dt, 0.02, 900);
+    const stopY = m.stopY;
     f.arms.R = { hand: ap(W, CB.sx(m.strS, stopY) + 8, stopY), bend: -30, pawRot: -40 };
     for (let i = 0; i < 4; i++) {
       const ring = age < 1.2 && i === str ? hit(age, 0.35) : 0;

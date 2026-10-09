@@ -217,18 +217,22 @@ export const drums: Rig = {
       busy[arm] = { t, piece };
       return arm;
     };
+    // A hat stroke under a crash is lost in it: the hand that crashes covers it, rather than
+    // the other hand reaching across the kit for the hat (which crossed the arms).
+    const crashAt = (t: number) => s.recent.some((o) => o.pitch === DRUM.crash && Math.abs(-o.age - t) < 0.025) || (s.upcoming ?? []).some((u) => u.pitch === DRUM.crash && Math.abs(u.inSec - t) < 0.025);
+    const underCrash = (pitch: number, t: number) => pieceOf(pitch) === "hat" && crashAt(t);
     for (let i = s.recent.length - 1; i >= 0; i--) {
       const o = s.recent[i];
       const piece = pieceOf(o.pitch);
       pieceAge[piece] = { age: o.age, vel: o.vel, pitch: o.pitch };
       // the kick and the pedal hi-hat are played by feet, not sticks
-      if (piece === "kick" || o.pitch === DRUM.hatPedal) continue;
+      if (piece === "kick" || o.pitch === DRUM.hatPedal || underCrash(o.pitch, -o.age)) continue;
       const arm = assign(piece, -o.age);
       last[arm] = { piece, age: o.age, vel: o.vel };
     }
     for (const u of s.upcoming ?? (s.nextPitch !== null ? [{ pitch: s.nextPitch, inSec: s.nextOnsetIn, vel: 0.7 }] : [])) {
       const piece = pieceOf(u.pitch);
-      if (piece === "kick" || u.pitch === DRUM.hatPedal) continue;
+      if (piece === "kick" || u.pitch === DRUM.hatPedal || underCrash(u.pitch, u.inSec)) continue;
       const arm = assign(piece, u.inSec);
       if (!next[arm]) next[arm] = { piece, inSec: u.inSec };
     }

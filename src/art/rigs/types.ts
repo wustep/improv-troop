@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { AnimalId, MemberFrameState, UpcomingOnset } from "@/music/types";
-import type { Mat, Pt } from "../affine";
+import { approach, type Mat, type Pt } from "../affine";
 
 /** Ref registry: rigs grab DOM nodes by key, no React state involved. */
 export class Bag {
@@ -101,6 +101,16 @@ export interface Rig {
 }
 
 // ─── Shared motion helpers ───────────────────────────────────────────────────
+
+/**
+ * Ease `cur` toward `target` (time constant `tau`), never faster than `maxPerSec`: a hand that
+ * covers a whole octave shift or a far bar in one frame reads as a teleport.
+ */
+export function slewTo(cur: number, target: number, dt: number, tau: number, maxPerSec: number): number {
+  const step = (target - cur) * approach(dt, tau);
+  const cap = maxPerSec * dt;
+  return cur + Math.max(-cap, Math.min(cap, step));
+}
 
 /** 1 at the onset, decaying to 0. */
 export const hit = (age: number, tau = 0.07) => (age < 0 ? 0 : Math.exp(-age / tau));

@@ -10,7 +10,13 @@ import { RIGS } from "./rigs";
 import { Bag, type Frame, type RigCtx } from "./rigs/types";
 
 export interface SpriteHandle {
-  update(state: MemberFrameState): void;
+  /**
+   * Draw one frame. `clock` (seconds) replaces the wall clock, so a frame can be stepped and
+   * replayed exactly (the art lab's scrubber); `reset` forgets the last frame's time first.
+   */
+  update(state: MemberFrameState, clock?: { t: number; reset?: boolean }): void;
+  /** Where the paws were last drawn (viewBox units), for spotting crossed or teleporting arms. */
+  hands(): Record<"L" | "R", Pt>;
 }
 
 export interface AnimalSpriteProps {
@@ -169,9 +175,10 @@ export const AnimalSprite = forwardRef<SpriteHandle, AnimalSpriteProps>(function
   });
 
   const step = useMemo(() => {
-    return (s: MemberFrameState) => {
+    return (s: MemberFrameState, clock?: { t: number; reset?: boolean }) => {
       const r = rt.current;
-      const t = performance.now() / 1000;
+      const t = clock ? clock.t : performance.now() / 1000;
+      if (clock?.reset) r.last = 0;
       const dt = r.last ? clamp(t - r.last, 0, 0.1) : 0.016;
       r.last = t;
 
@@ -250,7 +257,8 @@ export const AnimalSprite = forwardRef<SpriteHandle, AnimalSpriteProps>(function
       let blink = 1;
       if (t > r.blinkAt) {
         const p = (t - r.blinkAt) / 0.14;
-        if (p >= 1) r.blinkAt = t + 2.2 + Math.random() * 3.2;
+        // the next blink, pseudo-random from the time so a replayed frame blinks the same
+        if (p >= 1) r.blinkAt = t + 2.2 + (((Math.sin(t * 12.9898) * 43758.5453) % 1) + 1) % 1 * 3.2;
         else blink = Math.abs(1 - 2 * p);
       }
       const open = Math.max(0.08, blink) * (1 - r.bliss);
@@ -311,10 +319,13 @@ export const AnimalSprite = forwardRef<SpriteHandle, AnimalSpriteProps>(function
   useImperativeHandle(
     ref,
     () => ({
-      update(state: MemberFrameState) {
+      update(state: MemberFrameState, clock?: { t: number; reset?: boolean }) {
         rt.current.lastExternal = performance.now();
         rt.current.state = state;
-        step(state);
+        step(state, clock);
+      },
+      hands() {
+        return { L: { ...rt.current.hands.L }, R: { ...rt.current.hands.R } };
       },
     }),
     [step],

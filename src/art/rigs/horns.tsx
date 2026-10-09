@@ -268,12 +268,14 @@ export const clarinetRig: Rig = {
     const m = c.mem;
     const lift = w.pitch !== null ? clamp((w.pitch - 70) * 0.5, -4, 10) : 0;
     m.cl = (m.cl ?? 0) + (lift - (m.cl ?? 0)) * approach(f.dt, 0.2);
-    const local = chain(tr(c.mouth.x, c.mouth.y + 2 + lw * 8), rot(-16 - m.cl - lw * 18 + sway));
+    // The bell angles toward the screen-left arm, which holds the lower joint: angled the other
+    // way, that arm reached across the body under the upper hand and the arms crossed.
+    const local = chain(tr(c.mouth.x, c.mouth.y + 2 + lw * 8), rot(16 + m.cl + lw * 18 + sway));
     const toWorld = placeInst(c, f, local);
     setKeys(c, w.pitch !== null ? clarinet(w.pitch + 2) : null, "#2c2a35");
-    updatePuffs(c, f, { x: 0, y: 118 }, { x: 0.3, y: 1 }, lw);
-    f.arms.R = { hand: toWorld(4, 38), bend: -14, pawRot: -80 };
-    f.arms.L = { hand: toWorld(4, 76), bend: 16, pawRot: -80 };
+    updatePuffs(c, f, { x: 0, y: 118 }, { x: -0.3, y: 1 }, lw);
+    f.arms.R = { hand: toWorld(-4, 38), bend: -14, pawRot: 80 };
+    f.arms.L = { hand: toWorld(-4, 76), bend: 16, pawRot: 80 };
     f.look.lean = sway * 0.8;
   },
 };

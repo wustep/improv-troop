@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { applyFeel, pocketOf } from "@/audio/feel";
 import { FrameComputer } from "@/components/stage/frames";
-import { DRUM, defaultMembers } from "@/music/instruments";
+import { DRUM, INSTRUMENT_LIST, defaultMembers } from "@/music/instruments";
 import { defaultSettings, generateLocal } from "@/music/local";
 import { STYLES } from "@/music/styles";
 import type { InstrumentId, Member, StyleId } from "@/music/types";
 import { I } from "../affine";
+import { glitchesOf } from "../glitch";
 import { RIGS } from ".";
 import { barX } from "./vibes";
 import { Bag, type Frame, type RigCtx } from "./types";
@@ -29,12 +30,12 @@ function recordingBag() {
 
 const FPS = 60;
 
-function perform(inst: InstrumentId, style: StyleId, seed = 3) {
+function perform(inst: InstrumentId, style: StyleId, seed = 3, solo = false, record = true) {
   const band: Member[] = defaultMembers();
   if (!band.some((m) => m.instrument === inst)) band.push({ id: "guest", animal: "cat", name: "Guest", instrument: inst });
   const id = band.find((m) => m.instrument === inst)!.id;
   const st = STYLES[style];
-  const { score } = generateLocal({ ...defaultSettings(band), style, tempo: st.tempo.default, key: { ...st.key }, seed }, band);
+  const { score } = generateLocal({ ...defaultSettings(band), style, tempo: st.tempo.default, key: { ...st.key }, seed, ...(solo ? { soloists: [id] } : {}) }, band);
   const spb = 60 / score.frame.tempo;
   const pocket = pocketOf(score, id);
   // heard time: swing plus the player's pocket, as the audio engine schedules it
@@ -44,17 +45,22 @@ function perform(inst: InstrumentId, style: StyleId, seed = 3) {
   const ctx: RigCtx = { bag, animal: "cat", ink: "#000", fill: "#fff", light: "#fff", feet: "#000", seed: 1, mouth: { x: 120, y: 100 }, mem: {} };
   const end = score.frame.bars * score.frame.meter.beats * spb;
   const frames: Attrs[] = [];
+  const glitches: { beat: number; kinds: string[] }[] = [];
   let hands: Frame["arms"] = { L: { hand: { x: 80, y: 190 } }, R: { hand: { x: 160, y: 190 } } };
   for (let i = 0; i * (1 / FPS) < end; i++) {
     const t = i / FPS + 0.004;
-    const f: Frame = { s: fc.compute(id, t / spb, true, spb), t, dt: 1 / FPS, M: I, arms: hands, look: { mouthCovered: false, cheeks: 0, inhale: 0, bliss: false, lean: 0, dip: 0 } };
+    const prev = { L: { ...hands.L.hand }, R: { ...hands.R.hand } };
+    const f: Frame = { s: fc.compute(id, t / spb, true, spb), t, dt: 1 / FPS, M: I, arms: { L: { hand: { ...prev.L } }, R: { hand: { ...prev.R } } }, look: { mouthCovered: false, cheeks: 0, inhale: 0, bliss: false, lean: 0, dip: 0 } };
     RIGS[inst].update(ctx, f);
+    // the first frames settle from the default pose
+    const kinds = i > 5 ? glitchesOf({ L: f.arms.L.hand, R: f.arms.R.hand }, prev) : [];
+    if (kinds.length) glitches.push({ beat: +(t / spb).toFixed(2), kinds });
     hands = { L: { ...f.arms.L }, R: { ...f.arms.R } };
-    frames.push(JSON.parse(JSON.stringify(store)));
+    if (record) frames.push(JSON.parse(JSON.stringify(store)));
   }
   /** First frame drawn at or after time t. */
   const frameAt = (t: number) => frames[Math.max(0, Math.min(frames.length - 1, Math.ceil((t - 0.004) * FPS)))];
-  return { onsets, frameAt };
+  return { onsets, frameAt, glitches };
 }
 
 // where each drum is struck (see drums.tsx)
@@ -99,4 +105,17 @@ describe("rigs follow the notes frame by frame", () => {
       expect(on.length / onsets.length, style).toBeGreaterThan(0.98);
     }
   });
+
+  it("no arms cross and no paw teleports, for any instrument, soloing or comping", () => {
+    // what the art lab's "next glitch" stops on; drums crossed reaching for a hat under a crash,
+    // the bow jumped to the other end for a long note, the clarinet's lower hand reached across
+    const found: string[] = [];
+    for (const inst of INSTRUMENT_LIST)
+      for (const style of ["swing", "funk", "baroque", "ambient"] as StyleId[])
+        for (const solo of [false, true]) {
+          const { glitches } = perform(inst, style, 3, solo, false);
+          if (glitches.length) found.push(`${inst} ${style}${solo ? " solo" : ""}: ${glitches.slice(0, 3).map((g) => `${g.kinds.join("+")} @${g.beat}`).join(", ")}`);
+        }
+    expect(found).toEqual([]);
+  }, 60_000);
 });
