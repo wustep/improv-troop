@@ -439,7 +439,10 @@ export function SheetMusic({ score, getBeat, playing, playToken, onSeekBar, onSt
                   rowEls.current[r] = el;
                 }}
                 className="sheet-row"
-                style={{ height: model.rowHeight, width: width || "100%", position: "relative" }}
+                // A row out of view (below the fold, or scrolled out of the box) is skipped when the
+                // page paints. Without it, every animation frame on the stage re-walked thousands of
+                // chart glyphs: the main thread was busy ~1 s every second even with the band stopped.
+                style={{ height: model.rowHeight, width: width || "100%", position: "relative", contentVisibility: "auto" }}
               />
             ))
           )}
