@@ -9,7 +9,10 @@ export interface LlmOptions {
   model: string;
   system: string;
   prompt: string;
+  /** The visitor's AI Gateway key ("" when they have none). */
   apiKey: string;
+  /** The visitor's Anthropic key, used for Claude models when there's no gateway key. */
+  anthropicKey?: string;
   temperature?: number;
   maxOutputTokens?: number;
   reasoning?: ReasoningLevel;
@@ -94,6 +97,7 @@ export async function callLLM(o: LlmOptions): Promise<{ text: string; call: LlmC
         signal: o.signal,
         body: JSON.stringify({
           key: o.apiKey,
+          anthropicKey: o.anthropicKey || undefined,
           model: o.model,
           system: o.system,
           prompt: o.prompt,

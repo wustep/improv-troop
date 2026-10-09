@@ -63,7 +63,7 @@ const BANDMATE_LINE = 120;
 const REPLY_SHAPE = (bars: number[]) => `{"bars": {${bars.map((b) => `"${b + 1}": "..."`).join(", ")}}, "say": "optional: a short line to the band or a bandmate (<= 12 words) about something you just heard or are about to play, or \\"\\" (most phrases need none)"}`;
 
 export function startImproviser(settings: TroopSettings, members: Member[], hooks: PipelineHooks): ImprovController {
-  const { runId, apiKey, signal } = hooks;
+  const { runId, apiKey, anthropicKey, signal } = hooks;
   const dbg = useDebug.getState();
   const frame = buildFrame(settings, members);
   const rng = makeRng(settings.seed);
@@ -183,6 +183,7 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
       const { text, call } = await callLLM({
         runId,
         apiKey,
+        anthropicKey,
         signal,
         label: "count-off",
         agent: leader.id,
@@ -264,6 +265,7 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
           const { text, call } = await callLLM({
             runId,
             apiKey,
+            anthropicKey,
             signal,
             label: "reply",
             agent: m.id,
@@ -357,6 +359,7 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
           const { text, call } = await callLLM({
             runId,
             apiKey,
+            anthropicKey,
             signal: phraseSignal(pi),
             label: `bars ${myBars[0] + 1}-${myBars.at(-1)! + 1}`,
             agent: id,
@@ -483,6 +486,7 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
             const { text, call } = await callLLM({
               runId,
               apiKey,
+              anthropicKey,
               signal: phraseSignal(pi),
               label: `bars ${myBars[0] + 1}-${myBars.at(-1)! + 1}`,
               agent: id,

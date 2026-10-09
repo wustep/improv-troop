@@ -3,8 +3,8 @@
 //
 //   EVAL_MODELS=anthropic/claude-haiku-4.5,google/gemini-2.5-flash pnpm eval:gateway
 //
-// The key comes from IMPROV_TROOP_SERVER_KEY in .env.local, read by the /api/llm route itself;
-// this file never reads, prints, or forwards it.
+// The key comes from IMPROV_TROOP_SERVER_KEY (or ANTHROPIC_API_KEY, for Claude models only) in
+// .env.local, read by the /api/llm route itself; this file never reads, prints, or forwards it.
 import { loadEnvFile } from "node:process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { afterAll, describe, it, vi } from "vitest";

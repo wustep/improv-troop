@@ -69,7 +69,7 @@ function IntroNote({ onClose }: { onClose: () => void }) {
         ) : (
           <li>
             <button type="button" className="text-action" onClick={openBrains}>
-              Add a gateway key
+              Add a gateway or Anthropic key
             </button>
             , then <b>Let them jam!</b> to make them think it through
           </li>

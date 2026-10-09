@@ -4,6 +4,8 @@ import { create } from "zustand";
 import { runComposer, type PipelineHooks } from "@/ai/composer";
 import { insertByBar } from "@/ai/talk";
 import { startImproviser, type ImprovController } from "@/ai/improviser";
+import { canRun, canThinkWith, type KeyAccess } from "@/ai/keys";
+import { modelInfo } from "@/ai/models";
 import { notesHintFromScore, troopAudio } from "@/audio/engine";
 import { DEFAULT_SOUNDS, readSounds, type Sounds } from "@/audio/packs";
 import { defaultStandardLength, snapLength } from "@/music/form";
@@ -28,9 +30,14 @@ interface TroopState {
   hydrated: boolean;
   members: Member[];
   settings: TroopSettings;
+  /** The visitor's AI Gateway key (saved in this browser only). */
   apiKey: string;
+  /** The visitor's Anthropic key, for Claude models (saved in this browser only). */
+  anthropicKey: string;
   /** The server has its own gateway key (IMPROV_TROOP_SERVER_KEY), so the band can think without one here. */
   serverKey: boolean;
+  /** The server has its own Anthropic key (ANTHROPIC_API_KEY), so Claude models work without one here. */
+  serverAnthropicKey: boolean;
   /** Which piano and drum kit the band plays (saved in this browser). */
   sounds: Sounds;
   current: Score | null;
@@ -65,6 +72,7 @@ interface TroopState {
   setStandard(id: string | null): void;
   setMembers(members: Member[]): void;
   setApiKey(key: string): void;
+  setAnthropicKey(key: string): void;
   setSounds(patch: Partial<Sounds>): void;
   generate(): Promise<void>;
   cancel(): void;
@@ -78,7 +86,7 @@ interface TroopState {
 const LS = "improv-troop:v1";
 const LS_INTRO = "jamming:intro-seen";
 
-function load(): Partial<Pick<TroopState, "members" | "settings" | "apiKey" | "sounds">> & { pianoPack?: unknown } {
+function load(): Partial<Pick<TroopState, "members" | "settings" | "apiKey" | "anthropicKey" | "sounds">> & { pianoPack?: unknown } {
   try {
     const raw = localStorage.getItem(LS);
     return raw ? JSON.parse(raw) : {};
@@ -87,9 +95,9 @@ function load(): Partial<Pick<TroopState, "members" | "settings" | "apiKey" | "s
   }
 }
 
-function save(s: Pick<TroopState, "members" | "settings" | "apiKey" | "sounds">) {
+function save(s: Pick<TroopState, "members" | "settings" | "apiKey" | "anthropicKey" | "sounds">) {
   try {
-    localStorage.setItem(LS, JSON.stringify({ members: s.members, settings: s.settings, apiKey: s.apiKey, sounds: s.sounds }));
+    localStorage.setItem(LS, JSON.stringify({ members: s.members, settings: s.settings, apiKey: s.apiKey, anthropicKey: s.anthropicKey || undefined, sounds: s.sounds }));
   } catch {
     /* private mode etc. */
   }
@@ -193,7 +201,9 @@ export const useTroop = create<TroopState>((set, get) => {
     members: defaultMembers(),
     settings: defaultSettings(defaultMembers()),
     apiKey: "",
+    anthropicKey: "",
     serverKey: false,
+    serverAnthropicKey: false,
     sounds: DEFAULT_SOUNDS,
     current: null,
     isSketch: true,
@@ -220,10 +230,10 @@ export const useTroop = create<TroopState>((set, get) => {
       } catch {
         /* ignore */
       }
-      set({ hydrated: true, members, settings, apiKey: saved.apiKey ?? "", sounds: readSounds(saved.sounds, saved.pianoPack), takes: loadTakes(), seenIntro });
+      set({ hydrated: true, members, settings, apiKey: saved.apiKey ?? "", anthropicKey: saved.anthropicKey ?? "", sounds: readSounds(saved.sounds, saved.pianoPack), takes: loadTakes(), seenIntro });
       void fetch("/api/llm")
         .then((r) => (r.ok ? r.json() : null))
-        .then((d: { serverKey?: boolean } | null) => set({ serverKey: !!d?.serverKey }))
+        .then((d: { serverKey?: boolean; serverAnthropicKey?: boolean } | null) => set({ serverKey: !!d?.serverKey, serverAnthropicKey: !!d?.serverAnthropicKey }))
         .catch(() => {});
       endedUnsub?.();
       endedUnsub = troopAudio.onEnded(() => {
@@ -311,6 +321,14 @@ export const useTroop = create<TroopState>((set, get) => {
       persist();
     },
 
+    setAnthropicKey(anthropicKey) {
+      set((s) => ({
+        anthropicKey: anthropicKey.trim(),
+        gen: s.gen.error && anthropicKey.trim() !== s.anthropicKey ? { ...s.gen, error: null } : s.gen,
+      }));
+      persist();
+    },
+
     setSounds(patch) {
       const sounds = { ...get().sounds, ...patch };
       set({ sounds });
@@ -328,12 +346,20 @@ export const useTroop = create<TroopState>((set, get) => {
       persist();
 
       // No key: the stub band plays a fresh local take.
-      if (!st.apiKey && !st.serverKey) {
+      if (!canThink(st)) {
         const { score } = generateLocal(settings, members);
         const take: Take = { id: score.id, score, label: `${STYLES[settings.style].name} sketch`, engine: "local", createdAt: Date.now() };
         set((s) => ({ current: score, isSketch: false, takes: addTake(s.takes, take), chat: [], readyBars: null, autopilotBars: [] }));
         saveTakes(get().takes);
         void get().play();
+        return;
+      }
+
+      // Only Anthropic keys: say so up front rather than failing on the first GPT or Gemini call.
+      const blocked = modelsFor(settings).find((m) => !canRun(m, keyAccess(st)));
+      if (blocked) {
+        const name = modelInfo(blocked)?.label ?? blocked;
+        set({ gen: { ...st.gen, running: false, error: `${name} needs an AI Gateway key. With only an Anthropic key, pick a Claude model in “Brains & sounds”.` } });
         return;
       }
 
@@ -350,6 +376,7 @@ export const useTroop = create<TroopState>((set, get) => {
       const hooks: PipelineHooks = {
         runId,
         apiKey: st.apiKey,
+        anthropicKey: st.anthropicKey,
         signal: controller.signal,
         onStatus: (status) => set((s) => ({ gen: { ...s.gen, status } })),
         onChat: (msg) => set((s) => ({ chat: insertByBar(s.chat, msg) })),
@@ -524,5 +551,13 @@ export const useTroop = create<TroopState>((set, get) => {
   };
 });
 
+type Keys = Pick<TroopState, "apiKey" | "anthropicKey" | "serverKey" | "serverAnthropicKey">;
+
+/** Which providers the band can reach, from keys in this browser or ones the server lends. */
+export const keyAccess = (s: Keys): KeyAccess => ({ gateway: !!s.apiKey || s.serverKey, anthropic: !!s.anthropicKey || s.serverAnthropicKey });
+
 /** The band can call models: a key in this browser, or one the server lends. */
-export const canThink = (s: Pick<TroopState, "apiKey" | "serverKey">) => !!s.apiKey || s.serverKey;
+export const canThink = (s: Keys) => canThinkWith(keyAccess(s));
+
+/** The models a run in these settings calls. */
+const modelsFor = (s: TroopSettings) => (s.mode === "composer" ? [s.directorModel] : [s.directorModel, s.playerModel]);

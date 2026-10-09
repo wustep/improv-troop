@@ -3,14 +3,15 @@
 import { useRef, useState } from "react";
 import { AnimalPortrait } from "@/art/AnimalPortrait";
 import { InstrumentIcon } from "@/art/InstrumentIcon";
-import { modelsByProvider, PROVIDER_LABEL } from "@/ai/models";
+import { canRun, isClaude, keyMismatch, type KeyAccess } from "@/ai/keys";
+import { modelInfo, modelsByProvider, PROVIDER_LABEL } from "@/ai/models";
 import { lengthOptions } from "@/music/form";
 import { ANIMAL_LIST, ANIMALS, INSTRUMENT_LIST, INSTRUMENTS } from "@/music/instruments";
 import { STANDARDS, getStandard, searchStandards } from "@/music/standards";
 import { STYLE_LIST, STYLES } from "@/music/styles";
 import type { AnimalId, InstrumentId, Member } from "@/music/types";
 import type { Sounds } from "@/audio/packs";
-import { useTroop } from "@/state/store";
+import { keyAccess, useTroop } from "@/state/store";
 import { RoughBox, RoughButton } from "./ui/rough";
 
 /** The tune list, grouped by what you get: a song with its melody, jazz changes, pop chords, a groove. */
@@ -21,19 +22,65 @@ const TUNE_GROUPS: { label: string; has: (t: (typeof STANDARDS)[number]) => bool
   { label: "Grooves and grounds", has: (t) => !t.melody && !["swing", "bossa", "pop"].includes(t.style) },
 ];
 
-function ModelSelect({ value, onChange, label }: { value: string; onChange: (id: string) => void; label: string }) {
+/** Every model; with only an Anthropic key, the other providers' models are greyed out (they need the gateway). */
+function ModelSelect({ value, onChange, label, access }: { value: string; onChange: (id: string) => void; label: string; access: KeyAccess }) {
+  const claudeOnly = !access.gateway && access.anthropic;
   return (
-    <select className="sketch-select w-full" value={value} onChange={(e) => onChange(e.target.value)} aria-label={label}>
-      {modelsByProvider().map((g) => (
-        <optgroup key={g.provider} label={PROVIDER_LABEL[g.provider] ?? g.provider}>
-          {g.models.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.label}
-            </option>
-          ))}
-        </optgroup>
-      ))}
-    </select>
+    <>
+      <select className="sketch-select w-full" value={value} onChange={(e) => onChange(e.target.value)} aria-label={label}>
+        {modelsByProvider().map((g) => (
+          <optgroup key={g.provider} label={`${PROVIDER_LABEL[g.provider] ?? g.provider}${claudeOnly && g.provider !== "anthropic" ? " (needs an AI Gateway key)" : ""}`}>
+            {g.models.map((m) => (
+              <option key={m.id} value={m.id} disabled={claudeOnly && !isClaude(m.id)}>
+                {m.label}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+      {claudeOnly && !canRun(value, access) && (
+        <p className="mt-xxs text-xs text-ink">
+          <span aria-hidden className="text-(--error)">✗ </span>
+          {modelInfo(value)?.label ?? value} needs an AI Gateway key. Pick a Claude model to use your Anthropic key.
+        </p>
+      )}
+    </>
+  );
+}
+
+/** A key that stays in this browser: hidden by default, with show/hide and clear. */
+function KeyField({ id, label, value, placeholder, onChange, mismatch }: { id: string; label: string; value: string; placeholder: string; onChange: (key: string) => void; mismatch: string | null }) {
+  const [show, setShow] = useState(false);
+  return (
+    <>
+      <div className="flex gap-xxs">
+        <input
+          type={show ? "text" : "password"}
+          className="sketch-input min-w-0 flex-1"
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          autoComplete="off"
+          spellCheck={false}
+          aria-label={label}
+          id={id}
+        />
+        <button type="button" className="text-action px-xxs text-s" onClick={() => setShow((v) => !v)}>
+          {show ? "hide" : "show"}
+        </button>
+        {value && (
+          <button type="button" className="text-action px-xxs text-s" onClick={() => onChange("")} aria-label={`Clear ${label}`}>
+            clear
+          </button>
+        )}
+      </div>
+      {mismatch && (
+        <p className="mt-xxs text-xs text-ink">
+          <span aria-hidden className="text-(--error)">✗ </span>
+          {mismatch}
+        </p>
+      )}
+    </>
   );
 }
 
@@ -117,7 +164,9 @@ export function openBrains() {
   details.open = true;
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   details.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
-  document.getElementById("gateway-key")?.focus({ preventScroll: true });
+  // the field they're using: the Anthropic one when that's their only key
+  const { apiKey, anthropicKey } = useTroop.getState();
+  document.getElementById(!apiKey && anthropicKey ? "anthropic-key" : "gateway-key")?.focus({ preventScroll: true });
 }
 
 /**
@@ -196,16 +245,19 @@ export function ControlPanel() {
   const s = useTroop((x) => x.settings);
   const members = useTroop((x) => x.members);
   const apiKey = useTroop((x) => x.apiKey);
+  const anthropicKey = useTroop((x) => x.anthropicKey);
   const serverKey = useTroop((x) => x.serverKey);
-  const thinks = apiKey || serverKey;
+  const serverAnthropicKey = useTroop((x) => x.serverAnthropicKey);
+  const access = keyAccess({ apiKey, anthropicKey, serverKey, serverAnthropicKey });
+  const thinks = access.gateway || access.anthropic;
   const sounds = useTroop((x) => x.sounds);
   const set = useTroop((x) => x.setSettings);
   const setStyle = useTroop((x) => x.setStyle);
   const setStandard = useTroop((x) => x.setStandard);
   const setMembers = useTroop((x) => x.setMembers);
   const setApiKey = useTroop((x) => x.setApiKey);
+  const setAnthropicKey = useTroop((x) => x.setAnthropicKey);
   const setSounds = useTroop((x) => x.setSounds);
-  const [showKey, setShowKey] = useState(false);
   const std = getStandard(s.standard);
   const lengths = lengthOptions(s.standard);
   const free = ANIMAL_LIST.filter((a) => !members.some((m) => m.animal === a));
@@ -398,22 +450,7 @@ export function ControlPanel() {
         <div className="mt-xs space-y-s">
           <div>
             <Label hint="stays in this browser">AI Gateway key</Label>
-            <div className="flex gap-xxs">
-              <input
-                type={showKey ? "text" : "password"}
-                className="sketch-input min-w-0 flex-1"
-                placeholder="vck_…"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                autoComplete="off"
-                spellCheck={false}
-                aria-label="Vercel AI Gateway key"
-                id="gateway-key"
-              />
-              <button type="button" className="text-action px-xxs text-s" onClick={() => setShowKey((v) => !v)}>
-                {showKey ? "hide" : "show"}
-              </button>
-            </div>
+            <KeyField id="gateway-key" label="Vercel AI Gateway key" placeholder="vck_…" value={apiKey} onChange={setApiKey} mismatch={keyMismatch("gateway", apiKey)} />
             {apiKey ? (
               <p className="mt-xxs text-xs text-ink-soft">
                 Saved in this browser. The big button now says <b>{s.mode === "composer" ? "Compose!" : "Let them jam!"}</b>, and models are only called when you press it.
@@ -422,24 +459,44 @@ export function ControlPanel() {
               <p className="mt-xxs text-xs text-ink-soft">
                 This server lends the band its own key, so they can think already. Add yours to spend your own credits.
               </p>
+            ) : anthropicKey || serverAnthropicKey ? (
+              <p className="mt-xxs text-xs text-ink-soft">Optional with an Anthropic key: the gateway adds GPT and Gemini models.</p>
             ) : (
               <p className="mt-xxs text-xs text-ink-soft">
                 Without a key the band plays from its own sketchbook, with no model calls.{" "}
                 <a className="text-action" href="https://vercel.com/ai-gateway" target="_blank" rel="noreferrer">
                   Get a key from Vercel AI Gateway
                 </a>
-                .
+                , or add an Anthropic key below for Claude.
               </p>
             )}
           </div>
           <div>
+            <Label hint="Claude models only">Anthropic key</Label>
+            <KeyField id="anthropic-key" label="Anthropic API key" placeholder="sk-ant-…" value={anthropicKey} onChange={setAnthropicKey} mismatch={keyMismatch("anthropic", anthropicKey)} />
+            <p className="mt-xxs text-xs text-ink-soft">
+              {anthropicKey
+                ? apiKey
+                  ? "Saved in this browser. Your gateway key goes first; this one is used if you remove it."
+                  : "Saved in this browser and sent only with each Claude call, straight on to Anthropic. The server never keeps it."
+                : serverAnthropicKey && !serverKey && !apiKey
+                  ? "This server lends the band an Anthropic key for Claude models. Add yours to spend your own credits."
+                  : "Optional: Claude models can call Anthropic directly with your own key."}{" "}
+              {!anthropicKey && (
+                <a className="text-action" href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer">
+                  Get one from Anthropic
+                </a>
+              )}
+            </p>
+          </div>
+          <div>
             <Label>{s.mode === "composer" ? "Director" : "Leader"} model</Label>
-            <ModelSelect value={s.directorModel} onChange={(id) => set({ directorModel: id })} label={s.mode === "composer" ? "Director model" : "Leader model"} />
+            <ModelSelect value={s.directorModel} onChange={(id) => set({ directorModel: id })} label={s.mode === "composer" ? "Director model" : "Leader model"} access={access} />
           </div>
           {s.mode === "improviser" && (
             <div>
               <Label>Bandmates model</Label>
-              <ModelSelect value={s.playerModel} onChange={(id) => set({ playerModel: id })} label="Bandmates model" />
+              <ModelSelect value={s.playerModel} onChange={(id) => set({ playerModel: id })} label="Bandmates model" access={access} />
             </div>
           )}
           <div className="grid grid-cols-2 gap-s">

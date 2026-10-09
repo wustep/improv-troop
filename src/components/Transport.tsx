@@ -133,7 +133,7 @@ export function Transport() {
           tone="primary"
           className="px-l py-xs font-brand text-xl font-heavy text-on-accent"
           onClick={() => void generate()}
-          title={hasKey ? "Ask the band (calls the model)" : "Add an AI Gateway key in “Brains & sounds” to let the animals think — until then they play from their sketchbook."}
+          title={hasKey ? "Ask the band (calls the model)" : "Add an AI Gateway or Anthropic key in “Brains & sounds” to let the animals think — until then they play from their sketchbook."}
         >
           {goLabel}
         </RoughButton>
@@ -162,7 +162,7 @@ export function Transport() {
             </span>
             {/key/i.test(gen.error) ? (
               <button type="button" className="text-action" onClick={openBrains}>
-                check the key
+                {/pick a Claude model/.test(gen.error) ? "pick a model" : "check the key"}
               </button>
             ) : (
               <button type="button" className="text-action" onClick={() => void generate()}>

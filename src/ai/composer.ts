@@ -33,6 +33,7 @@ import {
 export interface PipelineHooks {
   runId: string;
   apiKey: string;
+  anthropicKey?: string;
   signal: AbortSignal;
   onStatus(text: string): void;
   onChat(msg: ChatMessage): void;
@@ -214,7 +215,7 @@ function criticPrompt(frame: ReturnType<typeof buildFrame>, cands: Candidate[], 
 
 /** Composer: a director writes the chart (best-of-N with a judge), then featured parts. */
 export async function runComposer(settings: TroopSettings, members: Member[], hooks: PipelineHooks): Promise<Score> {
-  const { runId, apiKey, signal } = hooks;
+  const { runId, apiKey, anthropicKey, signal } = hooks;
   const dbg = useDebug.getState();
   const tStart = performance.now();
   const step = (s: string) => {
@@ -240,6 +241,7 @@ export async function runComposer(settings: TroopSettings, members: Member[], ho
       callLLM({
         runId,
         apiKey,
+        anthropicKey,
         signal,
         label: n > 1 ? `plan ${i + 1}/${n}` : "plan",
         agent: "director",
@@ -294,6 +296,7 @@ export async function runComposer(settings: TroopSettings, members: Member[], ho
       const { text, call } = await callLLM({
         runId,
         apiKey,
+        anthropicKey,
         signal,
         label: "judge",
         agent: "critic",
@@ -351,6 +354,7 @@ export async function runComposer(settings: TroopSettings, members: Member[], ho
           const { text, call } = await callLLM({
             runId,
             apiKey,
+            anthropicKey,
             signal,
             label: `parts: ${m.name}`,
             agent: "director",
@@ -380,6 +384,7 @@ export async function runComposer(settings: TroopSettings, members: Member[], ho
               const fix = await callLLM({
                 runId,
                 apiKey,
+                anthropicKey,
                 signal,
                 label: `recount: ${m.name}`,
                 agent: "director",
