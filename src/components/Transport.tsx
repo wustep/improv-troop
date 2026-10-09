@@ -225,8 +225,102 @@ export function Transport() {
           </span>
         )}
       </div>
-      <ShareLink />
+      <div className="flex flex-wrap items-baseline gap-x-m">
+        <SaveAudio />
+        <ShareLink />
+      </div>
     </div>
+  );
+}
+
+/** A file name for a take: its title, without characters file systems refuse. */
+export function audioFileName(title: string, mimeType: string) {
+  const ext = mimeType.includes("mp4") ? "m4a" : mimeType.includes("ogg") ? "ogg" : "webm";
+  const base = title.replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim() || "take";
+  return `${base} · Jamming.${ext}`;
+}
+
+/** After the last note, keep recording while the room rings out. */
+const TAIL_MS = 1500;
+
+/**
+ * Save the take as an audio file: it plays from the top and the band is recorded as it plays
+ * (the samplers are live, so there's no faster-than-real-time render). The count-in isn't on the
+ * file. Stop throws the recording away.
+ */
+function SaveAudio() {
+  const current = useTroop((s) => s.current);
+  const running = useTroop((s) => s.gen.running);
+  const [phase, setPhase] = useState<"idle" | "recording" | "saving">("idle");
+  const [note, setNote] = useState<string | null>(null);
+  useEffect(() => {
+    if (!note) return;
+    const t = setTimeout(() => setNote(null), 3000);
+    return () => clearTimeout(t);
+  }, [note]);
+  if (!current || (running && phase === "idle")) return null;
+
+  const record = async () => {
+    const score = current;
+    const st = useTroop.getState();
+    if (st.playing) st.stop();
+    await st.play(0);
+    if (!useTroop.getState().playing) return;
+    setPhase("recording");
+    let rec: ReturnType<typeof troopAudio.startRecording> = null;
+    let ended = false;
+    let timer = 0;
+    const offEnded = troopAudio.onEnded(() => {
+      ended = true;
+      window.clearInterval(timer);
+      offEnded();
+      setPhase("saving");
+      window.setTimeout(async () => {
+        const blob = await rec?.stop();
+        setPhase("idle");
+        if (!blob) return setNote("nothing was recorded");
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = audioFileName(score.title, blob.type);
+        a.click();
+        window.setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+        setNote("saved");
+      }, TAIL_MS);
+    });
+    // start on the downbeat, after the count-in; a stop before the end throws it away
+    timer = window.setInterval(() => {
+      if (ended) return;
+      if (!useTroop.getState().playing) {
+        window.clearInterval(timer);
+        offEnded();
+        rec?.cancel();
+        setPhase("idle");
+        setNote("stopped, nothing saved");
+        return;
+      }
+      if (!rec && troopAudio.getBeat() >= 0) {
+        rec = troopAudio.startRecording();
+        if (!rec) {
+          window.clearInterval(timer);
+          offEnded();
+          setPhase("idle");
+          setNote("this browser can't record audio");
+        }
+      }
+    }, 20);
+  };
+
+  const label = phase === "recording" ? "recording… (stop to cancel)" : phase === "saving" ? "saving…" : (note ?? "save as audio");
+  return (
+    <button
+      type="button"
+      className="text-action text-m"
+      disabled={phase !== "idle"}
+      onClick={() => void record()}
+      title="Play the take from the top and save it as an audio file"
+    >
+      <span aria-live="polite">{label}</span>
+    </button>
   );
 }
 

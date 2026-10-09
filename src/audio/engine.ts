@@ -171,6 +171,10 @@ function isBrowser() {
   return typeof window !== "undefined" && typeof AudioContext !== "undefined";
 }
 
+
+/** Recording formats, best first: Opus in WebM (Chrome, Firefox), AAC in MP4 (Safari). */
+const RECORD_TYPES = ["audio/webm;codecs=opus", "audio/mp4;codecs=mp4a.40.2", "audio/mp4", "audio/ogg;codecs=opus", "audio/webm"];
+
 export class TroopAudio {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
@@ -826,6 +830,45 @@ export class TroopAudio {
     if (this.master && this.ctx) {
       this.master.gain.setTargetAtTime(this.masterVolume, this.ctx.currentTime, 0.02);
     }
+  }
+
+  /**
+   * Record what the band plays, from the end of the mix (after the compressor, so the file
+   * sounds like the speakers). Null where the browser can't record audio. `stop` resolves with
+   * the file; `cancel` throws it away.
+   */
+  startRecording(): { mimeType: string; stop(): Promise<Blob | null>; cancel(): void } | null {
+    const ctx = this.ctx;
+    const out = this.compressor;
+    if (!ctx || !out || typeof MediaRecorder === "undefined") return null;
+    const mimeType = RECORD_TYPES.find((t) => MediaRecorder.isTypeSupported(t));
+    if (!mimeType) return null;
+    const tap = ctx.createMediaStreamDestination();
+    out.connect(tap);
+    let rec: MediaRecorder;
+    try {
+      rec = new MediaRecorder(tap.stream, { mimeType, audioBitsPerSecond: 192_000 });
+    } catch {
+      out.disconnect(tap);
+      return null;
+    }
+    const chunks: Blob[] = [];
+    rec.ondataavailable = (e) => {
+      if (e.data.size) chunks.push(e.data);
+    };
+    const done = new Promise<void>((resolve) => (rec.onstop = () => resolve()));
+    rec.start(1000);
+    const finish = async (keep: boolean) => {
+      if (rec.state !== "inactive") rec.stop();
+      await done;
+      try {
+        out.disconnect(tap);
+      } catch {
+        /* already gone */
+      }
+      return keep && chunks.length ? new Blob(chunks, { type: mimeType }) : null;
+    };
+    return { mimeType, stop: () => finish(true), cancel: () => void finish(false) };
   }
 
   /** RMS of the master output right now (0..~1). Cheap enough to call every frame. */
