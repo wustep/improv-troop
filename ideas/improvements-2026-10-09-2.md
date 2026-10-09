@@ -22,3 +22,17 @@ Ranked: (1) no way to inspect a pose frame by frame (paused showed the idle pose
 `src/art/glitch.ts` holds the rule both the lab and a new test use: shoulder-to-paw lines that intersect away from the shoulders (a sax held at the side passes in front of the other shoulder, which is fine), or a paw moving more than 25 px in a 60 fps frame. The test runs every instrument through swing, funk, baroque and ambient, soloing and comping: zero glitches.
 
 Still rough: the glitch rule doesn't catch an arm stretched straight across the chest (the old clarinet), and reach isn't checked (the bass, trumpet and violin reach up to 125 px from the shoulder by design). `engine.test.ts` has two tests near the 5 s limit that time out when the machine is busy.
+
+## Round 2: the page, at 1300 and 390 px
+
+Used: a fresh load, a mock improviser run (key `mock`), the settings panel, Brains & sounds, the debug panel and the chart, at 1300 px and a true 390 px. (The test browser runs at 90% zoom, so its "390" window was really 433 CSS px; that looked like horizontal overflow and wasn't.)
+
+Ranked: (1) the chart box cut a system in half at its bottom edge, with no sign it scrolls; the desktop settings column did the same, (2) the form strip's short sections read "I…" and "Out H…" on a phone, (3) "peek under the hood" on a phone opened the panel out of sight, so the tap seemed to do nothing.
+
+- `useScrollMore` marks a scroll box while there's more below its fold, and `.scroll-more` fades the bottom edge: the chart, and the sticky settings column on desktop. At the true bottom the fade goes.
+- A form-strip label that won't fit falls back to its first word ("Out Head" → "Out"), then to nothing. The section's colour and portraits still say which it is, and the full name is the tooltip and the accessible name.
+- Opening the debug panel scrolls it into view (nearest, so nothing moves on desktop).
+
+Checked and fine: Brains & sounds at 390 px, the fixed mini transport (screenshots of a smooth scroll misplace it), the space under the footer (a full-page capture artifact).
+
+Still rough: the mock band's every spotlight reply is "Bruno, answer me!", so in mock runs Bruno says it to himself. Nothing stops a real model addressing itself either.

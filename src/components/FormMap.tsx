@@ -69,6 +69,27 @@ export function FormMap({
     return () => cancelAnimationFrame(raf);
   }, [playing, total, beats, sections]);
 
+  // A section name that won't fit falls back to its first word ("Out Head" → "Out"), then to
+  // nothing: on a phone "I…" and "Out H…" read as broken. The colour and portraits still say
+  // which section it is, and the full name is its tooltip.
+  useEffect(() => {
+    const strip = stripRef.current;
+    if (!strip) return;
+    const fit = () => {
+      for (const el of strip.querySelectorAll<HTMLElement>("[data-label]")) {
+        const full = el.dataset.label!;
+        for (const text of [full, full.split(" ")[0], ""]) {
+          el.textContent = text;
+          if (el.scrollWidth <= el.clientWidth + 1) break;
+        }
+      }
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(strip);
+    return () => ro.disconnect();
+  }, [sections]);
+
   const nameOf = (id: string) => score.members.find((m) => m.id === id);
   const auto = new Set(autopilotBars);
 
@@ -84,11 +105,13 @@ export function FormMap({
               className={`form-sec relative flex min-w-0 flex-col ${si > 0 ? "shadow-[inset_var(--border-m)_0_0_0_var(--border-default-color)]" : ""}`}
               style={{ width: `${(s.length / total) * 100}%`, background: KIND_FILL[s.kind] ?? "transparent" }}
             >
-              <div className="pointer-events-none flex items-center gap-xxs overflow-hidden whitespace-nowrap px-xs text-s">
+              <div className="pointer-events-none flex items-center gap-xxs overflow-hidden whitespace-nowrap px-xs text-s" title={s.name}>
                 {who.slice(0, 2).map((m) => (
                   <AnimalPortrait key={m!.id} animal={m!.animal} size={16} />
                 ))}
-                <span className="truncate pr-xs font-brand text-m font-heavy">{s.name.replace(/^Solo · /, "")}</span>
+                <span className="min-w-0 flex-1 overflow-hidden pr-xs font-brand text-m font-heavy" data-label={s.name.replace(/^Solo · /, "")} aria-label={s.name}>
+                  {s.name.replace(/^Solo · /, "")}
+                </span>
               </div>
               <div className="flex flex-1">
                 {Array.from({ length: s.length }, (_, i) => {

@@ -299,6 +299,11 @@ body {
   background: var(--cte-surface);
 }
 
+/* more below the fold of a scroll box: fade its bottom edge (see useScrollMore) */
+.scroll-more[data-more] {
+  mask-image: linear-gradient(to bottom, #000 calc(100% - var(--space-xl)), transparent);
+}
+
 /* stage slots: n across, or up to three across in a narrow stage (see Stage.tsx) */
 .band-row {
   container-type: inline-size;

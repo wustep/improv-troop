@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useScrollMore } from "@/components/ui/scrollMore";
 import type { Score } from "../music/types";
 import { BARS_PER_ROW, LABEL_W, MIN_ROW_WIDTH, MIN_ZOOM, NARROW_ROW, STAFF_H, buildModel, rowOf, rowRange, withRows, type SheetModel } from "./model";
 import { TPB } from "./expand";
@@ -178,6 +179,9 @@ export function SheetMusic({ score, getBeat, playing, playToken, onSeekBar, onSt
       window.clearTimeout(t);
     };
   }, []);
+
+  // the bottom edge fades while there's more chart below the box
+  useScrollMore(scrollRef);
 
   // New chart: back to the top, follow again.
   const scoreId = score.id;
@@ -408,7 +412,7 @@ export function SheetMusic({ score, getBeat, playing, playToken, onSeekBar, onSt
     <div
       ref={scrollRef}
       tabIndex={0}
-      className={className}
+      className={`scroll-more ${className ?? ""}`}
       style={{ position: "relative", overflow: "auto", outline: "none", overscrollBehavior: "contain" }}
       aria-label={`Sheet music: ${score.title}`}
     >

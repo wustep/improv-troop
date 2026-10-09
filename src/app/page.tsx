@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { DoodleDefs } from "@/art/DoodleDefs";
 import { troopAudio } from "@/audio/engine";
 import { BandTalk } from "@/components/BandTalk";
@@ -9,6 +9,7 @@ import { DebugPanel } from "@/components/DebugPanel";
 import { Stage } from "@/components/Stage";
 import { Takes, Transport } from "@/components/Transport";
 import { RoughBox, Squiggle } from "@/components/ui/rough";
+import { useScrollMore } from "@/components/ui/scrollMore";
 import { SheetMusic, type SheetStats } from "@/sheet/SheetMusic";
 import { useDebug } from "@/state/debug";
 import { useTroop } from "@/state/store";
@@ -23,6 +24,8 @@ export default function Home() {
   const setDebugOpen = useDebug((s) => s.setOpen);
   const [sheetStats, setSheetStats] = useState<SheetStats | null>(null);
   const [showSheet, setShowSheet] = useState(true);
+  const panelRef = useRef<HTMLDivElement>(null);
+  useScrollMore(panelRef);
 
   useEffect(() => {
     hydrate();
@@ -50,7 +53,15 @@ export default function Home() {
         </div>
         <button
           type="button"
-          onClick={() => setDebugOpen(!debugOpen)}
+          onClick={() => {
+            setDebugOpen(!debugOpen);
+            // on a phone the panel opens below the stage, out of sight: bring it into view
+            if (!debugOpen)
+              requestAnimationFrame(() => {
+                const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+                document.querySelector('[aria-label="Debug"]')?.scrollIntoView({ block: "nearest", behavior: reduce ? "auto" : "smooth" });
+              });
+          }}
           className="text-action text-m"
           aria-expanded={debugOpen}
         >
@@ -102,7 +113,7 @@ export default function Home() {
             )}
           </section>
         </main>
-        <div className="order-2 min-w-0 lg:sticky lg:top-m lg:order-none lg:max-h-[calc(100vh-2*var(--space-m))] lg:self-start lg:overflow-y-auto">
+        <div ref={panelRef} className="scroll-more order-2 min-w-0 lg:sticky lg:top-m lg:order-none lg:max-h-[calc(100vh-2*var(--space-m))] lg:self-start lg:overflow-y-auto">
           <ControlPanel />
         </div>
       </div>
