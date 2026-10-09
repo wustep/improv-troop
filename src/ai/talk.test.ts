@@ -3,7 +3,7 @@ import { buildFrame } from "@/music/form";
 import { defaultMembers } from "@/music/instruments";
 import { defaultSettings } from "@/music/local";
 import type { ChatMessage } from "@/music/types";
-import { checkChordNames, insertByBar, isFiller, TalkGate } from "./talk";
+import { checkChordNames, insertByBar, isFiller, notToSelf, TalkGate } from "./talk";
 
 const band = defaultMembers();
 // swing in Bb: Bbmaj7 Gm7 | Cm7 F7 | ... Eb7 ... Dm7 G7 ...
@@ -67,5 +67,20 @@ describe("who talks", () => {
     let chat: ChatMessage[] = [];
     for (const m of [at(undefined, "c"), at(4, "b5"), at(0, "b1"), at(8, "b9"), at(4, "b5'")]) chat = insertByBar(chat, m);
     expect(chat.map((c) => c.id)).toEqual(["c", "b1", "b5", "b5'", "b9"]);
+  });
+});
+
+describe("a player's own name", () => {
+  it("comes out of a line said to them", () => {
+    expect(notToSelf("Bruno, answer me!", "Bruno")).toBe("Answer me!");
+    expect(notToSelf("Hey Bruno — take it home.", "Bruno")).toBe("Take it home.");
+    expect(notToSelf("Nice one, Bruno!", "Bruno")).toBe("Nice one!");
+    expect(notToSelf("Bruno!", "Bruno")).toBeNull();
+  });
+
+  it("leaves lines to someone else, or about yourself in passing, alone", () => {
+    expect(notToSelf("Lily, answer me!", "Bruno")).toBe("Lily, answer me!");
+    expect(notToSelf("Brunoesque bounce on the bridge.", "Bruno")).toBe("Brunoesque bounce on the bridge.");
+    expect(notToSelf("Following Lily's lead.", "Bruno")).toBe("Following Lily's lead.");
   });
 });

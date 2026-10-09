@@ -112,6 +112,24 @@ export class TalkGate {
   }
 }
 
+/**
+ * A line with the speaker's own name taken out of it when it's said to them ("Bruno, answer
+ * me!" from Bruno is "Answer me!"; "Nice one, Bruno." from Bruno is "Nice one."). A model
+ * writing a bandmate's reply sometimes addresses the player it's writing for. Null when nothing
+ * is left.
+ */
+export function notToSelf(line: string, name: string): string | null {
+  const n = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const out = line
+    // a leading vocative: "Bruno, …" / "Hey Bruno — …"
+    .replace(new RegExp(`^\\s*(?:(?:hey|ok|okay|yo|go|come on)\\s+)?${n}\\s*[,:!—–-]+\\s*`, "i"), "")
+    // a trailing one: "…, Bruno!"
+    .replace(new RegExp(`\\s*[,—–-]+\\s*${n}(\\s*[.!?…]*)\\s*$`, "i"), "$1")
+    .trim();
+  if (!out || !/[a-z0-9]/i.test(out)) return null;
+  return out === line.trim() ? line : out[0].toUpperCase() + out.slice(1);
+}
+
 /** Band talk kept in bar order: a line for an earlier bar that arrives late goes before later bars. */
 export function insertByBar(chat: ChatMessage[], msg: ChatMessage): ChatMessage[] {
   if (msg.bar === undefined) return [...chat, msg];

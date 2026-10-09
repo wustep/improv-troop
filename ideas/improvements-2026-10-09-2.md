@@ -62,3 +62,14 @@ Ranked: (1) a third of a busy soloist's bars ran straight up (or up and down) th
 Not changed: ambient comping turned out to be smooth pads holding common tones; the top-voice figure counted the single "shimmer" notes above them. The bossa and pop strong-beat figures come from the general phrase generator, not runs, and are left for another round.
 
 Still rough: those bossa and pop strong beats; the run's shape is fixed (one turn) rather than drawn from a vocabulary of bebop cells.
+
+## Round 5: what the model path says, and the runs' strong beats
+
+Used: mock improviser runs (key `mock`; no real model was called in any round), and the strong-beat tally from round 4 broken down by directive.
+
+Ranked: (1) a model writing a bandmate's reply can address the player it's writing for ("Bruno, answer me!" from Bruno), and nothing stopped it; (2) most of the remaining non-chord strong beats in pop and bossa solos came from round 4's runs: in 8ths, the enclosure's upper neighbour landed on beat 3; (3) the eval's three-beat grooves (from the last set of rounds).
+
+- `notToSelf`: a line loses the speaker's own name when it's said to them ("Bruno, answer me!" → "Answer me!", "Nice one, Bruno!" → "Nice one!"); a line left with nothing is dropped. Applied where every improviser line enters the chat.
+- Runs in 8ths enclose with just the semitone below when the upper neighbour would land on beat 3, and the turn always falls inside the run, however short. The run test now also checks beats 1 and 3. Pop and bossa runs put no tensions on strong beats; what's left is colour from motif transforms (9ths and 13ths over major) and two held bossa tensions.
+
+Not done: the three-beat grooves need a prompt change, and that can only be judged against a real model.

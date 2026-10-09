@@ -13,7 +13,7 @@ import { useDebug } from "@/state/debug";
 import { chatMsg, trimSpeech, type PipelineHooks } from "./composer";
 import { asRecord, asString, extractJson, parseBarRange } from "./json";
 import { callLLM, LlmError, noteRepair, setParsed } from "./llm";
-import { checkChordNames, insertByBar, TalkGate } from "./talk";
+import { checkChordNames, insertByBar, notToSelf, TalkGate } from "./talk";
 import { accompanimentFits, applyDefault, asDynamic, asTexture, enforceSlots, resolveMember, usualDirective, validateBarText, validateMotif } from "./merge";
 import { barsSchema, countOffSchema, replySchema } from "./schemas";
 import {
@@ -99,6 +99,10 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
 
   const talk = new TalkGate(frame, P);
   const say = (msg: ChatMessage) => {
+    // a player isn't spoken to by name in their own line
+    const text = notToSelf(msg.text, nameOf(msg.from));
+    if (!text) return;
+    msg = { ...msg, text };
     chat = insertByBar(chat, msg);
     hooks.onChat(msg);
   };

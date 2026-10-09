@@ -362,6 +362,13 @@ describe("solos build", () => {
           expect(chordPcs(parseChord(chord.symbol)), at).toContain(mod(last.pitch, 12));
           const dirs = notes.slice(1).map((x, i) => Math.sign(x.pitch - notes[i].pitch)).filter(Boolean);
           expect(new Set(dirs).size, `${at} turns`).toBe(2);
+          // beats 1 and 3 sit on the chord (an enclosure's upper neighbour once landed on 3)
+          for (const x of notes) {
+            const t = x.start - b * 4;
+            if (Math.abs(t - Math.round(t)) > 1e-6 || Math.round(t) % 2) continue;
+            const c = score.frame.chords[b].filter((ch) => ch.beat <= t + 1e-6).at(-1)!;
+            expect(chordPcs(parseChord(c.symbol)), `${at} beat ${t + 1}`).toContain(mod(x.pitch, 12));
+          }
         }
       }
     expect(runs).toBeGreaterThan(5);

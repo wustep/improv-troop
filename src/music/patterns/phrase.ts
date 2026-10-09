@@ -706,12 +706,16 @@ export function runLine(ctx: BarCtx, opts: LineOpts = {}): NoteEvent[] {
   let p = ctx.mem.lastPitch !== null && ctx.mem.lastPitch >= lo && ctx.mem.lastPitch <= hi ? ctx.mem.lastPitch : Math.round((lo + hi) / 2);
   // head for the side with more room, and turn back once on the way
   let dir: 1 | -1 = hi - p >= p - lo ? 1 : -1;
-  const turnAt = Math.round(n * (0.55 + rng.next() * 0.25));
+
   const vel = velFor(ctx, 0.8) * (opts.vel ?? 1);
   const onBeat = (t: number) => Math.abs(t - Math.round(t)) < EPS;
   const out: NoteEvent[] = [];
-  // the last two notes enclose the arrival, so the line leaves room for them
-  const body = Math.max(1, n - 2);
+  // the last two notes enclose the arrival, so the line leaves room for them; in 8ths that would
+  // put the upper neighbour on beat 3, so there the enclosure is just the semitone below
+  const strong = (t: number) => onBeat(t) && Math.round(t) % 2 === 0;
+  const body = Math.max(1, n - (strong(startAt + (n - 2) * step) ? 1 : 2));
+  // the turn comes inside the run, even a short one
+  const turnAt = Math.max(1, Math.min(body - 1, Math.round(n * (0.55 + rng.next() * 0.25))));
   for (let i = 0; i < body; i++) {
     const t = startAt + i * step;
     const h = harmAt(ctx, t);
