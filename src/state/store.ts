@@ -151,7 +151,8 @@ export const useTroop = create<TroopState>((set, get) => {
     dbg.timing(runId, "total", performance.now() - t0);
     dbg.endRun(runId, "done", issues);
     const wasPlaying = get().playing;
-    set({ current: score, isSketch: true, chat: [] });
+    // a new chart on screen: the failed run it replaces is behind us
+    set((s) => ({ current: score, isSketch: true, chat: [], gen: s.gen.error ? { ...s.gen, error: null } : s.gen }));
     // switching character while playing starts the new chart
     if (wasPlaying) void get().play();
     else void troopAudio.prepare(members, { sounds: get().sounds, notesHint: notesHintFromScore(score) });
@@ -305,7 +306,8 @@ export const useTroop = create<TroopState>((set, get) => {
     },
 
     setApiKey(apiKey) {
-      set({ apiKey: apiKey.trim() });
+      // a new key answers the error the old one caused
+      set((s) => ({ apiKey: apiKey.trim(), gen: s.gen.error && apiKey.trim() !== s.apiKey ? { ...s.gen, error: null } : s.gen }));
       persist();
     },
 

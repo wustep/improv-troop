@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DRUM } from "@/music/instruments";
 import { LANES } from "@/music/notation";
-import { acousticKitPreset, DEFAULT_SOUNDS, lm2Sample, packChain, readSounds } from "./packs";
+import { acousticKitPreset, bridgeGaps, DEFAULT_SOUNDS, lm2Sample, packChain, readSounds } from "./packs";
 
 describe("the acoustic kit", () => {
   const preset = acousticKitPreset();
@@ -38,5 +38,16 @@ describe("sounds", () => {
   it("falls back from every sampled pack", () => {
     expect(packChain("drums").map((p) => p.pack)).toEqual(["vcsl:acoustic-kit", "lm-2"]);
     expect(packChain("piano", { ...DEFAULT_SOUNDS, piano: "wurlitzer" }).length).toBeGreaterThan(1);
+  });
+});
+
+describe("sample gaps", () => {
+  it("fetch the same note's neighbouring layer for a file the host is missing", async () => {
+    const asked: string[] = [];
+    const storage = bridgeGaps({ fetch: async (url) => (asked.push(url), { status: 200, arrayBuffer: async () => new ArrayBuffer(0), json: async () => null, text: async () => "" }) }, { "cp80/samples/080-G#5-MP.ogg": "cp80/samples/080-G#5-F.ogg" });
+    const base = "https://example.org/e-pianos/cp80/samples";
+    await storage.fetch(`${base}/080-G%235-MP.ogg`);
+    await storage.fetch(`${base}/060-C4-MP.ogg`);
+    expect(asked).toEqual([`${base}/080-G%235-F.ogg`, `${base}/060-C4-MP.ogg`]);
   });
 });

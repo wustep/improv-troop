@@ -8,6 +8,7 @@ import {
   type Scheduler,
   type Smplr,
   type SmplrPreset,
+  type Storage,
 } from "smplr";
 import type { InstrumentId } from "@/music/types";
 import { DRUM } from "@/music/instruments";
@@ -293,6 +294,28 @@ const vibes: PackSpec = {
 // is the piano's level-matched volume brought down by that much.
 export const EPIANO_VOLUME = 45;
 
+// Files the hosted sets are missing (404) or that won't decode, each replaced by the same note
+// one velocity layer over: a region with no sample would play silence.
+export const EPIANO_GAPS: Record<string, string> = {
+  "cp80/samples/057-A3-F.ogg": "cp80/samples/057-A3-FF.ogg",
+  "cp80/samples/065-F4-PP.ogg": "cp80/samples/065-F4-MP.ogg",
+  "cp80/samples/080-G#5-MP.ogg": "cp80/samples/080-G#5-F.ogg",
+  "wurlitzer-ep200/samples/ab6mp.ogg": "wurlitzer-ep200/samples/ab6f.ogg",
+};
+
+/** Storage that fetches a known gap's stand-in instead. */
+export function bridgeGaps(storage: Storage, gaps: Record<string, string>): Storage {
+  return {
+    fetch(url) {
+      const plain = decodeURIComponent(url);
+      for (const [from, to] of Object.entries(gaps)) {
+        if (plain.endsWith(`/${from}`)) return storage.fetch(encodeURI(plain.slice(0, -from.length) + to).replace(/#/g, "%23"));
+      }
+      return storage.fetch(url);
+    },
+  };
+}
+
 function epiano(name: "WurlitzerEP200" | "CP80", pack: string): PackSpec {
   return {
     pack,
@@ -300,8 +323,8 @@ function epiano(name: "WurlitzerEP200" | "CP80", pack: string): PackSpec {
       return ElectricPiano(p.ctx, {
         instrument: name,
         destination: p.destination,
-        storage: p.storage,
         volume: EPIANO_VOLUME,
+        storage: bridgeGaps(p.storage, EPIANO_GAPS),
         pan: p.pan,
         onLoadProgress: ({ loaded, total }) => p.onProgress(loaded, total),
       });

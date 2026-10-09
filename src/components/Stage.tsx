@@ -25,6 +25,9 @@ function useWidth<T extends HTMLElement>() {
   return [ref, w] as const;
 }
 
+/** Narrow screens shrink each slot so a horn reaching past it stays inside the stage (globals.css). */
+const NARROW_SLOT = 0.84;
+
 /**
  * Which way a player's speech bubble opens, and how wide it may grow. Alone in their row a
  * player gets room to say it on a line or two (staying on stage); when a neighbour is talking
@@ -140,8 +143,9 @@ export function Stage() {
   // themselves in CSS (a container query on the row), so the server-rendered first paint is
   // already laid out right on a phone; spriteW mirrors it for the spotlight and bubbles.
   const perRowNarrow = n === 4 ? 2 : Math.min(n, 3);
-  const perRow = width < 560 ? perRowNarrow : n;
-  const spriteW = Math.max(84, Math.min(220, (width - 8) / perRow - 8));
+  const narrow = width < 560;
+  const perRow = narrow ? perRowNarrow : n;
+  const spriteW = Math.max(84, Math.min(220, ((width - 8) / perRow - 8) * (narrow ? NARROW_SLOT : 1)));
 
   const computer = useMemo(() => (score ? new FrameComputer(score) : null), [score]);
 

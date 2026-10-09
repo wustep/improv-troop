@@ -306,9 +306,11 @@ body {
 .band-slot {
   width: clamp(84px, calc((100cqw - 8px) / var(--per) - 8px), 220px);
 }
+/* on a phone the outer players stand back from the frame: a trumpet bell or a trombone slide
+   reaches about a fifth of a sprite past its slot (NARROW_SLOT in Stage.tsx mirrors this) */
 @container (max-width: 559px) {
   .band-slot {
-    width: clamp(84px, calc((100cqw - 8px) / var(--per-narrow) - 8px), 220px);
+    width: clamp(84px, calc(((100cqw - 8px) / var(--per-narrow) - 8px) * 0.84), 220px);
   }
 }
 
