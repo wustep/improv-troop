@@ -123,7 +123,8 @@ function MemberRow({ m, members, onChange, onRemove }: { m: Member; members: Mem
         </RoughButton>
         <button
           type="button"
-          className="px-xxs text-l text-ink-soft transition-colors duration-(--motion-duration) hover:text-(--color-1) disabled:opacity-30"
+          // a finger-sized target (the × alone was 18 px wide)
+          className="flex min-h-xl min-w-xl items-center justify-center text-l text-ink-soft transition-colors duration-(--motion-duration) hover:text-(--color-1) disabled:opacity-30"
           onClick={onRemove}
           disabled={members.length <= 1}
           aria-label={`Remove ${m.name}`}

@@ -388,7 +388,8 @@ export function Takes() {
             <button
               type="button"
               onClick={() => remove(t.id)}
-              className="px-xxs pt-xxs text-ink-soft opacity-0 transition-colors duration-(--motion-duration) hover:text-(--color-1) focus:opacity-100 group-hover:opacity-100"
+              // shown on hover, or always on a touch screen (which has no hover to reveal it)
+              className="px-xxs pt-xxs text-ink-soft opacity-0 transition-colors duration-(--motion-duration) hover:text-(--color-1) focus:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-70"
               aria-label={`Delete take ${takes.length - i}`}
               title="Delete this take"
             >

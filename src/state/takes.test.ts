@@ -30,6 +30,20 @@ describe("takes", () => {
     expect(loadTakes().map((t) => t.id)).toEqual(takes.map((t) => t.id));
   });
 
+  it("make room by dropping the oldest sketch, not a take the models wrote", () => {
+    const ai = (n: number): Take => ({ ...take(n), engine: "ai" });
+    let takes: Take[] = [ai(1), take(2)];
+    for (let n = 3; n <= MAX_TAKES + 2; n++) takes = addTake(takes, take(n));
+    expect(takes).toHaveLength(MAX_TAKES);
+    // the first model take outlived the older sketches around it
+    expect(takes.at(-1)!.id).toBe("take-1");
+    expect(takes.some((t) => t.id === "take-2")).toBe(false);
+    // a list of nothing but model takes still loses its oldest
+    let all: Take[] = [];
+    for (let n = 1; n <= MAX_TAKES + 1; n++) all = addTake(all, ai(n));
+    expect(all.at(-1)!.id).toBe("take-2");
+  });
+
   it("replace an older copy of the same chart", () => {
     const takes = addTake(addTake([take(1), take(2)], take(3)), { ...take(1), label: "again" });
     expect(takes.map((t) => t.label)).toEqual(["again", "#3", "#2"]);

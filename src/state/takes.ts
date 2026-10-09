@@ -17,9 +17,19 @@ export const MAX_TAKES = 12;
 
 const LS_TAKES = "jamming:takes:v1";
 
-/** A new take on top (replacing an older copy of the same chart), trimmed to the cap. */
+/**
+ * A new take on top (replacing an older copy of the same chart), trimmed to the cap. The
+ * oldest local sketch goes first: it comes back from its settings and seed, while a take the
+ * models wrote cost credits and can't be made again. Only a list of model takes loses its oldest.
+ */
 export function addTake(takes: Take[], take: Take): Take[] {
-  return [take, ...takes.filter((t) => t.id !== take.id)].slice(0, MAX_TAKES);
+  const out = [take, ...takes.filter((t) => t.id !== take.id)];
+  while (out.length > MAX_TAKES) {
+    let drop = -1;
+    for (let i = out.length - 1; i > 0 && drop < 0; i--) if (out[i].engine === "local") drop = i;
+    out.splice(drop < 0 ? out.length - 1 : drop, 1);
+  }
+  return out;
 }
 
 /**
