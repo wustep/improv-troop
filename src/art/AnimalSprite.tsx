@@ -17,7 +17,19 @@ export interface SpriteHandle {
   update(state: MemberFrameState, clock?: { t: number; reset?: boolean }): void;
   /** Where the paws were last drawn (viewBox units), for spotting crossed or teleporting arms. */
   hands(): Record<"L" | "R", Pt>;
+  /** Where the shoulders were last drawn: the body leans, dips and bows, so they move too. */
+  shoulders(): Record<"L" | "R", Pt>;
+  /** The take just ended: a happy little hop, eyes squeezed shut. */
+  cheer(): void;
 }
+
+/** How long the reactions last (s): a soloist's bow, a listener's nod, the end-of-take cheer. */
+const BOW_S = 1.1;
+const NOD_S = 0.7;
+const CHEER_S = 2.4;
+
+/** 0 → 1 → 0 over `len` seconds since `t0` (0 outside it). */
+const pulse = (t: number, t0: number, len: number) => (t >= t0 && t < t0 + len ? Math.sin((Math.PI * (t - t0)) / len) : 0);
 
 export interface AnimalSpriteProps {
   animal: AnimalId;
@@ -172,6 +184,14 @@ export const AnimalSprite = forwardRef<SpriteHandle, AnimalSpriteProps>(function
     brow: 0,
     browUp: 0,
     hands: { L: { x: 100, y: 205 }, R: { x: 140, y: 205 } } as Record<"L" | "R", Pt>,
+    shoulders: { L: { ...ANCHOR.shoulderL }, R: { ...ANCHOR.shoulderR } } as Record<"L" | "R", Pt>,
+    // reactions: when each last started (s), and what last frame said, to spot the change
+    bowT: -Infinity,
+    nodT: -Infinity,
+    cheerT: -Infinity,
+    wasFeatured: false,
+    lastLook: 0,
+    soft: 0,
   });
 
   const step = useMemo(() => {
@@ -191,6 +211,24 @@ export const AnimalSprite = forwardRef<SpriteHandle, AnimalSpriteProps>(function
       const tilt = playing ? Math.sin(s.beat * Math.PI) * (0.8 + 2 * energy) : Math.sin(t * 0.6) * 2;
       const feat = s.featured ? 1 : 0;
 
+      // ── reactions to the shape of the take ──
+      // A solo ends: the soloist takes a small bow. The spotlight moves on: the listeners nod
+      // it along, each a beat apart so the band doesn't move as one.
+      if (playing && r.wasFeatured && !s.featured) r.bowT = t;
+      const look0 = s.lookX ?? 0;
+      if (playing && !s.featured && look0 !== r.lastLook && Math.abs(look0 - r.lastLook) > 0.2 && t - r.bowT > BOW_S) r.nodT = t + (hash(animal) % 5) * 0.06;
+      r.wasFeatured = playing && s.featured;
+      r.lastLook = look0;
+      const bowing = pulse(t, r.bowT, BOW_S);
+      // two quick dips
+      const nod = t >= r.nodT && t < r.nodT + NOD_S ? Math.max(0, Math.sin((2 * Math.PI * (t - r.nodT)) / NOD_S)) : 0;
+      const cheerP = (t - r.cheerT) / CHEER_S;
+      const cheering = cheerP >= 0 && cheerP < 1 ? 1 - cheerP : 0;
+      // two hops, the second smaller
+      const hop = cheerP >= 0 && cheerP < 0.6 ? Math.abs(Math.sin(cheerP * Math.PI * (2 / 0.6))) * (cheerP < 0.3 ? 7 : 4) : 0;
+      // soft bars: eyes half-lidded, listening in
+      r.soft += ((playing && energy < 0.45 ? 1 : 0) - r.soft) * approach(dt, 0.4);
+
       // ── listening: glance toward whoever has the spotlight, more while resting ──
       const look = s.lookX ?? 0;
       const resting = s.role === "rest" || (s.active.length === 0 && s.nextOnsetIn > 1);
@@ -205,14 +243,15 @@ export const AnimalSprite = forwardRef<SpriteHandle, AnimalSpriteProps>(function
 
       const charM: Mat = chain(
         rot(r.lean * 0.9, 120, ANCHOR.ground),
-        tr(0, r.dip),
+        tr(0, r.dip + bowing * 3 - hop),
         scl(1 + feat * 0.025, 1 + feat * 0.025, 120, ANCHOR.ground),
       );
-      const headM: Mat = chain(charM, tr(headTurn * 2.6, bob), rot(tilt + headTurn * 4, ANCHOR.neck.x, ANCHOR.neck.y));
+      const headDip = bowing * 4 + nod * 2.6;
+      const headM: Mat = chain(charM, tr(headTurn * 2.6, bob + headDip), rot(tilt + headTurn * 4 + bowing * 5, ANCHOR.neck.x, ANCHOR.neck.y));
       const M = rig.follow === "world" ? I : rig.follow === "char" ? charM : headM;
 
       me.tf("char", attr(charM));
-      me.tf("head", attr(chain(tr(headTurn * 2.6, bob), rot(tilt + headTurn * 4, ANCHOR.neck.x, ANCHOR.neck.y))));
+      me.tf("head", attr(chain(tr(headTurn * 2.6, bob + headDip), rot(tilt + headTurn * 4 + bowing * 5, ANCHOR.neck.x, ANCHOR.neck.y))));
       me.tf("instFront", attr(M));
       me.tf("instBack", attr(M));
 
@@ -243,6 +282,7 @@ export const AnimalSprite = forwardRef<SpriteHandle, AnimalSpriteProps>(function
         const a = f.arms[side];
         r.hands[side] = a.hand;
         const sh = ap(charM, side === "L" ? ANCHOR.shoulderL.x : ANCHOR.shoulderR.x, ANCHOR.shoulderL.y);
+        r.shoulders[side] = sh;
         const arm = armShape(sh, a.hand, side === "L" ? -1 : 1, a.bend ?? 12);
         me.set("armFill" + side, "d", arm.fill);
         me.set("arm" + side, "d", arm.outline);
@@ -261,7 +301,9 @@ export const AnimalSprite = forwardRef<SpriteHandle, AnimalSpriteProps>(function
         if (p >= 1) r.blinkAt = t + 2.2 + (((Math.sin(t * 12.9898) * 43758.5453) % 1) + 1) % 1 * 3.2;
         else blink = Math.abs(1 - 2 * p);
       }
-      const open = Math.max(0.08, blink) * (1 - r.bliss);
+      // happy shut eyes for a bow or a cheer; half-lidded in a soft passage
+      const happy = Math.max(r.bliss, Math.min(1, bowing * 1.6), Math.min(1, cheering * 2));
+      const open = Math.max(0.08, blink) * (1 - happy) * (1 - 0.3 * r.soft);
       // pupils glance toward the hands, or across the stage at the soloist
       const hx = (r.hands.L.x + r.hands.R.x) / 2 - 120;
       const hy = (r.hands.L.y + r.hands.R.y) / 2 - 110;
@@ -271,7 +313,7 @@ export const AnimalSprite = forwardRef<SpriteHandle, AnimalSpriteProps>(function
       const gy = (hy / gl) * 1.4 * (1 - g) - g * 0.6;
       me.tf("eyeL", `translate(${(e1.x + gx).toFixed(2)} ${(e1.y + gy).toFixed(2)}) scale(1 ${open.toFixed(3)})`);
       me.tf("eyeR", `translate(${(e2.x + gx).toFixed(2)} ${(e2.y + gy).toFixed(2)}) scale(1 ${open.toFixed(3)})`);
-      me.op("shut", r.bliss);
+      me.op("shut", happy);
 
       // ── expressions: an "o" on big accents, a focused brow on fast passages ──
       const newest = s.recent[0];
@@ -319,6 +361,9 @@ export const AnimalSprite = forwardRef<SpriteHandle, AnimalSpriteProps>(function
   useImperativeHandle(
     ref,
     () => ({
+      cheer() {
+        rt.current.cheerT = rt.current.last || performance.now() / 1000;
+      },
       update(state: MemberFrameState, clock?: { t: number; reset?: boolean }) {
         rt.current.lastExternal = performance.now();
         rt.current.state = state;
@@ -326,6 +371,9 @@ export const AnimalSprite = forwardRef<SpriteHandle, AnimalSpriteProps>(function
       },
       hands() {
         return { L: { ...rt.current.hands.L }, R: { ...rt.current.hands.R } };
+      },
+      shoulders() {
+        return { L: { ...rt.current.shoulders.L }, R: { ...rt.current.shoulders.R } };
       },
     }),
     [step],

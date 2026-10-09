@@ -149,6 +149,9 @@ export function Stage() {
 
   const computer = useMemo(() => (score ? new FrameComputer(score) : null), [score]);
 
+  // a take played to its end (not stopped): the band cheers
+  useEffect(() => troopAudio.onEnded(() => sprites.current.forEach((h) => h?.cheer())), []);
+
   // per-frame animation: read the audio clock, hand each sprite its state
   useEffect(() => {
     const mutedSet = new Set(muted);

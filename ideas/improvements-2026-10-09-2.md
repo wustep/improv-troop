@@ -36,3 +36,17 @@ Ranked: (1) the chart box cut a system in half at its bottom edge, with no sign 
 Checked and fine: Brains & sounds at 390 px, the fixed mini transport (screenshots of a smooth scroll misplace it), the space under the footer (a full-page capture artifact).
 
 Still rough: the mock band's every spotlight reply is "Bruno, answer me!", so in mock runs Bruno says it to himself. Nothing stops a real model addressing itself either.
+
+## Round 3: the band reacts to the take
+
+Watched: a sketch played to its end, a solo handed from Rusty to Mochi in the art lab, soft and loud bars. The animals already glanced at the soloist, sparkled while the soloist phrased, made an "o" on accents and closed their eyes on long notes, but nothing marked the shape of a performance: a solo ending, the spotlight moving, the last chord.
+
+Ranked: (1) a solo ends and nobody acknowledges it, (2) the take ends and the band just stops, (3) soft passages look the same as loud ones.
+
+- **A solo ends:** the soloist takes a small bow, eyes squeezed shut (1.1 s).
+- **The spotlight moves:** the listeners nod it along, two quick dips, each a few frames apart so the band doesn't move as one.
+- **The take plays to its end** (not Stop): everyone cheers, two hops and happy shut eyes (2.4 s). `SpriteHandle.cheer()`, called from `troopAudio.onEnded`; the art lab has a **cheer** button to step through it.
+- **Soft bars** (energy under 0.45): eyes half-lidded, listening in.
+- The art lab's glitch check uses the shoulders where they're drawn (`SpriteHandle.shoulders()`): a bow moves the body, and fixed shoulders flagged Rusty's trumpet hold as crossed.
+
+Still rough: nothing yet for trading fours specifically (the traders glance at each other only through the spotlight), and the reactions haven't been tuned by watching a long take at full speed.

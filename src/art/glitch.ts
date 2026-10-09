@@ -26,10 +26,14 @@ const NEAR_SHOULDER = 16;
  * shoulders; a paw merely right of the other, as on a slanted clarinet, is fine), or a paw that
  * moved too far since the previous frame.
  */
-export function glitchesOf(now: Record<"L" | "R", Pt>, prev: Record<"L" | "R", Pt> | null): Glitch[] {
+export function glitchesOf(
+  now: Record<"L" | "R", Pt>,
+  prev: Record<"L" | "R", Pt> | null,
+  sh: Record<"L" | "R", Pt> = { L: ANCHOR.shoulderL, R: ANCHOR.shoulderR },
+): Glitch[] {
   const out: Glitch[] = [];
-  const x = crossing(ANCHOR.shoulderL, now.L, ANCHOR.shoulderR, now.R);
-  if (x && Math.min(Math.hypot(x.x - ANCHOR.shoulderL.x, x.y - ANCHOR.shoulderL.y), Math.hypot(x.x - ANCHOR.shoulderR.x, x.y - ANCHOR.shoulderR.y)) > NEAR_SHOULDER) out.push("crossed");
+  const x = crossing(sh.L, now.L, sh.R, now.R);
+  if (x && Math.min(Math.hypot(x.x - sh.L.x, x.y - sh.L.y), Math.hypot(x.x - sh.R.x, x.y - sh.R.y)) > NEAR_SHOULDER) out.push("crossed");
   if (prev && Math.max(Math.hypot(now.L.x - prev.L.x, now.L.y - prev.L.y), Math.hypot(now.R.x - prev.R.x, now.R.y - prev.R.y)) > JUMP_PX) out.push("jump");
   return out;
 }

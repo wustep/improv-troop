@@ -227,7 +227,7 @@ function ArtLab() {
         const s = stateAt(notes, beat, true, featured === i, look);
         sp.update(stopped ? { ...s, playing: false, active: [], nextOnsetIn: Infinity, nextPitch: null, upcoming: [] } : s, { t: 10 + beat * SPB, reset: opts.reset });
         const h = sp.hands();
-        glitches[i] = glitchesOf(h, opts.step ? prevHands.current[i] : null);
+        glitches[i] = glitchesOf(h, opts.step ? prevHands.current[i] : null, sp.shoulders());
         prevHands.current[i] = h;
       });
       return glitches;
@@ -370,6 +370,9 @@ function ArtLab() {
         </button>
         <button className={btn} onClick={nextGlitch} title="Step until a pose looks wrong: crossed arms, or a paw jumping (g)" data-testid="next-glitch">
           next glitch
+        </button>
+        <button className={btn} onClick={() => sprites.current.forEach((sp) => sp?.cheer())} title="What the band does when a take plays to its end" data-testid="cheer">
+          cheer
         </button>
         <input
           type="range"
