@@ -1,4 +1,4 @@
-import { dynamicLift, harmAt, type BarCtx } from "./context";
+import { dynamicLift, harmAt, shapePhrase, type BarCtx } from "./context";
 import { fitOctave, holdable, nearestIn } from "./harmony";
 import { notesToText, parseNotes, splitBars } from "./notation";
 import type { Rng } from "./rng";
@@ -309,7 +309,7 @@ export function realizeMotifBar(ctx: BarCtx, ops: MotifOp[], barOffset = 0): Not
     fitted = fitOctave(out, Math.max(rlo, lo2 - 3), Math.min(rhi, hi2 + 3), featured ? (lo2 + hi2) / 2 : ctx.mem.lastPitch);
   }
   if (fitted.length) ctx.mem.lastPitch = fitted[fitted.length - 1].pitch;
-  return fitted;
+  return shapePhrase(fitted, ctx.style);
 }
 
 function scaleStepAway(p: number, interval: number, pcs: number[]): number {

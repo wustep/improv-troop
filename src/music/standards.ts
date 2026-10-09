@@ -10,7 +10,7 @@ export interface Standard {
   name: string;
   key: KeySig;
   meter: number;
-  /** One entry per bar; several chords in a bar are space-separated and split the bar evenly. */
+  /** One entry per bar; several chords in a bar are space-separated and split the bar evenly (two in 3/4 split 2 + 1). */
   bars: string[];
   /** Section letters per bar group, e.g. [["A", 8], ["A", 8], ["B", 8], ["A", 8]]. */
   form: [string, number][];
@@ -151,7 +151,7 @@ export const STANDARDS: Standard[] = [
     bars: [
       "Fm7", "Bbm7", "Eb7", "Abmaj7", "Dbmaj7", "G7", "Cmaj7", "Cmaj7",
       "Cm7", "Fm7", "Bb7", "Ebmaj7", "Abmaj7", "D7", "Gmaj7", "Gmaj7",
-      "Am7", "D7", "Gmaj7", "Gmaj7", "F#m7b5", "B7", "Emaj7", "C7#5",
+      "Am7", "D7", "Gmaj7", "Gmaj7", "F#m7", "B7", "Emaj7", "C7#5",
       "Fm7", "Bbm7", "Eb7", "Abmaj7", "Dbmaj7", "Dbm7", "Cm7", "Bdim7", "Bbm7", "Eb7", "Abmaj7", "Gm7b5 C7",
     ],
     form: [["A", 8], ["A", 8], ["B", 8], ["A", 12]],

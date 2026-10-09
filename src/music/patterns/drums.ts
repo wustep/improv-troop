@@ -1,6 +1,6 @@
 import { velFor, type BarCtx } from "../context";
 import { ENDINGS } from "../ending";
-import { DRUM } from "../instruments";
+import { DRUM, drumPiece } from "../instruments";
 import { parseDrumGrid } from "../notation";
 import { hashString } from "../rng";
 import type { NoteEvent } from "../types";
@@ -379,4 +379,29 @@ export function endDrums(ctx: BarCtx): NoteEvent[] {
       return out;
     }
   }
+}
+
+// which stick hit gives way when a written grid asks for more than two hands at once
+const STICK_RANK: Record<string, number> = { crash: 0, snare: 1, tom: 2, ride: 3, hat: 4, aux: 5 };
+
+/**
+ * A written drum grid made playable by two sticks and two feet: at any instant at most two stick
+ * hits (the fill and the accents win over timekeeping), and the hi-hat stays shut while the rack
+ * tom is struck (on an open-handed kit the hat and the rack tom are the same hand's, and playing
+ * both crosses the arms). Returns the notes kept and how many were dropped.
+ */
+export function playableKit(notes: NoteEvent[]): { notes: NoteEvent[]; dropped: number } {
+  const at = (n: NoteEvent) => Math.round(n.start * 48);
+  const feet = (n: NoteEvent) => n.pitch === DRUM.kick || n.pitch === 35 || n.pitch === DRUM.hatPedal;
+  const groups = new Map<number, NoteEvent[]>();
+  for (const n of notes) if (!feet(n)) (groups.get(at(n)) ?? groups.set(at(n), []).get(at(n))!).push(n);
+  const drop = new Set<NoteEvent>();
+  for (const hits of groups.values()) {
+    const rackTom = hits.some((n) => n.pitch === DRUM.highTom || n.pitch === DRUM.midTom || n.pitch === 48);
+    const keep = hits
+      .filter((n) => !(rackTom && (n.pitch === DRUM.hatClosed || n.pitch === DRUM.hatOpen)))
+      .sort((a, b) => STICK_RANK[drumPiece(a.pitch)] - STICK_RANK[drumPiece(b.pitch)] || b.vel - a.vel).slice(0, 2);
+    for (const n of hits) if (!keep.includes(n)) drop.add(n);
+  }
+  return drop.size ? { notes: notes.filter((n) => !drop.has(n)), dropped: drop.size } : { notes, dropped: 0 };
 }

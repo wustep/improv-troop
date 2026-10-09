@@ -141,6 +141,35 @@ function dynamicGain(energy: number): number {
   return 0.55 + energy * 0.6;
 }
 
+/**
+ * A written or stated line played like a player, not a sequencer: the high point of the bar
+ * sings, swung upbeats lean in, long notes get their weight, and a short last note eases off.
+ * No randomness, so a seed plays the same take. Ghost notes keep their own level, and every
+ * note of a chord moves together (it's read from the chord's top).
+ */
+export function shapePhrase(notes: NoteEvent[], style: Pick<StyleDef, "swing">): NoteEvent[] {
+  if (notes.length < 2) return notes;
+  const at = (t: number) => Math.round(t * 48);
+  const tops = new Map<number, number>();
+  for (const n of notes) tops.set(at(n.start), Math.max(tops.get(at(n.start)) ?? -Infinity, n.pitch));
+  if (tops.size < 2) return notes;
+  const hi = Math.max(...tops.values());
+  const lo = Math.min(...tops.values());
+  const last = Math.max(...tops.keys());
+  return notes.map((n) => {
+    if (n.art === "ghost") return n;
+    const k = at(n.start);
+    const lift = hi > lo ? (tops.get(k)! - lo) / (hi - lo) : 0.5;
+    const frac = n.start - Math.floor(n.start + 1e-6);
+    let f = 0.94 + 0.1 * lift;
+    if (Math.abs(n.start) < 1e-6) f *= 1.03;
+    if (Math.abs(frac - 0.5) < 1e-6 && style.swing > 0.55 && n.dur <= 0.5) f *= 1.04;
+    if (n.dur >= 1) f *= 1.03;
+    if (k === last && n.dur < 1) f *= 0.95;
+    return { ...n, vel: Math.max(0.05, Math.min(1, n.vel * f)) };
+  });
+}
+
 /** How much louder (or softer) a bar at `energy` plays than one at `from` (mf by default). */
 export function dynamicLift(energy: number, from = DYNAMIC_ENERGY.mf): number {
   return dynamicGain(energy) / dynamicGain(from);

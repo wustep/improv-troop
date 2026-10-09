@@ -1,4 +1,4 @@
-import { chordSpans, dynamicLift, harmAt, velFor, type BarCtx } from "./context";
+import { chordSpans, dynamicLift, harmAt, shapePhrase, velFor, type BarCtx } from "./context";
 import { holdable, nearestIn } from "./harmony";
 import { keyPrefersFlats, mod, pitchName } from "./theory";
 import { ENDINGS } from "./ending";
@@ -110,7 +110,9 @@ function realizeRaw(ctx: BarCtx, text: string): DirectiveResult {
     if (looksLikeDrumGrid(t)) {
       if (fn !== "rhythm") return { ...realizeDirective(ctx, "@line"), issues: ["drum grid given to a pitched player; improvised instead"] };
       const r = parseDrumGrid(t, ctx.beats);
-      return { notes: r.notes.map((n) => ({ ...n, vel: n.vel * velFor(ctx, 1) })), issues: r.errors, kind: "grid" };
+      const kit = drums.playableKit(r.notes);
+      const issues = kit.dropped ? [...r.errors, `${kit.dropped} hit${kit.dropped > 1 ? "s" : ""} more than two sticks can play; dropped`] : r.errors;
+      return { notes: kit.notes.map((n) => ({ ...n, vel: n.vel * velFor(ctx, 1) })), issues, kind: "grid" };
     }
     if (fn === "rhythm") {
       return { ...realizeDirective(ctx, "@groove"), issues: ["pitched notes given to drums; grooved instead"] };
@@ -119,14 +121,17 @@ function realizeRaw(ctx: BarCtx, text: string): DirectiveResult {
     const issues = [...r.errors];
     if (r.covered < ctx.beats - 1e-6) issues.push(`bar short by ${(ctx.beats - r.covered).toFixed(2)} beats (padded with rest)`);
     const vel = velFor(ctx, 0.8);
-    const notes = rehearse(
-      ctx,
-      r.notes.map((n) => ({
-        ...n,
-        // an accent is marked, not pre-boosted: the audio engine lifts every accent once
-        vel: n.art === "ghost" ? vel * 0.4 : vel,
-      })),
-      issues,
+    const notes = shapePhrase(
+      rehearse(
+        ctx,
+        r.notes.map((n) => ({
+          ...n,
+          // an accent is marked, not pre-boosted: the audio engine lifts every accent once
+          vel: n.art === "ghost" ? vel * 0.4 : vel,
+        })),
+        issues,
+      ),
+      ctx.style,
     );
     if (notes.length) ctx.mem.lastPitch = notes[notes.length - 1].pitch;
     return { notes, issues, kind: "notes" };
@@ -195,7 +200,10 @@ function realizeRaw(ctx: BarCtx, text: string): DirectiveResult {
         return done(realizeMotifBar(c, []));
       }
       const vel = velFor(ctx, 0.8);
-      const out = notes.map((n) => ({ ...n, vel: n.art === "ghost" ? vel * 0.4 : vel, written: true as const }));
+      const out = shapePhrase(
+        notes.map((n) => ({ ...n, vel: n.art === "ghost" ? vel * 0.4 : vel, written: true as const })),
+        ctx.style,
+      );
       if (out.length) ctx.mem.lastPitch = out[out.length - 1].pitch;
       ctx.mem.phrase = null;
       return done(out);

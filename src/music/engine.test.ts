@@ -3,6 +3,8 @@ import { buildFrame, defaultStandardLength, FREE_LENGTHS, lengthOptions, snapLen
 import { DRUM, INSTRUMENTS, defaultMembers } from "./instruments";
 import { defaultSettings, generateLocal } from "./local";
 import { parseDrumGrid, parseNotes } from "./notation";
+import { shapePhrase } from "./context";
+import { playableKit } from "./patterns/drums";
 import { STANDARDS } from "./standards";
 import { STYLES, STYLE_LIST } from "./styles";
 import { homeOf } from "./ensemble";
@@ -1018,11 +1020,15 @@ describe("accents", () => {
     const leader = score.settings.leaderId;
     const bar = score.plan.findIndex((b) => b.directives?.[leader]?.startsWith("@motif"));
     const plan = score.plan.map((b) => ({ ...b, directives: { ...b.directives } }));
-    plan[bar].directives![leader] = "C5/4> D5/4 E5/4 G5/4";
-    const res = realize({ frame: score.frame, members: band, plan, motif: score.motif, seed: 5 });
-    const notes = res.parts[leader].filter((n) => Math.floor(n.start / 4 + 1e-9) === bar);
-    expect(notes[0].art).toBe("accent");
-    expect(notes[0].vel).toBeCloseTo(notes[1].vel, 5);
+    const play = (text: string) => {
+      plan[bar].directives![leader] = text;
+      const res = realize({ frame: score.frame, members: band, plan, motif: score.motif, seed: 5 });
+      return res.parts[leader].filter((n) => Math.floor(n.start / 4 + 1e-9) === bar);
+    };
+    const marked = play("C5/4> D5/4 E5/4 G5/4");
+    const plain = play("C5/4 D5/4 E5/4 G5/4");
+    expect(marked[0].art).toBe("accent");
+    expect(marked[0].vel).toBeCloseTo(plain[0].vel, 5);
   });
 });
 
@@ -1319,5 +1325,36 @@ describe("notes and grids from models, loosely written", () => {
     const r = parseNotes("C5/4 D5 /8~ D5/8 E5/2", 4);
     expect(r.errors).toEqual([]);
     expect(r.covered).toBe(4);
+  });
+});
+
+describe("playing like a player", () => {
+  it("shapes a stated line: the high point sings, a short last note eases off", () => {
+    const flat = [62, 64, 65, 69, 67].map((pitch, i) => ({ pitch, start: [0, 0.5, 1, 2.5, 3][i], dur: 0.45, vel: 0.8 }));
+    const v = shapePhrase(flat, STYLES.swing).map((n) => n.vel);
+    expect(Math.max(...v)).toBe(v[3]);
+    expect(v[4]).toBeLessThan(v[3]);
+    expect(new Set(v.map((x) => x.toFixed(3))).size).toBeGreaterThan(2);
+    // a chord moves as one, and a ghost keeps its own level
+    const chord = shapePhrase(
+      [
+        { pitch: 60, start: 0, dur: 1, vel: 0.6 },
+        { pitch: 64, start: 0, dur: 1, vel: 0.6 },
+        { pitch: 67, start: 1, dur: 1, vel: 0.6, art: "ghost" as const },
+      ],
+      STYLES.swing,
+    );
+    expect(chord[0].vel).toBe(chord[1].vel);
+    expect(chord[2].vel).toBe(0.6);
+  });
+  it("keeps a written drum grid to two sticks, and shuts the hat under a rack tom", () => {
+    const grid = parseDrumGrid("rd:x... hh:x... t1:x... sd:x... bd:x...", 1);
+    expect(grid.errors).toEqual([]);
+    const { notes, dropped } = playableKit(grid.notes);
+    const sticks = notes.filter((n) => n.pitch !== DRUM.kick);
+    expect(sticks.length).toBe(2);
+    expect(sticks.some((n) => n.pitch === DRUM.hatClosed)).toBe(false);
+    expect(notes.some((n) => n.pitch === DRUM.kick)).toBe(true);
+    expect(dropped).toBe(2);
   });
 });

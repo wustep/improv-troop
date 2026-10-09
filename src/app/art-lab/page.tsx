@@ -38,17 +38,19 @@ function fakePart(inst: InstrumentId, seed: number): NoteEvent[] {
     const b0 = bar * 4;
     const ch = CHORDS[bar % 4];
     if (inst === "drums") {
-      for (const beat of [0, 1, 1.66, 2, 3, 3.66]) notes.push({ pitch: DRUM.ride, start: b0 + beat, dur: 0.25, vel: beat % 1 ? 0.5 : 0.75 });
+      // a fill bar hands both sticks to the drums: the ride stops for it and no hat opens over it
+      const fill = bar % 4 === 3;
+      for (const beat of [0, 1, 1.66, 2, 3, 3.66]) if (!fill || beat < 2.5) notes.push({ pitch: DRUM.ride, start: b0 + beat, dur: 0.25, vel: beat % 1 ? 0.5 : 0.75 });
       notes.push({ pitch: DRUM.hatPedal, start: b0 + 1, dur: 0.25, vel: 0.6 });
       notes.push({ pitch: DRUM.hatPedal, start: b0 + 3, dur: 0.25, vel: 0.6 });
       notes.push({ pitch: DRUM.kick, start: b0, dur: 0.25, vel: 0.8 });
       if (r() < 0.6) notes.push({ pitch: DRUM.snare, start: b0 + 2.66, dur: 0.25, vel: 0.5 });
       if (bar % 4 === 0) notes.push({ pitch: DRUM.crash, start: b0, dur: 1, vel: 0.9 });
-      if (bar % 4 === 3) {
+      if (fill) {
         const toms = [DRUM.snare, DRUM.snare, DRUM.highTom, DRUM.highTom, DRUM.midTom, DRUM.floorTom];
         toms.forEach((p, i) => notes.push({ pitch: p, start: b0 + 2.5 + i * 0.25, dur: 0.25, vel: 0.8 }));
       }
-      if (bar % 2 === 1) notes.push({ pitch: DRUM.hatOpen, start: b0 + 3.5, dur: 0.5, vel: 0.6 });
+      if (bar % 2 === 1 && !fill) notes.push({ pitch: DRUM.hatOpen, start: b0 + 3.5, dur: 0.5, vel: 0.6 });
       continue;
     }
     if (inst === "bass") {
