@@ -23,6 +23,13 @@ describe("share links", () => {
     expect(again.members).toEqual(take.members);
   });
 
+  it("keep a take's swing feel", () => {
+    const take = generateLocal({ ...defaultSettings(band), seed: 7, swingFeel: "hard" }, band).score;
+    const again = replay(encodeShare(take));
+    expect(again.swing).toBe(take.swing);
+    expect(again.swing).toBeGreaterThan(generateLocal({ ...defaultSettings(band), seed: 7 }, band).score.swing);
+  });
+
   it("replay a standard", () => {
     const std = STANDARDS[0];
     const settings = { ...defaultSettings(band), style: std.style, standard: std.id, key: { ...std.key }, bars: std.bars.length, seed: 42 };

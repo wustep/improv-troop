@@ -6,7 +6,7 @@ import { parseDrumGrid, parseNotes } from "./notation";
 import { shapePhrase } from "./context";
 import { playableKit } from "./patterns/drums";
 import { STANDARDS } from "./standards";
-import { STYLES, STYLE_LIST } from "./styles";
+import { STYLES, STYLE_LIST, swingAt } from "./styles";
 import { homeOf } from "./ensemble";
 import { holdable } from "./harmony";
 import { harmonyOf, topLine } from "./realize";
@@ -1356,5 +1356,17 @@ describe("playing like a player", () => {
     expect(sticks.some((n) => n.pitch === DRUM.hatClosed)).toBe(false);
     expect(notes.some((n) => n.pitch === DRUM.kick)).toBe(true);
     expect(dropped).toBe(2);
+  });
+});
+
+describe("swing feel", () => {
+  it("leans light, medium or hard, only where the style swings", () => {
+    const [light, medium, hard] = (["light", "medium", "hard"] as const).map((f) => swingAt(STYLES.swing, 160, f));
+    expect(light).toBeLessThan(medium);
+    expect(medium).toBeLessThan(hard);
+    expect(light).toBeGreaterThan(0.5);
+    expect(hard).toBeLessThanOrEqual(0.72);
+    expect(swingAt(STYLES.swing, 160)).toBe(medium);
+    expect(swingAt(STYLES.bossa, 120, "hard")).toBe(0.5);
   });
 });

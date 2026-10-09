@@ -10,7 +10,7 @@ import { defaultStandardLength, snapLength } from "@/music/form";
 import { ANIMALS, defaultMembers, INSTRUMENTS } from "@/music/instruments";
 import { defaultSettings, generateLocal } from "@/music/local";
 import { getStandard } from "@/music/standards";
-import { STYLES } from "@/music/styles";
+import { STYLES, swingAt } from "@/music/styles";
 import type { ChatMessage, Member, Score, TroopSettings } from "@/music/types";
 import { useDebug } from "./debug";
 import { sharedFromHash, type SharedTake } from "./share";
@@ -112,10 +112,14 @@ function reconcile(settings: TroopSettings, members: Member[]): TroopSettings {
   return { ...settings, leaderId, soloists, bars };
 }
 
-/** The chart at another tempo. Tempo is a playback dial: the plan and the notes stay as they are. */
-function atTempo(score: Score, tempo: number): Score {
-  if (score.frame.tempo === tempo && score.settings.tempo === tempo) return score;
-  return { ...score, settings: { ...score.settings, tempo }, frame: { ...score.frame, tempo } };
+/**
+ * The chart at another tempo or swing feel. Both are playback dials: the plan and the notes stay
+ * as they are, and the swing follows the tempo the way the style does (a fast tune swings flatter).
+ */
+function atPlayback(score: Score, tempo: number, swingFeel = score.settings.swingFeel): Score {
+  const swing = swingAt(STYLES[score.settings.style], tempo, swingFeel);
+  if (score.frame.tempo === tempo && score.settings.tempo === tempo && score.settings.swingFeel === swingFeel && score.swing === swing) return score;
+  return { ...score, swing, settings: { ...score.settings, tempo, swingFeel }, frame: { ...score.frame, tempo } };
 }
 
 let controller: AbortController | null = null;
@@ -243,7 +247,7 @@ export const useTroop = create<TroopState>((set, get) => {
     },
 
     setSettings(patch) {
-      const structural = Object.keys(patch).some((k) => !["tempo", "bestOf", "directorModel", "playerModel", "mode", "phraseBars"].includes(k));
+      const structural = Object.keys(patch).some((k) => !["tempo", "swingFeel", "bestOf", "directorModel", "playerModel", "mode", "phraseBars"].includes(k));
       const settings = reconcile({ ...get().settings, ...patch }, get().members);
       set({ settings });
       // the tempo slider fires on every pixel of a drag: save once it settles
@@ -251,11 +255,11 @@ export const useTroop = create<TroopState>((set, get) => {
       else persist();
       if (structural) {
         sketch();
-      } else if (patch.tempo !== undefined) {
-        // tempo is a playback dial: apply to the chart on screen without re-planning it
+      } else if (patch.tempo !== undefined || "swingFeel" in patch) {
+        // tempo and swing are playback dials: apply them to the chart on screen without re-planning it
         const cur = get().current;
         if (cur) {
-          const next = atTempo(cur, settings.tempo);
+          const next = atPlayback(cur, settings.tempo, settings.swingFeel);
           set({ current: next });
           // re-tempo in place; restart from this bar only if the transport can't (e.g. mid count-in)
           if (get().playing && !troopAudio.setTempo(next)) {
@@ -349,7 +353,7 @@ export const useTroop = create<TroopState>((set, get) => {
         onChat: (msg) => set((s) => ({ chat: insertByBar(s.chat, msg) })),
         onScore: (phrase) => {
           // the band planned at the tempo they were asked for: keep any change made since
-          const score = atTempo(phrase, get().settings.tempo);
+          const score = atPlayback(phrase, get().settings.tempo, get().settings.swingFeel);
           // a reload mid-jam comes back to this jam (finish replaces it under the same id)
           if (improv && improv.readyBars() > 0) {
             cutShort = cutShortTake(score, improv.readyBars(), label);
@@ -372,7 +376,7 @@ export const useTroop = create<TroopState>((set, get) => {
       };
 
       const finish = (done: Score) => {
-        const score = atTempo(done, get().settings.tempo);
+        const score = atPlayback(done, get().settings.tempo, get().settings.swingFeel);
         const take: Take = { id: score.id, score, label, engine: "ai", createdAt: Date.now() };
         set((s) => ({
           current: score,
@@ -429,7 +433,7 @@ export const useTroop = create<TroopState>((set, get) => {
         await troopAudio.unlock();
         void troopAudio.prepare(score.members, { sounds: get().sounds, notesHint: notesHintFromScore(score) });
         for (const m of score.members) troopAudio.setMute(m.id, get().muted.includes(m.id));
-        started = troopAudio.play(score, { fromBar, countIn: fromBar === 0 });
+        started = troopAudio.play(score, { fromBar, countIn: fromBar === 0 && get().sounds.countIn });
       } catch (e) {
         console.error("[troop] play failed", e);
       }

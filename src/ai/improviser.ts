@@ -116,7 +116,7 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
     frame,
     plan,
     motif,
-    swing: swingAt(style, frame.tempo),
+    swing: swingAt(style, frame.tempo, settings.swingFeel),
     rit: ritFor(frame),
     parts: Object.fromEntries(Object.entries(parts).map(([k, v]) => [k, [...v].sort((a, b) => a.start - b.start)])),
     chat: [...chat],

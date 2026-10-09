@@ -445,7 +445,7 @@ export async function runComposer(settings: TroopSettings, members: Member[], ho
     frame,
     plan,
     motif: chosen.motif,
-    swing: swingAt(style, frame.tempo),
+    swing: swingAt(style, frame.tempo, settings.swingFeel),
     rit: ritFor(frame),
     parts: res.parts,
     chat,

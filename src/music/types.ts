@@ -191,7 +191,11 @@ export interface TroopSettings {
   directorModel: string;
   playerModel: string;
   phraseBars: number; // improviser: bars per conversational round
+  /** How hard swung 8ths lean (swing and New Orleans; absent = the style's own). */
+  swingFeel?: SwingFeel;
 }
+
+export type SwingFeel = "light" | "medium" | "hard";
 
 /** The locked, code-built skeleton: length, form, harmony, and lead/solo slots. */
 export interface Frame {

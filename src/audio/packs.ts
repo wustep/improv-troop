@@ -18,17 +18,25 @@ import { CountingStorage } from "./storage";
 
 export type PianoPack = "salamander" | "splendid" | "soundfont" | "wurlitzer" | "cp80";
 export type DrumKit = "acoustic" | "lm2";
+export type Room = "dry" | "club" | "hall";
 
-/** Which sampled sound the piano and the drums use. */
+/** How the band sounds in this browser: the piano and drum samples, the room, the count-in. */
 export interface Sounds {
   piano: PianoPack;
   drums: DrumKit;
+  room: Room;
+  /** A bar of clicks before a take from the top. */
+  countIn: boolean;
 }
 
-export const DEFAULT_SOUNDS: Sounds = { piano: "salamander", drums: "acoustic" };
+export const DEFAULT_SOUNDS: Sounds = { piano: "salamander", drums: "acoustic", room: "club", countIn: true };
 
 export const PIANO_PACKS: PianoPack[] = ["salamander", "splendid", "soundfont", "wurlitzer", "cp80"];
 export const DRUM_KITS: DrumKit[] = ["acoustic", "lm2"];
+export const ROOMS: Room[] = ["dry", "club", "hall"];
+
+/** Each instrument's reverb send (REVERB_SEND) is scaled by the room. */
+export const ROOM_SEND: Record<Room, number> = { dry: 0.3, club: 1, hall: 2.2 };
 
 /** A saved or shared value read back as a sound we have (anything else is the default). */
 export function readSounds(raw: unknown, legacyPiano?: unknown): Sounds {
@@ -37,6 +45,8 @@ export function readSounds(raw: unknown, legacyPiano?: unknown): Sounds {
   return {
     piano: PIANO_PACKS.includes(piano as PianoPack) ? (piano as PianoPack) : DEFAULT_SOUNDS.piano,
     drums: DRUM_KITS.includes(o.drums as DrumKit) ? (o.drums as DrumKit) : DEFAULT_SOUNDS.drums,
+    room: ROOMS.includes(o.room as Room) ? (o.room as Room) : DEFAULT_SOUNDS.room,
+    countIn: typeof o.countIn === "boolean" ? o.countIn : DEFAULT_SOUNDS.countIn,
   };
 }
 

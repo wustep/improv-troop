@@ -337,6 +337,19 @@ export function ControlPanel() {
         </div>
       </Field>
 
+      {STYLES[s.style].swing > 0.5 && (
+        <Field>
+          <Label hint="how far the 8ths lean">Swing</Label>
+          <div className="flex gap-xs">
+            {(["light", "medium", "hard"] as const).map((f) => (
+              <Chip key={f} seed={`swing-${f}`} active={(s.swingFeel ?? "medium") === f} onClick={() => set({ swingFeel: f })}>
+                {f}
+              </Chip>
+            ))}
+          </div>
+        </Field>
+      )}
+
       <Field>
         <Label>Leader</Label>
         <div className="flex flex-wrap gap-xs">
@@ -451,6 +464,18 @@ export function ControlPanel() {
                 <option value="lm2">LinnDrum machine</option>
               </select>
             </div>
+            <div>
+              <Label>Room</Label>
+              <select className="sketch-select w-full" value={sounds.room} onChange={(e) => setSounds({ room: e.target.value as Sounds["room"] })} aria-label="Room">
+                <option value="dry">Dry (close up)</option>
+                <option value="club">Club</option>
+                <option value="hall">Hall (big and wet)</option>
+              </select>
+            </div>
+            <label className="flex cursor-pointer items-center gap-xs self-end pb-xxs text-m" title="A bar of clicks before a take from the top">
+              <input type="checkbox" className="sketch-check" checked={sounds.countIn} onChange={(e) => setSounds({ countIn: e.target.checked })} />
+              count me in
+            </label>
           </div>
         </div>
       </details>

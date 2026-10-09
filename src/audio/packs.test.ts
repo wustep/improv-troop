@@ -31,12 +31,12 @@ describe("the acoustic kit", () => {
 
 describe("sounds", () => {
   it("reads old saves and unknown values back as sounds we have", () => {
-    expect(readSounds(undefined, "splendid")).toEqual({ piano: "splendid", drums: "acoustic" });
-    expect(readSounds({ piano: "harpsichord", drums: "808" })).toEqual(DEFAULT_SOUNDS);
-    expect(readSounds({ piano: "wurlitzer", drums: "lm2" })).toEqual({ piano: "wurlitzer", drums: "lm2" });
+    expect(readSounds(undefined, "splendid")).toEqual({ ...DEFAULT_SOUNDS, piano: "splendid" });
+    expect(readSounds({ piano: "harpsichord", drums: "808", room: "cave", countIn: "yes" })).toEqual(DEFAULT_SOUNDS);
+    expect(readSounds({ piano: "wurlitzer", drums: "lm2", room: "hall", countIn: false })).toEqual({ piano: "wurlitzer", drums: "lm2", room: "hall", countIn: false });
   });
   it("falls back from every sampled pack", () => {
     expect(packChain("drums").map((p) => p.pack)).toEqual(["vcsl:acoustic-kit", "lm-2"]);
-    expect(packChain("piano", { piano: "wurlitzer", drums: "acoustic" }).length).toBeGreaterThan(1);
+    expect(packChain("piano", { ...DEFAULT_SOUNDS, piano: "wurlitzer" }).length).toBeGreaterThan(1);
   });
 });

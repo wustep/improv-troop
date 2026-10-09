@@ -14,7 +14,7 @@ const VERSION = 1;
 export const SHARE_PARAM = "t";
 const MAX_MEMBERS = 12;
 
-type SharedSettings = Pick<TroopSettings, "style" | "bars" | "tempo" | "key" | "meter" | "standard" | "leaderId" | "soloists" | "seed" | "phraseBars">;
+type SharedSettings = Pick<TroopSettings, "style" | "bars" | "tempo" | "key" | "meter" | "standard" | "leaderId" | "soloists" | "seed" | "phraseBars" | "swingFeel">;
 
 interface Payload {
   s: SharedSettings;
@@ -57,6 +57,7 @@ export function encodeShare(score: Score): string {
       soloists: s.soloists,
       seed: s.seed,
       phraseBars: s.phraseBars,
+      ...(s.swingFeel && s.swingFeel !== "medium" ? { swingFeel: s.swingFeel } : {}),
     },
     m: score.members.map((m) => [m.id, m.animal, m.name, m.instrument]),
   };
@@ -119,6 +120,7 @@ export function decodeShare(value: string): SharedTake | null {
       leaderId: typeof s.leaderId === "string" && ids.has(s.leaderId) ? s.leaderId : "",
       soloists: Array.isArray(s.soloists) ? s.soloists.filter((id): id is string => typeof id === "string" && ids.has(id)) : [],
       phraseBars: int(s.phraseBars, 1, 16) ?? 4,
+      ...(s.swingFeel === "light" || s.swingFeel === "hard" ? { swingFeel: s.swingFeel } : {}),
     },
   };
 }

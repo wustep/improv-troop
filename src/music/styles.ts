@@ -1,4 +1,4 @@
-import type { InstrumentFunction, SectionKind, StyleId } from "./types";
+import type { InstrumentFunction, SectionKind, StyleId, SwingFeel } from "./types";
 
 // Seven distinct characters. Distinctness comes from texture priors (what each
 // function in the band actually does), not from the style's name. Prompts quote
@@ -390,8 +390,11 @@ export const CELLO_TEXTURE: Record<StyleId, Partial<Record<SectionKind, string>>
  * The style's swing ratio at a tempo. Swing flattens as it speeds up: near a triplet at a
  * ballad, close to even 8ths at a burning tempo. `swing` in the style is its ratio at 120 bpm.
  */
-export function swingAt(style: StyleDef, tempo: number): number {
+export function swingAt(style: StyleDef, tempo: number, feel: SwingFeel = "medium"): number {
   if (style.swing <= 0.5) return style.swing;
-  const r = style.swing - (tempo - 120) * 0.0006;
-  return Math.round(Math.min(0.68, Math.max(0.55, r)) * 1000) / 1000;
+  const r = Math.min(0.68, Math.max(0.55, style.swing - (tempo - 120) * 0.0006));
+  // light leans half as far from straight (a lazy, almost even ballad 8th); hard leans
+  // a third further, toward the 2:1 triplet shuffle and a little past it
+  const lean = { light: 0.5, medium: 1, hard: 1.35 }[feel] ?? 1;
+  return Math.round(Math.min(0.72, 0.5 + (r - 0.5) * lean) * 1000) / 1000;
 }

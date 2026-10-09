@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { troopAudio, type DrumKit, type LoadState, type PianoPack, type PlaybackStats } from "@/audio/engine";
-import { DRUM_KITS, PIANO_PACKS } from "@/audio/packs";
+import { DEFAULT_SOUNDS, DRUM_KITS, PIANO_PACKS } from "@/audio/packs";
 import { notesHintFromScore } from "@/audio/engine";
 import { AUDIO_FIXTURE } from "@/audio/fixture";
 
@@ -47,7 +47,7 @@ export default function AudioLab() {
 
   const prepare = () =>
     troopAudio.prepare(AUDIO_FIXTURE.members, {
-      sounds: { piano: pack, drums: kit },
+      sounds: { ...DEFAULT_SOUNDS, piano: pack, drums: kit },
       notesHint: notesHintFromScore(AUDIO_FIXTURE),
     });
 

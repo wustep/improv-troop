@@ -10,6 +10,7 @@ import {
   packChain,
   pizzChain,
   PIZZ_VOLUME,
+  ROOM_SEND,
   DEFAULT_SOUNDS,
   type DrumKit,
   type PackSpec,
@@ -287,7 +288,7 @@ export class TroopAudio {
   ): Promise<void> {
     const ctx = this.ensureContext();
     if (!ctx) return;
-    if (opts?.sounds) this.sounds = opts.sounds;
+    if (opts?.sounds) this.setSounds(opts.sounds);
     this.currentMembers = members.slice();
     this.assignEntries(members);
     this.ensureClick();
@@ -444,7 +445,7 @@ export class TroopAudio {
         }
         if (this.reverb) {
           try {
-            inst.output.addEffect("reverb", this.reverb, REVERB_SEND[entry.instrument]);
+            inst.output.addEffect("reverb", this.reverb, REVERB_SEND[entry.instrument] * ROOM_SEND[this.sounds.room]);
           } catch {
             /* ignore */
           }
@@ -699,6 +700,20 @@ export class TroopAudio {
 
   stop(): void {
     this.halt(false);
+  }
+
+  /** New sounds: a new room is heard at once (the samples change on the next prepare). */
+  setSounds(sounds: Sounds): void {
+    const roomChanged = sounds.room !== this.sounds.room;
+    this.sounds = sounds;
+    if (!roomChanged || !this.reverb) return;
+    for (const e of this.entries.values()) {
+      try {
+        e.inst?.output.sendEffect("reverb", REVERB_SEND[e.instrument] * ROOM_SEND[sounds.room]);
+      } catch {
+        /* not loaded yet: it picks up the room when it is */
+      }
+    }
   }
 
   private halt(fireEnded: boolean) {

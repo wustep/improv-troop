@@ -88,7 +88,7 @@ export function generateLocal(settings: TroopSettings, members: Member[]): Local
     frame,
     plan,
     motif,
-    swing: swingAt(style, frame.tempo),
+    swing: swingAt(style, frame.tempo, settings.swingFeel),
     rit: ritFor(frame),
     parts: res.parts,
     chat: narrateLocal(frame, plan, members, rng.fork("narrate")),
