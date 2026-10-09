@@ -3,7 +3,7 @@ import { motifFromText } from "@/music/motif";
 import { fitBeatGroups, looksLikeDrumGrid, notesToText, parseDrumGrid, parseNotes, spellChordSymbols, squeezeBar } from "@/music/notation";
 import { isFeaturedRole } from "@/music/realize";
 import { fold, keyPrefersFlats } from "@/music/theory";
-import type { BarPlan, Dynamic, Frame, InstrumentFunction, Member, Motif, NoteEvent, Role, Texture } from "@/music/types";
+import type { BarPlan, Dynamic, Frame, InstrumentFunction, Member, Motif, NoteEvent, Role, StyleId, Texture } from "@/music/types";
 import { asRecord, asString, parseBarRange } from "./json";
 
 const TEXTURES: Texture[] = ["sparse", "groove", "build", "peak", "breakdown", "tutti", "stoptime", "ostinato"];
@@ -62,6 +62,9 @@ function movedWords(octaves: number): string {
   return `${octaves < 0 ? "down" : "up"} ${OCTAVE_WORDS[Math.abs(octaves)]}`;
 }
 
+// Styles whose lines are riffs: a lick that fills half the bar is played twice.
+const RIFF_STYLES = new Set<StyleId>(["funk", "pop"]);
+
 // What each kind of player can be told to do while someone else is featured.
 const ACCOMPANIMENT: Record<InstrumentFunction, RegExp> = {
   rhythm: /^@(groove)$/,
@@ -116,7 +119,7 @@ export function ghostNotes(text: string): string {
  * With a role, a directive for an accompanying player must be one they can play, and a
  * featured player's must be a featured part (not comping or a pattern under someone else).
  */
-export function validateBarText(text: string, member: Member, beats: number, repairs: string[], where: string, role?: Role): string | null {
+export function validateBarText(text: string, member: Member, beats: number, repairs: string[], where: string, role?: Role, style?: StyleId): string | null {
   let t = text.trim();
   if (!t) return null;
   const fn = INSTRUMENTS[member.instrument].fn;
@@ -133,7 +136,7 @@ export function validateBarText(text: string, member: Member, beats: number, rep
       const readable = grid ? fn === "rhythm" && !parseDrumGrid(written, beats).errors.length : fn !== "rhythm" && !parseNotes(written.split("|")[0], beats).errors.some((e) => /^bad/.test(e));
       if (readable) {
         repairs.push(`${where}: ${words[0]} with the part written out; played as written`);
-        return validateBarText(written, member, beats, repairs, where, role);
+        return validateBarText(written, member, beats, repairs, where, role, style);
       }
       t = words.slice(0, at).join(" ");
     }
@@ -212,6 +215,14 @@ export function validateBarText(text: string, member: Member, beats: number, rep
       for (const n of r.notes) if (off + n.start < beats - 1e-6) looped.push({ ...n, start: off + n.start, dur: Math.min(n.dur, beats - off - n.start) });
     repairs.push(`${where}: a ${fmtBeats(r.covered)}-beat groove, looped to the barline`);
     first = notesToText(looped, beats);
+    r = parseNotes(first, beats);
+  }
+  // a horn's funk lick of eight 16ths is half a bar (cheap models count it as a whole one): a
+  // riff in a riff style goes round twice, where elsewhere the rest of the bar would be silence
+  const sixteenths = r.notes.length >= 5 && r.notes.every((n) => n.dur <= 0.25 + 1e-6 && Math.abs(n.start * 4 - Math.round(n.start * 4)) < 1e-6);
+  if ((fn === "melodic" || !accompanying) && style && RIFF_STYLES.has(style) && !r.errors.length && sixteenths && Math.abs(r.covered * 2 - beats) < 1e-6) {
+    repairs.push(`${where}: a half-bar 16th riff, played twice`);
+    first = `${first} ${first}`;
     r = parseNotes(first, beats);
   }
   if (r.errors.length) repairs.push(`${where}: ${r.errors.slice(0, 2).join("; ")}`);
@@ -386,7 +397,7 @@ export function mergePlan(
           continue;
         }
         const role = frame.slots[i]?.[m.id] ?? base[i]?.roles[m.id];
-        const clean = validateBarText(text, m, frame.meter.beats, repairs, `bar ${b1} ${m.name}`, role);
+        const clean = validateBarText(text, m, frame.meter.beats, repairs, `bar ${b1} ${m.name}`, role, frame.style);
         if (clean) bp.directives[m.id] = clean;
       }
     }

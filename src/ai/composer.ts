@@ -415,7 +415,7 @@ export async function runComposer(settings: TroopSettings, members: Member[], ho
               continue;
             }
             const repairs: string[] = [];
-            const clean = validateBarText(raw, m, frame.meter.beats, repairs, `bar ${b + 1}`, frame.slots[b]?.[id] ?? plan[b].roles[id]);
+            const clean = validateBarText(raw, m, frame.meter.beats, repairs, `bar ${b + 1}`, frame.slots[b]?.[id] ?? plan[b].roles[id], frame.style);
             repairs.forEach((x) => noteRepair(call.id, x));
             if (clean && clean !== "@rest") plan[b].directives = { ...plan[b].directives, [id]: clean };
           }

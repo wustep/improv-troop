@@ -136,6 +136,21 @@ describe("validateBarText", () => {
     // and a soloist's short line is a phrase
     expect(check("C5/4 D5/4 E5/4", fox).repairs.join()).not.toMatch(/looped/);
   });
+  it("plays a funk horn's half-bar 16th lick twice, and only in a riff style", () => {
+    // Gemini 2.5 Flash's funk head: eight 16ths written as a whole bar
+    const lick = "r/16 Bb4/16 C5/16 Eb5/16 r/16 D5/16 Bb4/16 G4/16";
+    const funk: string[] = [];
+    const out = validateBarText(lick, fox, 4, funk, "bar 6", "lead", "funk");
+    expect(funk.join()).toMatch(/played twice/);
+    expect(out).toBe(`${lick} ${lick}`);
+    expect(parseNotes(out!, 4).covered).toBe(4);
+    // a swing soloist's half bar is a phrase and a breath
+    const swing: string[] = [];
+    expect(validateBarText(lick, fox, 4, swing, "bar 6", "solo", "swing")).toBe(lick);
+    expect(swing.join()).toMatch(/padded/);
+    // and a sparse half bar in funk is a phrase too
+    expect(validateBarText("C5/8 r/8 D5/4", fox, 4, [], "bar 6", "lead", "funk")).toBe("C5/8 r/8 D5/4");
+  });
   it("keeps a short beat's gap inside that beat when the bar is written in beat groups", () => {
     const frog = band[1];
     // the second beat has three 16ths: the slip stays in beat 2, beats 3 and 4 stay on their beats

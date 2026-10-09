@@ -411,7 +411,7 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
               continue;
             }
             const repairs: string[] = [];
-            const clean = validateBarText(raw, m, frame.meter.beats, repairs, `bar ${b + 1}`, frame.slots[b]?.[id] ?? plan[b].roles[id]);
+            const clean = validateBarText(raw, m, frame.meter.beats, repairs, `bar ${b + 1}`, frame.slots[b]?.[id] ?? plan[b].roles[id], frame.style);
             repairs.forEach((x) => noteRepair(call.id, x));
             if (clean && clean !== "@rest") plan[b].directives = { ...plan[b].directives, [id]: clean };
           }
@@ -531,7 +531,7 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
               const raw = asString(bmap[String(b + 1)], 600);
               if (!raw) continue;
               const repairs: string[] = [];
-              const clean = validateBarText(raw, m, frame.meter.beats, repairs, `bar ${b + 1}`, frame.slots[b]?.[id] ?? plan[b].roles[id]);
+              const clean = validateBarText(raw, m, frame.meter.beats, repairs, `bar ${b + 1}`, frame.slots[b]?.[id] ?? plan[b].roles[id], frame.style);
               repairs.forEach((x) => noteRepair(call.id, x));
               // the song's pickup and written bars aren't the band's to rewrite
               if (clean && !plan[b].directives?.[id]?.startsWith("@tune")) plan[b].directives = { ...plan[b].directives, [id]: clean };
