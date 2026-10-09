@@ -623,10 +623,11 @@ describe("standards form", () => {
       expect(lengthOptions(std.id)).toContain(defaultStandardLength(std.id));
       for (const bars of lengthOptions(std.id)) {
         const s = { ...defaultSettings(band), standard: std.id, key: std.key, style: std.style, bars, meter: { beats: std.meter }, soloists: ["bear"] };
-        const { score } = generateLocal(s, band);
-        const last = score.frame.sections[score.frame.sections.length - 1];
+        // the form alone: generating every note of every take made this the suite's slowest test
+        const frame = buildFrame(s, band);
+        const last = frame.sections[frame.sections.length - 1];
         expect(["head", "out", "tag"]).toContain(last.kind);
-        if (bars > std.bars.length || std.bars.length >= 16) expect(score.frame.sections.some((x) => x.kind === "solo")).toBe(true);
+        if (bars > std.bars.length || std.bars.length >= 16) expect(frame.sections.some((x) => x.kind === "solo")).toBe(true);
       }
     }
   });
@@ -635,7 +636,7 @@ describe("standards form", () => {
     for (const std of STANDARDS) {
       for (const bars of lengthOptions(std.id)) {
         const s = { ...defaultSettings(band), standard: std.id, key: std.key, style: std.style, bars, meter: { beats: std.meter } };
-        const { chords } = generateLocal(s, band).score.frame;
+        const { chords } = buildFrame(s, band);
         const end = chords[chords.length - 1];
         expect(end.length, `${std.id} ${bars}`).toBe(1);
         expect(parseChord(end[0].symbol).root, `${std.id} ${bars} ends on ${end[0].symbol}`).toBe(mod(parsePitch(`${std.key.tonic}4`)!, 12));

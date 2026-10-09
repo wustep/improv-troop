@@ -24,6 +24,10 @@ The packs differ by up to 16 dB out of the box, so each one is level-matched:
 - The electric pianos are normalized about 15 dB hotter than Salamander (C4, mezzo), so they play at `EPIANO_VOLUME`.
 - VCSL records its drum layers at their natural level: a snare's softest tap peaks 27 dB under its hardest. smplr also scales by velocity, so each layer is trimmed onto one curve, from −13 dBFS for the softest layer up to −1 dBFS for the hardest. The peaks were measured from the decoded samples and are written next to each piece in `ACOUSTIC_KIT`.
 
+## Notation fonts
+
+The chart is engraved by VexFlow in Petaluma and Petaluma Script (Steinberg's handwritten SMuFL fonts, SIL Open Font License 1.1). `public/fonts/petaluma.woff2` and `petaluma-script.woff2` are the files VexFlow 5 bundles, extracted so the page loads `vexflow/core` and these two instead of the full entry's six inlined fonts. If they don't load, the full entry is fetched and the chart falls back to Bravura and Academico.
+
 ## Gaps in the hosted sets
 
 The hosted CP80 is missing three oggs (`057-A3-F`, `065-F4-PP`, `080-G#5-MP`), and the Wurlitzer's `ab6mp.ogg` won't decode. smplr plays silence for a region with no sample. The m4a twins aren't a reliable stand-in, because many of them don't decode in Chromium. So `EPIANO_GAPS` fetches the same note one velocity layer over instead.

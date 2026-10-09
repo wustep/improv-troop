@@ -32,20 +32,25 @@ let vfPromise: Promise<VF> | null = null;
 function loadVexFlow() {
   if (!vfPromise) {
     vfPromise = (async () => {
-      const vf = await import("vexflow");
-      let fonts: [string, string] = ["Petaluma", "Petaluma Script"];
+      // VexFlow's core plus the handwritten pair the chart uses, served as font files. The full
+      // entry inlines six fonts as base64 (1.1 MB of script on first load) to use two of them.
+      const vf = await import("vexflow/core");
       try {
-        // The full vexflow entry registers its bundled fonts; wait for the handwritten pair.
         await Promise.race([
-          Promise.all([document.fonts.load("30px Petaluma"), document.fonts.load('16px "Petaluma Script"')]),
-          new Promise((r) => setTimeout(r, 4000)),
+          Promise.all([
+            vf.Font.load("Petaluma", "/fonts/petaluma.woff2", { display: "block" }),
+            vf.Font.load("Petaluma Script", "/fonts/petaluma-script.woff2", { display: "swap" }),
+          ]),
+          new Promise((_, no) => setTimeout(() => no(new Error("font timeout")), 6000)),
         ]);
-        if (!document.fonts.check("30px Petaluma")) fonts = ["Bravura", "Academico"];
+        vf.VexFlow.setFonts("Petaluma", "Petaluma Script");
+        return vf as unknown as VF;
       } catch {
-        fonts = ["Bravura", "Academico"];
+        // the files didn't come: the full entry brings its own engraving fonts
+        const full = await import("vexflow");
+        full.VexFlow.setFonts("Bravura", "Academico");
+        return full;
       }
-      vf.VexFlow.setFonts(...fonts);
-      return vf;
     })();
   }
   return vfPromise;
