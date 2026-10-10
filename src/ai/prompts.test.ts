@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { defaultMembers } from "@/music/instruments";
 import { defaultSettings, generateLocal } from "@/music/local";
-import { harmonyBlock } from "./prompts";
+import { grooveCount, harmonyBlock } from "./prompts";
+import { barsSchema } from "./schemas";
 
 const band = defaultMembers();
 const { frame, plan } = generateLocal({ ...defaultSettings(band), bars: 16, seed: 5 }, band).score;
@@ -30,5 +31,20 @@ describe("chartBlock", () => {
     // bar 2 of the melody (r F A Bb in F) is r Bb D Eb in Bb
     expect(text).toMatch(/opens: .*\| r\/4 Bb\d\/4 D\d\/4 Eb\d\/4/);
     expect(text).toContain("Bars 1-4 are the intro");
+  });
+});
+
+describe("counting a groove", () => {
+  it("sums its examples to the bar's length", () => {
+    expect(grooveCount(4)).toContain("1 + ½ + ½ + 1 + 1 = 4");
+    expect(grooveCount(3)).toContain("1 + ½ + ½ + 1 = 3");
+    expect(grooveCount(3)).toContain("The sum must be 3");
+  });
+
+  it("asks for each bar's count ahead of its notes", () => {
+    const s = barsSchema([5, 6], true, true);
+    expect(Object.keys(s.properties!)).toEqual(["count", "bars", "say"]);
+    expect(s.required).toEqual(["count", "bars", "say"]);
+    expect(Object.keys(barsSchema([5], false).properties!)).toEqual(["bars"]);
   });
 });

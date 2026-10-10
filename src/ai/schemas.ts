@@ -48,10 +48,19 @@ export function criticSchema(): JSONSchema7 {
   });
 }
 
-/** {"bars": {"5": "...", ...}, "say": "..."} — bar numbers are 1-based. */
-export function barsSchema(barNumbers: number[], withSay: boolean): JSONSchema7 {
-  const bars = obj(Object.fromEntries(barNumbers.map((b) => [String(b), str()])));
-  return withSay ? obj({ bars, say: str("short line to the band, or empty") }) : obj({ bars });
+/**
+ * {"bars": {"5": "...", ...}, "say": "..."} — bar numbers are 1-based. With `count`, each bar's
+ * rhythm summed in beats comes first ({"count": {"5": "1 + ½ + ½ + 1 + 1 = 4"}, ...}), so a groove's
+ * beats are added up before its notes are written.
+ */
+export function barsSchema(barNumbers: number[], withSay: boolean, count = false): JSONSchema7 {
+  const perBar = (description?: string) => obj(Object.fromEntries(barNumbers.map((b) => [String(b), str(description)])));
+  const bars = perBar();
+  return obj({
+    ...(count ? { count: perBar('beats of each note and rest, summed, e.g. "1 + ½ + ½ + 1 + 1 = 4"; "-" for a directive') } : {}),
+    bars,
+    ...(withSay ? { say: str("short line to the band, or empty") } : {}),
+  });
 }
 
 export function countOffSchema(otherIds: string[]): JSONSchema7 {

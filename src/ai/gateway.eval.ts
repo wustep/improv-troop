@@ -9,8 +9,9 @@ import { loadEnvFile } from "node:process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { afterAll, describe, it, vi } from "vitest";
 import { POST } from "@/app/api/llm/route";
-import { defaultMembers } from "@/music/instruments";
+import { defaultMembers, INSTRUMENTS } from "@/music/instruments";
 import { defaultSettings } from "@/music/local";
+import { isFeaturedRole } from "@/music/realize";
 import type { Member, Score, StyleId } from "@/music/types";
 import { useDebug } from "@/state/debug";
 import { runComposer, type PipelineHooks } from "./composer";
@@ -26,6 +27,7 @@ const OUT = process.env.EVAL_OUT ?? "";
 // the director (composer, improviser's leader) on its own model; players on the model under test
 const DIRECTOR = process.env.EVAL_DIRECTOR ?? "";
 const STANDARD = process.env.EVAL_STANDARD ?? null;
+const SEEDS = (process.env.EVAL_SEEDS ?? process.env.EVAL_SEED ?? "11").split(",").map(Number);
 
 // Rough list prices, $ per million tokens (input, output), for the spend estimate only.
 const PRICE: Record<string, [number, number]> = {
@@ -75,6 +77,32 @@ function bucket(repair: string): string {
   if (r.includes("outside the") || r.includes("frame")) return "frame";
   if (r.includes("unknown") || r.includes("directive") || r.includes("couldn't")) return "directive";
   return "other";
+}
+
+/**
+ * How well the bass and comping parts count their bars: of the accompanying bars a model wrote out
+ * as notes, how many came in short (looped, padded, kept inside a beat), at half or a quarter of the
+ * bar (repeated), or long (squeezed). Solo bars don't count; this is about grooves.
+ */
+function grooveLengths(score: Score | null, calls: { agent: string; repairs: string[] }[]) {
+  const counts = { written: 0, short: 0, half: 0, long: 0 };
+  if (!score) return counts;
+  const accompanying = (m: Member, bar: number) => ["bass", "chordal"].includes(INSTRUMENTS[m.instrument].fn) && !isFeaturedRole(score.plan[bar]?.roles?.[m.id]);
+  for (const bp of score.plan)
+    for (const m of band) {
+      const d = bp.directives?.[m.id] ?? "";
+      if (d && !d.startsWith("@") && accompanying(m, bp.index)) counts.written++;
+    }
+  for (const c of calls)
+    for (const r of c.repairs) {
+      const bar = /\bbar (\d+)/.exec(r);
+      const m = band.find((x) => x.id === c.agent) ?? band.find((x) => new RegExp(`\\b${x.name}\\b`).test(r));
+      if (!bar || !m || !accompanying(m, +bar[1] - 1)) continue;
+      if (/looped to the barline|padded with rest|inside its beat/.test(r)) counts.short++;
+      else if (/repeated to fill the bar/.test(r)) counts.half++;
+      else if (/squeezed to fit/.test(r)) counts.long++;
+    }
+  return counts;
 }
 
 function measure(model: string, mode: string, style: StyleId, runId: string, score: Score | null, err: string | null, ms: number) {
@@ -127,6 +155,7 @@ function measure(model: string, mode: string, style: StyleId, runId: string, sco
     director: DIRECTOR || undefined,
     written: `${written}/${cells}`,
     recounts: mine.filter((c) => c.label.startsWith("recount")).length,
+    grooves: grooveLengths(score, mine),
     talk: mode === "improviser" ? { perPhrase: perPhrase.join(" "), late: `${late}/${jamLines.length}` } : undefined,
     repairs,
     issues,
@@ -147,34 +176,38 @@ function measure(model: string, mode: string, style: StyleId, runId: string, sco
 describe("gateway eval", () => {
   for (const model of MODELS)
     for (const style of STYLES)
-      for (const mode of MODES) {
-        it(`${mode} · ${style} · ${model}`, { timeout: 600_000 }, async () => {
-          const runId = `${mode}-${STANDARD ?? style}-${DIRECTOR ? `${DIRECTOR.replace(/\W+/g, "_")}+` : ""}${model.replace(/\W+/g, "_")}`;
-          const settings = {
-            ...defaultSettings(band),
-            mode: mode as "composer" | "improviser",
-            style,
-            bars: BARS,
-            bestOf: 2,
-            soloists: ["bear"],
-            directorModel: DIRECTOR || model,
-            standard: STANDARD,
-            playerModel: model,
-            seed: Number(process.env.EVAL_SEED ?? 11),
-          };
-          const t0 = performance.now();
-          let score: Score | null = null;
-          let err: string | null = null;
-          try {
-            score = mode === "composer" ? await runComposer(settings, band, hooks(runId)) : await startImproviser(settings, band, hooks(runId)).promise;
-          } catch (e) {
-            err = (e as Error).message;
-          }
-          measure(model, mode, style, runId, score, err, performance.now() - t0);
-        });
-      }
+      for (const mode of MODES)
+        for (const seed of SEEDS) {
+          it(`${mode} · ${style} · ${model} · seed ${seed}`, { timeout: 600_000 }, async () => {
+            const runId = `${mode}-${STANDARD ?? style}-${DIRECTOR ? `${DIRECTOR.replace(/\W+/g, "_")}+` : ""}${model.replace(/\W+/g, "_")}-s${seed}`;
+            const settings = {
+              ...defaultSettings(band),
+              mode: mode as "composer" | "improviser",
+              style,
+              bars: BARS,
+              bestOf: 2,
+              soloists: ["bear"],
+              directorModel: DIRECTOR || model,
+              standard: STANDARD,
+              playerModel: model,
+              seed,
+            };
+            const t0 = performance.now();
+            let score: Score | null = null;
+            let err: string | null = null;
+            try {
+              score = mode === "composer" ? await runComposer(settings, band, hooks(runId)) : await startImproviser(settings, band, hooks(runId)).promise;
+            } catch (e) {
+              err = (e as Error).message;
+            }
+            measure(model, mode, style, runId, score, err, performance.now() - t0);
+          });
+        }
   afterAll(() => {
     const usd = rows.reduce((a, r) => a + (r.usd as number), 0);
     console.log(`\nestimated spend this run: $${usd.toFixed(3)}`);
+    const g = { written: 0, short: 0, half: 0, long: 0 };
+    for (const r of rows) for (const k of Object.keys(g) as (keyof typeof g)[]) g[k] += (r.grooves as typeof g)[k];
+    console.log(`accompanying bars written out: ${g.written}; short ${g.short}, half/quarter ${g.half}, long ${g.long}`);
   });
 });

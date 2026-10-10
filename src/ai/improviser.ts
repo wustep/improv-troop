@@ -22,6 +22,7 @@ import {
   chartBlock,
   chatBlock,
   GRAMMAR,
+  grooveCount,
   harmonyBlock,
   motifBlock,
   NOTES_ONLY,
@@ -60,7 +61,7 @@ function describeBars(bars: number[], frame: Frame, plan: BarPlan[], memberId: s
 
 const BANDMATE_LINE = 120;
 
-const REPLY_SHAPE = (bars: number[]) => `{"bars": {${bars.map((b) => `"${b + 1}": "..."`).join(", ")}}, "say": "optional: a short line to the band or a bandmate (<= 12 words) about something you just heard or are about to play, or \\"\\" (most phrases need none)"}`;
+const REPLY_SHAPE = (bars: number[], count = false) => `{${count ? `"count": {${bars.map((b) => `"${b + 1}": "..."`).join(", ")}}, ` : ""}"bars": {${bars.map((b) => `"${b + 1}": "..."`).join(", ")}}, "say": "optional: a short line to the band or a bandmate (<= 12 words) about something you just heard or are about to play, or \\"\\" (most phrases need none)"}`;
 
 export function startImproviser(settings: TroopSettings, members: Member[], hooks: PipelineHooks): ImprovController {
   const { runId, apiKey, anthropicKey, signal } = hooks;
@@ -487,6 +488,7 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
         accIds.map(async (id) => {
           const m = members.find((x) => x.id === id)!;
           const myBars = bars.filter((b) => b !== last && !isFeaturedRole(plan[b].roles[id]));
+          const grooving = ["bass", "chordal"].includes(INSTRUMENTS[m.instrument].fn);
           try {
             const { text, call } = await callLLM({
               runId,
@@ -517,14 +519,15 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
                 describeBars(myBars, frame, plan, id),
                 "",
                 GRAMMAR,
+                grooving ? grooveCount(frame.meter.beats) : "",
                 "",
                 `Accompany in the style's texture: a directive keeps steady time; write notes or a drum grid when you want a specific answer (fill a gap the soloist leaves, a hit, a riff). Follow the dynamics. "@rest" is fine if laying out serves the music.`,
-                `Reply: ${REPLY_SHAPE(myBars)}`,
+                `Reply: ${REPLY_SHAPE(myBars, grooving)}`,
               ].join("\n"),
               temperature: 0.85,
               maxOutputTokens: 1000,
               reasoning: "none",
-              schema: barsSchema(myBars.map((b) => b + 1), true),
+              schema: barsSchema(myBars.map((b) => b + 1), true, grooving),
               schemaName: "phrase",
             });
             if (stage[pi] === "done") {

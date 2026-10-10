@@ -104,6 +104,15 @@ export const GRAMMAR = DIRECTIVE_HELP;
 
 export const NOTES_ONLY = `Notes: "pitch/duration" e.g. "Bb4/8 C5/8 D5/4 r/4 F5/4"; durations 1 2 4 8 16, "." dotted, "t" triplet (three 8t = one beat), "r" rest, "~" ties to the next note; chords as [C4 E4 G4]/2. Sounding pitch, octave numbers with C4 = middle C. Each bar's durations must add up exactly to the bar, so count as you write: 1 = 4 beats, 2 = 2, 4 = 1, 8 = ½, 16 = ¼, "." adds half again, three "t" notes take the time of two. "Bb4/8 C5/8 D5/4 r/4 F5/4" = ½+½+1+1+1 = 4 beats; a 4/4 bar holds eight 8ths, never more. Each bar's string is that one bar, never two bars' worth, even when it has two chords (each gets half the bar). Busy 16th-note bars: separate the beats with commas, each group exactly one beat ("Bb2/16 r/16 F3/16 G3/16, Ab3/8 G3/16 r/16, ...").`;
 
+/**
+ * Bass and comping grooves written out as notes: cheap models count notes, not beats ("D3/4 Db3/8
+ * C3/8 D3/4" is four notes and three beats), so they sum each bar's rhythm in "count" first.
+ */
+export function grooveCount(beats: number): string {
+  const ones = " + 1".repeat(beats - 2);
+  return `Count before you write: for each bar, first put its rhythm in "count", the beats of every note and rest summed ("1 + ½ + ½${ones} = ${beats}", "¼ ¼ ¼ ¼ + ½ ½${ones} = ${beats}"), then write notes that match it. The sum must be ${beats}. Four notes aren't four beats: "D3/4 Db3/8 C3/8 D3/4" is 1 + ½ + ½ + 1 = 3. For a bar that's a directive or a rest, count "-".`;
+}
+
 /** What a member played in some bars, compactly, for listening. */
 export function playedBlock(
   members: Member[],

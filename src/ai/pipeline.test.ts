@@ -130,6 +130,21 @@ describe("improviser pipeline", () => {
   });
 });
 
+describe("accompanying grooves", () => {
+  it("the bass adds up each bar's beats before writing it; the drums don't", async () => {
+    const fetch = installFakeFetch();
+    const settings = { ...defaultSettings(band), mode: "improviser" as const, soloists: ["bear"] };
+    await startImproviser(settings, band, hooks("t-grooves")).promise;
+    const bodies = fetch.mock.calls.map(([, init]) => JSON.parse(String(init?.body ?? "{}")));
+    const phrase = (agent: string) => bodies.filter((b) => b.schemaName === "phrase" && b.system.includes(band.find((m) => m.id === agent)!.name));
+    const counted = (b: { schema: { properties: Record<string, unknown> } }) => "count" in b.schema.properties;
+    expect(phrase("frog").length).toBeGreaterThan(0);
+    expect(phrase("frog").every(counted)).toBe(true);
+    expect(phrase("owl").some(counted)).toBe(false);
+    expect(phrase("frog")[0].prompt).toMatch(/"D3\/4 Db3\/8 C3\/8 D3\/4" is 1 \+ ½ \+ ½ \+ 1 = 3/);
+  });
+});
+
 describe("when the count-off call fails", () => {
   const failCountOff = (status: number) =>
     vi.stubGlobal(
