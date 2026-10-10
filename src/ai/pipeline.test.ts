@@ -155,7 +155,7 @@ describe("when the count-off call fails", () => {
   it("a bad key still stops the jam", async () => {
     failCountOff(401);
     const settings = { ...defaultSettings(band), mode: "improviser" as const, soloists: ["bear"] };
-    await expect(startImproviser(settings, band, hooks("t-countoff-401")).promise).rejects.toThrow(/couldn't call the tune/);
+    await expect(startImproviser(settings, band, hooks("t-countoff-401")).promise).rejects.toMatchObject({ status: 401 });
   });
 });
 

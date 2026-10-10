@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { anthropicModelId, canRun, canThinkWith, keyMismatch, pickRoute } from "./keys";
+import { anthropicModelId, canRun, canThinkWith, keyMismatch, pickRoute, runErrorText } from "./keys";
 import { MODELS } from "./models";
 
 const CLAUDE = "anthropic/claude-sonnet-5.5";
@@ -57,5 +57,17 @@ describe("key routing", () => {
     expect(keyMismatch("anthropic", "sk-ant-api03-abc")).toBeNull();
     expect(keyMismatch("gateway", "vck_abc")).toBeNull();
     expect(keyMismatch("anthropic", "")).toBeNull();
+  });
+});
+
+describe("run errors", () => {
+  it("lets a key problem speak for itself", () => {
+    expect(runErrorText("Anthropic rejected your Anthropic key — check it in “Brains & sounds”.")).toBe("Anthropic rejected your Anthropic key — check it in “Brains & sounds”.");
+    expect(runErrorText("GPT-5.4 mini needs an AI Gateway key. With only an Anthropic key, pick a Claude model in “Brains & sounds”.")).not.toMatch(/lost the thread/);
+  });
+
+  it("says the band lost the thread for anything else", () => {
+    expect(runErrorText("Rate limited by Anthropic — try again in a moment.")).toBe("The band lost the thread: Rate limited by Anthropic — try again in a moment.");
+    expect(runErrorText("monkeys on the keyboard")).toMatch(/^The band lost the thread/);
   });
 });

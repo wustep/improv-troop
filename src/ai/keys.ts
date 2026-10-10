@@ -58,3 +58,9 @@ export function keyMismatch(field: keyof KeySet, key: string): string | null {
   if (field === "anthropic" && !k.startsWith("sk-ant-")) return "Anthropic keys start with sk-ant-. Double-check you copied the whole key.";
   return null;
 }
+
+/** A run stopped because of a key (missing, rejected, or one that can't reach the model): the fix is in "Brains & sounds". */
+export const isKeyProblem = (error: string) => /\bkey\b/i.test(error);
+
+/** How a failed run reads. A key problem already says what to do; anything else, the band lost the thread mid-take. */
+export const runErrorText = (error: string) => (isKeyProblem(error) ? error : `The band lost the thread: ${error}`);

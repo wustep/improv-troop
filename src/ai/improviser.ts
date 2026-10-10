@@ -255,7 +255,8 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
       // a bad key stops the jam; anything else (an outage, a timeout) and the leader just counts
       // off the band's own motif and plan, and the bandmates still have their say
       const status = e instanceof LlmError ? e.status : 0;
-      if (status === 401 || status === 403) throw new Error(`${leader.name} couldn't call the tune: ${(e as Error).message}`);
+      // the key's message already says what to fix; who was calling the tune doesn't matter
+      if (status === 401 || status === 403) throw e;
       countedOffAlone = true;
       dbg.step(runId, `${leader.name}'s count-off failed (${(e as Error).message}); counting off the sketch's motif and plan`);
       say(chatMsg(leader.id, "Let's just play it. One, two…", "count-off", undefined, "band"));

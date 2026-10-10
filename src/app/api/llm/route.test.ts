@@ -88,6 +88,17 @@ describe("llm route", () => {
     expect(seen[0].body.model).toBe("claude-sonnet-5-5");
   });
 
+  it("routes a visitor's Anthropic key to Anthropic even when the server lends a gateway key", async () => {
+    vi.stubEnv("IMPROV_TROOP_SERVER_KEY", "vck_test_server");
+    const seen = fakeAnthropic(() => message("ok"));
+    const res = await post({ model: "anthropic/claude-haiku-4.5", key: "", anthropicKey: "sk-ant-test-browser" });
+    expect(res.status).toBe(200);
+    expect((await res.json()).via).toBe("anthropic");
+    expect(seen).toHaveLength(1);
+    expect(seen[0].url).toMatch(/^https:\/\/api\.anthropic\.com\//);
+    expect(seen[0].headers.get("x-api-key")).toBe("sk-ant-test-browser");
+  });
+
   it("uses the server's ANTHROPIC_API_KEY for Claude when nothing comes from the browser", async () => {
     vi.stubEnv("ANTHROPIC_API_KEY", "sk-ant-test-server");
     const seen = fakeAnthropic(() => message("ok"));

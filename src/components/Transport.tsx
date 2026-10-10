@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { isKeyProblem, runErrorText } from "@/ai/keys";
 import { troopAudio, type LoadState } from "@/audio/engine";
 import { INSTRUMENTS } from "@/music/instruments";
 import { canShare, shareUrl } from "@/state/share";
@@ -158,9 +159,10 @@ export function Transport() {
         ) : gen.error ? (
           <span role="alert" className="flex flex-wrap items-baseline gap-x-s">
             <span className="text-ink">
-              <span aria-hidden className="text-(--error)">✗ </span>The band lost the thread: {gen.error}
+              <span aria-hidden className="text-(--error)">✗ </span>
+              {runErrorText(gen.error)}
             </span>
-            {/key/i.test(gen.error) ? (
+            {isKeyProblem(gen.error) ? (
               <button type="button" className="text-action" onClick={openBrains}>
                 {/pick a Claude model/.test(gen.error) ? "pick a model" : "check the key"}
               </button>
