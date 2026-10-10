@@ -134,6 +134,7 @@ export class Motion {
   lean = 0;
   dip = 0;
   shift = 0;
+  pedal = -1;
   cheeks = 0;
   inhale = 0;
   bliss = 0;
@@ -352,7 +353,8 @@ export class Motion {
       shoulders,
       headTurn,
       eyeTurn: this.eyeGlance,
-      feet: [stepL, Math.max(tap * (1 - walking), stepR)],
+      // a pedal foot rests on its bar: heel down, toe lifting off as the pedal comes up
+      feet: [stepL, this.pedal >= 0 ? Math.max(stepR, (1 - this.pedal) * 6 * g) : Math.max(tap * (1 - walking), stepR)],
       ears,
       earFlap,
       tail,
@@ -367,7 +369,8 @@ export class Motion {
   settle(look: Look, dt: number) {
     const k = approach(dt, 0.12);
     this.lean += (clamp(look.lean, -8, 8) - this.lean) * k;
-    this.shift += (clamp(look.shift ?? 0, -24, 24) - this.shift) * approach(dt, 0.18);
+    this.shift += (clamp(look.shift ?? 0, -26, 26) - this.shift) * approach(dt, 0.18);
+    if (look.pedal !== undefined) this.pedal = this.pedal < 0 ? look.pedal : this.pedal + (look.pedal - this.pedal) * approach(dt, 0.03);
     this.dip += (clamp(look.dip, 0, 6) - this.dip) * approach(dt, 0.05);
     this.cheeks += (look.cheeks - this.cheeks) * approach(dt, 0.05);
     this.inhale += (look.inhale - this.inhale) * approach(dt, 0.1);

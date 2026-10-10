@@ -1,7 +1,7 @@
 import { DRUM, drumPiece } from "@/music/instruments";
 import { L, S, ellipsePath, hash, mix } from "../sketch";
 import { type Pt, approach, clamp } from "../affine";
-import { type Frame, type Rig, type RigCtx, hit, nextWhere, strokeLift, wobble } from "./types";
+import { type Frame, type Rig, type RigCtx, glide, hit, nextWhere, strokeLift, wobble } from "./types";
 
 // A real (open-handed) kit seen from the front. Screen-left arm: hi-hat, crash, rack tom;
 // screen-right arm: ride, floor tom, snare — whichever arm is free takes the snare/tom.
@@ -249,14 +249,13 @@ export const drums: Rig = {
       const target = pose(piece, arm, lift);
       const kx = "x" + arm;
       const ky = "y" + arm;
-      if (m[kx] === undefined) {
-        m[kx] = target.hand.x;
-        m[ky] = target.hand.y;
-      }
-      const k = approach(f.dt, 0.03);
-      m[kx] += (target.hand.x - m[kx]) * k;
-      m[ky] += (target.hand.y - m[ky]) * k;
-      const hand = { x: m[kx], y: m[ky] };
+      // The hand glides from drum to drum, lifted in an arc while it travels (not dragged across
+      // the kit); the stroke rides on top of that exactly, so the stick still lands on the onset.
+      const rest = pose(piece, arm, 0).hand;
+      glide(m, kx, rest.x, f.dt, 30000, 1400);
+      glide(m, ky, rest.y, f.dt, 30000, 1400);
+      const arc = Math.min(9, Math.hypot(m[kx + "V"] ?? 0, m[ky + "V"] ?? 0) * 0.012);
+      const hand = { x: m[kx], y: m[ky] + target.hand.y - rest.y - arc };
       const tip = { x: target.tip.x + (hand.x - target.hand.x), y: target.tip.y + (hand.y - target.hand.y) };
       c.bag.set("stick" + arm, "x1", hand.x);
       c.bag.set("stick" + arm, "y1", hand.y);

@@ -4,7 +4,7 @@
 import { L, S, ellipsePath, hash, mix } from "../sketch";
 import { type Mat, type Pt, ap, approach, attr, chain, clamp, rot, scl, tr } from "../affine";
 import { OPEN, stopFrac, stringFor } from "../fingering";
-import { type Frame, type Rig, type RigCtx, hit, newOnsets, slewTo } from "./types";
+import { type Frame, type Rig, type RigCtx, damp, glide, hit, newOnsets } from "./types";
 
 const WOOD = "#c0712f";
 const WOOD_HATCH = "#e29a55";
@@ -41,6 +41,25 @@ function longestOf<T extends { durSec: number }>(notes: T[]): T | null {
 }
 
 // ─── Bowing (violin + cello) ─────────────────────────────────────────────────
+
+/**
+ * How far along its stroke the bow is, by how far through the note: it bites quickly, draws
+ * evenly, and eases off into the change, so a change of bow isn't a reversal at full speed.
+ */
+export const bowCurve = (p: number) => {
+  const k = clamp(p, 0, 1);
+  return 0.25 * k + 0.75 * (1 - (1 - k) ** 1.6);
+};
+
+/** The semitones above the open string for a fraction of the way to the bridge (stopFrac's inverse). */
+const semisOf = (frac: number) => -12 * Math.log2(1 - clamp(frac, 0, 0.95));
+
+/** Vibrato on a held note: it starts after the note speaks and widens in, rather than switching on. */
+function vibrato(n: { durSec: number; progress: number } | null, t: number): number {
+  if (!n || n.durSec <= 0.5) return 0;
+  const w = clamp((n.progress - 0.12) / 0.3, 0, 1);
+  return Math.sin(t * 34) * 1.3 * w * w;
+}
 
 interface BowGeo {
   open: number[];
@@ -88,7 +107,7 @@ function bowedUpdate(geo: BowGeo, c: RigCtx, f: Frame) {
     if (pos.semis > 0) m.semis = pos.semis;
   }
   const str = m.str ?? 1;
-  m.strS = (m.strS ?? str) + (str - (m.strS ?? str)) * approach(f.dt, 0.05);
+  damp(m, "strS", str, f.dt, 0.05);
 
   // Bow: alternate direction per onset; travel ∝ note length.
   if (m.dir === undefined) {
@@ -112,10 +131,9 @@ function bowedUpdate(geo: BowGeo, c: RigCtx, f: Frame) {
   // Pizz or arco? Follow the newest note (or the most recent onset).
   const lastArt = n?.art ?? f.s.recent[0]?.art;
   const pizzNow = lastArt === "pizz" && (!!n || (f.s.recent[0]?.age ?? Infinity) < 1.5);
-  m.pz = (m.pz ?? 0) + ((pizzNow ? 1 : 0) - (m.pz ?? 0)) * approach(f.dt, pizzNow ? 0.06 : 0.18);
-  const pz = m.pz;
+  const pz = damp(m, "pz", pizzNow ? 1 : 0, f.dt, pizzNow ? 0.07 : 0.16);
   if (n && n.art !== "pizz") {
-    const target = m.s0 + m.dir * m.travel * Math.min(1, n.progress * 1.05);
+    const target = m.s0 + m.dir * m.travel * bowCurve(Math.min(1, n.progress * 1.05));
     m.bs = clamp(target, 0.04, 0.96);
   }
   const C = ap(W, geo.contact(0).x, geo.contact(0).y);
@@ -153,13 +171,14 @@ function bowedUpdate(geo: BowGeo, c: RigCtx, f: Frame) {
 
   // Left hand on the neck.
   const semis = m.semis ?? 2;
-  m.semisS = (m.semisS ?? semis) + (semis - (m.semisS ?? semis)) * approach(f.dt, 0.035);
-  const stop = geo.stop(Math.round(m.strS), m.semisS);
+  // a shift along the neck: the hand speeds up and settles into the new position
+  const along = glide(m, "stopF", stopFrac(semis), f.dt, 160, 9);
+  const stop = geo.stop(Math.round(m.strS), semisOf(along));
   const hand = ap(W, stop.x, stop.y);
-  // vibrato on long notes
-  const vib = n && n.durSec > 0.5 && n.progress > 0.2 ? Math.sin(f.t * 34) * 1.2 : 0;
+  const vib = vibrato(n, f.t);
   f.arms.R = { hand: { x: hand.x + vib, y: hand.y }, bend: -16, pawRot: -30 };
-  f.arms.L = { hand: bowHand, bend: 18, pawRot: 10 + pz * 40 };
+  // the wrist bends at the frog and straightens out toward the tip; the elbow opens with it
+  f.arms.L = { hand: bowHand, bend: 22 - m.bs * 10, pawRot: (1 - pz) * (24 - m.bs * 28) + pz * 50 };
 
   // String shimmer.
   for (let i = 0; i < 4; i++) {
@@ -362,15 +381,14 @@ export const cello: Rig = {
       m.dbl = stops.length > 1 ? 1 : 0;
     }
     const strMid = ((m.s0 ?? 1) + (m.s1 ?? 1)) / 2;
-    m.strS = (m.strS ?? strMid) + (strMid - (m.strS ?? strMid)) * approach(f.dt, 0.05);
+    damp(m, "strS", strMid, f.dt, 0.05);
     const semisMid = ((m.m0 ?? 3) + (m.m1 ?? 3)) / 2;
-    m.semisS = (m.semisS ?? semisMid) + (semisMid - (m.semisS ?? semisMid)) * approach(f.dt, 0.035);
+    m.semisS = semisOf(glide(m, "stopF", stopFrac(semisMid), f.dt, 130, 8));
 
     // Pizz or arco? Follow the newest note (or the most recent onset).
     const lastArt = group[0]?.art ?? s.recent[0]?.art;
     const pizzNow = lastArt === "pizz" && (group.length > 0 || (s.recent[0]?.age ?? Infinity) < 1.5);
-    m.pz = (m.pz ?? 0) + ((pizzNow ? 1 : 0) - (m.pz ?? 0)) * approach(f.dt, pizzNow ? 0.06 : 0.18);
-    const pz = m.pz;
+    const pz = damp(m, "pz", pizzNow ? 1 : 0, f.dt, pizzNow ? 0.07 : 0.16);
 
     // ── arco bow: alternate direction per onset, travel ∝ duration, louder → nearer the bridge
     if (m.dir === undefined) {
@@ -393,7 +411,7 @@ export const cello: Rig = {
     });
     const held = longestOf(group);
     const arcoNote = held && held.art !== "pizz" ? held : null;
-    if (arcoNote) m.bs = clamp(m.b0 + m.dir * m.travel * Math.min(1, arcoNote.progress * 1.05), 0.04, 0.96);
+    if (arcoNote) m.bs = clamp(m.b0 + m.dir * m.travel * bowCurve(Math.min(1, arcoNote.progress * 1.05)), 0.04, 0.96);
     const toBridge = clamp(((m.loud ?? 0.6) - 0.5) * 2, 0, 1);
     const cy = 12 + toBridge * 6;
     const cx = VC.sx(0, cy) + (VC.sx(3, cy) - VC.sx(0, cy)) * (m.strS / 3);
@@ -439,13 +457,13 @@ export const cello: Rig = {
     c.bag.set("stick", "y2", tip.y + bp.y * 2);
     c.bag.set("frog", "cx", frog.x + bp.x * 2);
     c.bag.set("frog", "cy", frog.y + bp.y * 2);
-    f.arms.L = { hand, bend: 18, pawRot: 10 + pz * 50 };
+    f.arms.L = { hand, bend: 22 - m.bs * 10, pawRot: (1 - pz) * (24 - m.bs * 28) + pz * 60 };
 
     // ── left hand on the neck: follows the stopped note(s), spans a double-stop
     const stopY = VC.nut + (VC.bridge - VC.nut) * stopFrac(m.semisS);
     const sx = VC.sx(0, stopY) + (VC.sx(3, stopY) - VC.sx(0, stopY)) * (m.strS / 3);
     const lh = ap(W, sx + 7, stopY);
-    const vib = arcoNote && arcoNote.durSec > 0.5 && arcoNote.progress > 0.2 ? Math.sin(f.t * 34) * 1.2 : 0;
+    const vib = vibrato(arcoNote, f.t);
     m.dblS = (m.dblS ?? 0) + ((m.dbl ?? 0) - (m.dblS ?? 0)) * approach(f.dt, 0.06);
     f.arms.R = { hand: { x: lh.x + vib, y: lh.y }, bend: -16, pawRot: -30, spread: 1 + m.dblS * 0.35 };
 
@@ -549,8 +567,8 @@ export const bass: Rig = {
       if (p.semis > 0) m.semis = p.semis;
     }
     const str = m.str ?? 1;
-    m.strS = (m.strS ?? str) + (str - (m.strS ?? str)) * approach(f.dt, 0.05);
-    m.semisS = (m.semisS ?? 3) + ((m.semis ?? 3) - (m.semisS ?? 3)) * approach(f.dt, 0.03);
+    damp(m, "strS", str, f.dt, 0.05);
+    m.semisS = m.semis ?? 3;
     const last = f.s.recent[0];
     const age = last ? last.age : Infinity;
     // Pluck: finger rests on the string, pulls through on the onset, then drifts back.
@@ -564,7 +582,7 @@ export const bass: Rig = {
     // a shift up or down the neck travels at a hand's speed, however far it goes. The paw sits
     // behind the neck just below the stopping finger, which reaches up to the note.
     const wantY = CB.nut + (CB.bridge - CB.nut) * stopFrac(m.semisS) + 7;
-    m.stopY = slewTo(m.stopY ?? wantY, wantY, f.dt, 0.02, 900);
+    glide(m, "stopY", wantY, f.dt, 14000, 900);
     const stopY = m.stopY;
     f.arms.R = { hand: ap(W, CB.sx(m.strS, stopY) + 8, stopY), bend: -30, pawRot: -40 };
     for (let i = 0; i < 4; i++) {
@@ -640,8 +658,7 @@ export const guitar: Rig = {
       for (const p of pitches) sum += Math.min(stringFor(p, OPEN.guitar).semis, 12);
       m.fret = sum / pitches.length;
     }
-    m.fretS = (m.fretS ?? 3) + ((m.fret ?? 3) - (m.fretS ?? 3)) * approach(f.dt, 0.04);
-    const fx = GTR_NUT - (GTR_NUT - GTR_BRIDGE) * stopFrac(Math.max(0.5, m.fretS));
+    const fx = GTR_NUT - (GTR_NUT - GTR_BRIDGE) * glide(m, "fretF", stopFrac(Math.max(0.5, m.fret ?? 3)), f.dt, 100, 7);
     f.arms.R = { hand: ap(W, fx, 7), bend: -14, pawRot: -30 };
 
     const sAge = f.t - m.sT;

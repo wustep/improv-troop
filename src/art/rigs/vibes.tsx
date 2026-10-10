@@ -1,7 +1,7 @@
 import { L, S, ellipsePath, hash, mix, rectPath } from "../sketch";
 import { clamp } from "../affine";
 import { isBlack, keyUnits } from "../fingering";
-import { type Frame, type Rig, type RigCtx, slewTo, hit, strokeLift } from "./types";
+import { type Frame, type Rig, type RigCtx, damp, glide, slewTo, hit, strokeLift } from "./types";
 
 // Bars F3 (53) … F6 (89).
 const LO = 53;
@@ -85,6 +85,13 @@ export const vibes: Rig = {
       (isBlack(p) ? cordA : cordN).push(`M${(x - 1).toFixed(1)} ${isBlack(p) ? ACC_Y + 3 : NAT_Y + 4} h2`);
     }
     return {
+      // the damper pedal: a long bar near the floor, so the foot finds it wherever the player stands
+      back: (
+        <g ref={c.bag.r("pedal")}>
+          <L d="M30 236 L40 245 M210 236 L200 245" ink="#3b3446" seed={s + 9} w={1.6} />
+          <S d={rectPath(38, 243, 164, 3.4, 1.5)} ink="#3b3446" base="#8f8b99" seed={s + 10} w={1.2} />
+        </g>
+      ),
       front: (
         <g>
           {/* legs on little wheels */}
@@ -167,10 +174,9 @@ export const vibes: Rig = {
       m["park" + k] = slewTo(m["park" + k] ?? park, park, f.dt, 0.05, 4);
       lift = Math.max(lift, m["park" + k]);
       const kx = "x" + k;
-      if (m[kx] === undefined) m[kx] = barX(pitch);
-      m[kx] = slewTo(m[kx], barX(pitch), f.dt, 0.03, 1100);
+      glide(m, kx, barX(pitch), f.dt, 26000, 1100);
       // the accidental row sits higher than the naturals: ease between them too
-      m["y" + k] = slewTo(m["y" + k] ?? barY(pitch), barY(pitch), f.dt, 0.03, 600);
+      glide(m, "y" + k, barY(pitch), f.dt, 20000, 600);
       heads[k] = { x: m[kx], y: m["y" + k] - lift * 22 };
       c.bag.tf("mb" + k, `translate(${heads[k].x.toFixed(1)} ${heads[k].y.toFixed(1)})`);
     }
@@ -200,6 +206,14 @@ export const vibes: Rig = {
       i++;
     }
     for (; i < POOL; i++) c.bag.op("bf" + i, 0);
+    // Damper pedal: down while notes ring on (held notes, chords), up to stop them, and lifted for
+    // an instant as a new chord lands so the old one doesn't smear into it.
+    const ringing = s.active.some((n) => n.durSec > 0.35) || s.active.length >= 2;
+    const fresh2 = s.recent.filter((o) => o.age < 0.06).length >= 2;
+    const want = s.playing && ringing && !fresh2 ? 1 : 0;
+    const pedal = damp(m, "pedal", want, f.dt, want ? 0.04 : 0.03);
+    c.bag.tf("pedal", `translate(0 ${(pedal * 1.6).toFixed(2)})`);
+    f.look.pedal = pedal;
     // the player walks along the bars toward where the mallets are, and leans the rest of the way
     const mid = (m.xL + m.xR) / 2 - 120;
     f.look.shift = clamp(mid * 0.6, -26, 26);

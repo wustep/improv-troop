@@ -40,6 +40,9 @@ function perform(inst: InstrumentId, style: StyleId, seed = 3, solo = false, rec
   const end = beats * spb;
   const frames: Attrs[] = [];
   const glitches: { beat: number; kinds: string[] }[] = [];
+  // the biggest change of a paw's velocity from one frame to the next (px/frame)
+  let snap = { px: 0, beat: 0 };
+  const vel = { L: { x: 0, y: 0 }, R: { x: 0, y: 0 } };
   // the body moves as on stage (lean, slide, bounce), and the arms start where its shoulders are
   const motion = new Motion({ follow: RIGS[inst].follow, seated: !!RIGS[inst].seated, ears: null, tail: null, seed: 7 });
   let hands: Frame["arms"] = { L: { hand: { x: 80, y: 190 } }, R: { hand: { x: 160, y: 190 } } };
@@ -54,12 +57,18 @@ function perform(inst: InstrumentId, style: StyleId, seed = 3, solo = false, rec
     // the first frames settle from the default pose
     const kinds = i > 5 ? glitchesOf({ L: f.arms.L.hand, R: f.arms.R.hand }, prev, pose.shoulders) : [];
     if (kinds.length) glitches.push({ beat: +(t / spb).toFixed(2), kinds });
+    for (const k of ["L", "R"] as const) {
+      const v = { x: f.arms[k].hand.x - prev[k].x, y: f.arms[k].hand.y - prev[k].y };
+      const dv = Math.hypot(v.x - vel[k].x, v.y - vel[k].y);
+      if (i > 10 && dv > snap.px) snap = { px: dv, beat: +(t / spb).toFixed(2) };
+      vel[k] = v;
+    }
     hands = { L: { ...f.arms.L }, R: { ...f.arms.R } };
     if (record) frames.push(JSON.parse(JSON.stringify(store)));
   }
   /** First frame drawn at or after time t. */
   const frameAt = (t: number) => frames[Math.max(0, Math.min(frames.length - 1, Math.ceil((t - 0.004) * FPS)))];
-  return { onsets, frameAt, glitches };
+  return { onsets, frameAt, glitches, snap };
 }
 
 // where each drum is struck (see drums.tsx)
@@ -122,6 +131,20 @@ describe("rigs follow the notes frame by frame", () => {
         for (const solo of [false, true]) {
           const { glitches } = perform(inst, style, 3, solo, false, tempo);
           if (glitches.length) found.push(`${inst} ${style}${tempo ? ` ${tempo}` : ""}${solo ? " solo" : ""}: ${glitches.length} frames, ${glitches.slice(0, 3).map((g) => `${g.kinds.join("+")} @${g.beat}`).join(", ")}`);
+        }
+    expect(found).toEqual([]);
+  }, 120_000);
+
+  it("paws ease into and out of their moves rather than snapping to full speed", () => {
+    // an exponential ease starts at full speed: a hand leapt 15–21 px in the first frame of a
+    // shift. A stick or mallet really does reverse at the head, so drums and vibes get more room.
+    const LIMIT: Partial<Record<InstrumentId, number>> = { drums: 24, vibes: 20 };
+    const found: string[] = [];
+    for (const inst of INSTRUMENT_LIST)
+      for (const style of ["swing", "funk", "baroque", "ambient"] as StyleId[])
+        for (const solo of [false, true]) {
+          const { snap } = perform(inst, style, 3, solo, false);
+          if (snap.px > (LIMIT[inst] ?? 14)) found.push(`${inst} ${style}${solo ? " solo" : ""}: ${snap.px.toFixed(1)} px/frame @${snap.beat}`);
         }
     expect(found).toEqual([]);
   }, 120_000);

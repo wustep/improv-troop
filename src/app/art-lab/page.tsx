@@ -345,7 +345,7 @@ function ArtLab() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [stepFrames, nextGlitch]);
+  }, [stepFrames, nextGlitch, FRAME_BEATS]);
 
   const btn = "rounded-xs px-s py-xxs text-l shadow-[inset_0_0_0_var(--border-l)_var(--border-default-color)]";
 

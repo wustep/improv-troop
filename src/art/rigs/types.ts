@@ -71,6 +71,8 @@ export interface Look {
   dip: number;
   /** Slide sideways (px, + = toward viewer-right): a pianist along the bench, a vibist along the bars. */
   shift?: number;
+  /** A damper pedal under the right foot, 0 (up) … 1 (down), for a standing player who works one. */
+  pedal?: number;
 }
 
 export interface Frame {
@@ -112,6 +114,57 @@ export function slewTo(cur: number, target: number, dt: number, tau: number, max
   const step = (target - cur) * approach(dt, tau);
   const cap = maxPerSec * dt;
   return cur + Math.max(-cap, Math.min(cap, step));
+}
+
+/**
+ * Follow `target` like a hand does: speed up, then slow into place, never overshooting (a
+ * critically damped spring; `smooth` ≈ the time to get most of the way there). The velocity lives
+ * in `mem[key + "V"]`. An exponential ease starts at full speed, which reads as a robotic snap.
+ */
+export function damp(mem: Record<string, number>, key: string, target: number, dt: number, smooth: number, maxSpeed = Infinity): number {
+  const cur = mem[key] ?? target;
+  const vel = mem[key + "V"] ?? 0;
+  if (dt <= 0) return (mem[key] = cur);
+  const omega = 2 / Math.max(smooth, 1e-4);
+  const x = omega * dt;
+  const decay = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x);
+  const maxChange = maxSpeed * smooth;
+  const change = Math.max(-maxChange, Math.min(maxChange, cur - target));
+  const goal = cur - change;
+  const temp = (vel + omega * change) * dt;
+  let v = (vel - omega * temp) * decay;
+  let out = goal + (change + temp) * decay;
+  // never past the target
+  if (target - cur > 0 === out > target) {
+    out = target;
+    v = 0;
+  }
+  mem[key + "V"] = v;
+  return (mem[key] = out);
+}
+
+/**
+ * Travel to `target` the way a limb does: speed up at no more than `accel` (px/s²), cruise at no
+ * more than `maxSpeed`, and brake in time to arrive without overshooting. The quickest move that
+ * still eases in and out; the velocity lives in `mem[key + "V"]`.
+ */
+export function glide(mem: Record<string, number>, key: string, target: number, dt: number, accel: number, maxSpeed = Infinity): number {
+  const cur = mem[key] ?? target;
+  let v = mem[key + "V"] ?? 0;
+  if (dt <= 0) return (mem[key] = cur);
+  const d = target - cur;
+  // the speed from which it can still stop in time, braking a frame at a time
+  const a = accel * dt;
+  const brake = a * (Math.sqrt((2 * Math.abs(d)) / (a * dt) + 0.25) - 0.5);
+  const want = Math.sign(d) * Math.min(maxSpeed, brake);
+  v += Math.max(-accel * dt, Math.min(accel * dt, want - v));
+  let out = cur + v * dt;
+  if ((target - cur) * (target - out) < 0) {
+    out = target;
+    v = 0;
+  }
+  mem[key + "V"] = v;
+  return (mem[key] = out);
 }
 
 /** 1 at the onset, decaying to 0. */

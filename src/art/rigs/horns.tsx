@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { S, ellipsePath, hash, mix } from "../sketch";
 import { type Mat, ap, approach, attr, chain, clamp, rot, scl, tr } from "../affine";
 import { clarinet, tromboneSlide, trumpetValves, woodwind, type WoodwindFingering } from "../fingering";
-import type { Frame, Rig, RigCtx } from "./types";
+import { type Frame, type Rig, type RigCtx, damp, glide, hit } from "./types";
 
 const BRASS = "#f2c14e";
 const BRASS_HATCH = "#d9a12e";
@@ -49,6 +49,22 @@ interface Wind {
   blowing: boolean;
   pitch: number | null;
   lowered: number;
+  /** 1 on each tongued attack, decaying fast: the horn gives a little with it. */
+  kick: number;
+}
+
+/**
+ * 1 when the fingering (valves, keys) just changed, decaying fast: the paw works with it, so a
+ * run looks fingered rather than the hand floating still over moving keys.
+ */
+function fingerTwitch(c: RigCtx, f: Frame, sig: string): number {
+  const m = c.mem;
+  const code = [...sig].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) % 1e9, 7);
+  if (m.fingerSig !== code) {
+    m.fingerSig = code;
+    m.fingerT = f.t;
+  }
+  return hit(f.t - (m.fingerT ?? -Infinity), 0.06);
 }
 
 /** Shared breathing / cheeks / rest posture logic. */
@@ -60,13 +76,16 @@ function windCommon(c: RigCtx, f: Frame): Wind {
   const pitch = blowing ? s.active[0].pitch : s.nextOnsetIn < 0.06 ? s.nextPitch : null;
   const quiet = !blowing && s.nextOnsetIn > 1.4 && (s.recent[0]?.age ?? Infinity) > 0.8;
   const lowerTarget = !s.playing ? (quiet ? 0.75 : 0) : quiet && (s.role === "rest" || s.nextOnsetIn > 3) ? 1 : 0;
-  m.lower = (m.lower ?? 0.75) + (lowerTarget - (m.lower ?? 0.75)) * approach(f.dt, lowerTarget > (m.lower ?? 0) ? 0.35 : 0.12);
+  // the horn comes up and goes down in one easy arc (an exponential start looked like a jerk)
+  if (m.lower === undefined) m.lower = 0.75;
+  damp(m, "lower", lowerTarget, f.dt, lowerTarget > m.lower ? 0.32 : 0.14);
   m.cheek = (m.cheek ?? 0) + ((blowing ? 1 : 0) - (m.cheek ?? 0)) * approach(f.dt, blowing ? 0.04 : 0.1);
   f.look.mouthCovered = m.lower < 0.55;
   f.look.cheeks = m.cheek * (1 - m.lower);
   f.look.inhale = !blowing && s.nextOnsetIn < 0.45 ? 1 - s.nextOnsetIn / 0.45 : 0;
   f.look.bliss = s.active.some((n) => n.durSec > 0.9 && n.progress > 0.25) || (s.featured && blowing && s.active[0].durSec > 0.5);
-  return { blowing, pitch, lowered: m.lower };
+  const kick = blowing ? hit(s.active[0].age, 0.05) * (0.5 + 0.5 * s.active[0].vel) : 0;
+  return { blowing, pitch, lowered: m.lower, kick };
 }
 
 function keyDot(c: RigCtx, key: string, x: number, y: number, r = 3) {
@@ -118,16 +137,18 @@ export const trumpet: Rig = {
     const tilt = w.pitch !== null ? -8 - clamp(w.pitch - 67, -12, 16) * 0.55 : -6;
     m.tilt = (m.tilt ?? -6) + (tilt - (m.tilt ?? -6)) * approach(f.dt, 0.12);
     const lw = w.lowered;
-    const local = chain(tr(c.mouth.x + lw * 4, c.mouth.y + lw * 26), rot(m.tilt + lw * 38), scl(1.12));
+    const local = chain(tr(c.mouth.x + lw * 4, c.mouth.y + lw * 26), rot(m.tilt + lw * 38 + w.kick * 1.2), scl(1.12));
     const toWorld = placeInst(c, f, local);
     const valves = w.pitch !== null ? trumpetValves(w.pitch) : [false, false, false];
-    valves.forEach((down, i) => c.bag.tf("v" + i, down ? "translate(0 4)" : ""));
+    // valves travel down and spring back up (quick, but not a teleport)
+    valves.forEach((down, i) => c.bag.tf("v" + i, `translate(0 ${damp(m, "vd" + i, down ? 4 : 0, f.dt, down ? 0.012 : 0.02).toFixed(2)})`));
+    const tw = fingerTwitch(c, f, valves.join());
     updatePuffs(c, f, { x: 106, y: 0 }, { x: 1, y: -0.2 }, lw);
     const pressDepth = valves.filter(Boolean).length;
     // Right paw rests behind the valve block so the caps (and their presses) stay visible. The
     // left cradles the leadpipe by the first slide: reaching on to the valve casing laid that arm
     // across the chest.
-    f.arms.R = { hand: toWorld(62, -8 + pressDepth * 0.6), bend: -14, pawRot: -10 };
+    f.arms.R = { hand: toWorld(62, -8 + pressDepth * 0.6 + tw * 0.8), bend: -14, pawRot: -10 - tw * 6 };
     f.arms.L = { hand: toWorld(22, 11), bend: 16, pawRot: 30 };
     f.look.lean = (w.blowing ? 2 : 0) - (m.tilt + 6) * 0.15;
   },
@@ -168,13 +189,16 @@ export const trombone: Rig = {
   update(c, f) {
     const w = windCommon(c, f);
     const m = c.mem;
-    const pos = w.pitch !== null ? tromboneSlide(w.pitch) : m.pos ?? 1;
-    if (w.pitch !== null) m.pos = pos;
+    // the slide sets off for the next note as this one ends, and arrives with it
+    const next = f.s.nextOnsetIn < 0.12 && f.s.nextPitch !== null ? f.s.nextPitch : null;
+    const aim = next ?? w.pitch;
+    const pos = aim !== null ? tromboneSlide(aim) : m.pos ?? 1;
+    if (aim !== null) m.pos = pos;
     const lw = w.lowered;
-    // horn down, slide closed (locked in first, as players rest it)
-    m.slide = (m.slide ?? 0) + ((pos - 1) * SLIDE_STEP * (1 - lw) - (m.slide ?? 0)) * approach(f.dt, 0.045);
+    // horn down, slide closed (locked in first, as players rest it); a shift speeds up and lands
+    glide(m, "slide", (pos - 1) * SLIDE_STEP * (1 - lw), f.dt, 9000, 700);
     c.bag.tf("slide", `translate(${m.slide.toFixed(2)} 0)`);
-    const local = chain(tr(c.mouth.x + lw * 2, c.mouth.y + lw * 30), rot(6 + lw * 40));
+    const local = chain(tr(c.mouth.x + lw * 2, c.mouth.y + lw * 30), rot(6 + lw * 40 + w.kick));
     const toWorld = placeInst(c, f, local);
     updatePuffs(c, f, { x: 72, y: -11 }, { x: 1, y: -0.3 }, lw);
     f.arms.R = { hand: toWorld(50 + m.slide, 5), bend: -10, pawRot: -20 };
@@ -219,16 +243,17 @@ export const sax: Rig = {
     const w = windCommon(c, f);
     const lw = w.lowered;
     const sway = Math.sin(f.t * 1.5) * (w.blowing ? 3 : 1) * (f.s.featured ? 1.6 : 1);
-    const local = chain(tr(c.mouth.x + lw * 6, c.mouth.y + lw * 10), rot(sway * 0.6 + lw * 10));
+    const local = chain(tr(c.mouth.x + lw * 6, c.mouth.y + lw * 10), rot(sway * 0.6 + lw * 10 - w.kick * 0.8));
     const toWorld = placeInst(c, f, local);
     const fg = w.pitch !== null ? woodwind(w.pitch + 14, 74) : null;
     setKeys(c, fg, c.ink);
+    const tw = fg ? fingerTwitch(c, f, fg.holes.join() + fg.octave) : 0;
     updatePuffs(c, f, { x: 68, y: 56 }, { x: 0.25, y: -1 }, lw);
     const upperDown = fg ? fg.holes.slice(0, 3).filter(Boolean).length : 0;
     const lowerDown = fg ? fg.holes.slice(3).filter(Boolean).length : 0;
     // Upper stack from across the chest, lower stack straight down.
-    f.arms.L = { hand: toWorld(31 - upperDown * 0.6, 48), bend: 8, pawRot: 70 };
-    f.arms.R = { hand: toWorld(40 + lowerDown * 0.6, 84), bend: 10, pawRot: -60 };
+    f.arms.L = { hand: toWorld(31 - upperDown * 0.6, 48), bend: 8, pawRot: 70 + tw * 7 };
+    f.arms.R = { hand: toWorld(40 + lowerDown * 0.6, 84), bend: 10, pawRot: -60 - tw * 7 };
     f.look.lean = sway;
   },
 };
@@ -274,12 +299,14 @@ export const clarinetRig: Rig = {
     m.cl = (m.cl ?? 0) + (lift - (m.cl ?? 0)) * approach(f.dt, 0.2);
     // The bell angles toward the screen-left arm, which holds the lower joint: angled the other
     // way, that arm reached across the body under the upper hand and the arms crossed.
-    const local = chain(tr(c.mouth.x, c.mouth.y + 2 + lw * 8), rot(16 + m.cl + lw * 18 + sway));
+    const local = chain(tr(c.mouth.x, c.mouth.y + 2 + lw * 8), rot(16 + m.cl + lw * 18 + sway + w.kick));
     const toWorld = placeInst(c, f, local);
-    setKeys(c, w.pitch !== null ? clarinet(w.pitch + 2) : null, "#2c2a35");
+    const fg = w.pitch !== null ? clarinet(w.pitch + 2) : null;
+    setKeys(c, fg, "#2c2a35");
+    const tw = fg ? fingerTwitch(c, f, fg.holes.join() + fg.octave) : 0;
     updatePuffs(c, f, { x: 0, y: 118 }, { x: -0.3, y: 1 }, lw);
-    f.arms.R = { hand: toWorld(-4, 38), bend: -14, pawRot: 80 };
-    f.arms.L = { hand: toWorld(-4, 76), bend: 16, pawRot: 80 };
+    f.arms.R = { hand: toWorld(-4, 38), bend: -14, pawRot: 80 + tw * 7 };
+    f.arms.L = { hand: toWorld(-4, 76), bend: 16, pawRot: 80 - tw * 7 };
     f.look.lean = sway * 0.8;
   },
 };
@@ -321,12 +348,14 @@ export const flute: Rig = {
     const tilt = w.pitch !== null ? clamp((w.pitch - 78) * 0.25, -4, 5) : 0;
     m.ft = (m.ft ?? 0) + (tilt - (m.ft ?? 0)) * approach(f.dt, 0.2);
     const sway = Math.sin(f.t * 1.2) * (w.blowing ? 2 : 0.6);
-    const local = chain(tr(c.mouth.x + 2, c.mouth.y + 1 + lw * 22), rot(-10 + m.ft + sway - lw * 25));
+    const local = chain(tr(c.mouth.x + 2, c.mouth.y + 1 + lw * 22), rot(-10 + m.ft + sway - lw * 25 - w.kick * 0.8));
     const toWorld = placeInst(c, f, local);
-    setKeys(c, w.pitch !== null ? woodwind(w.pitch, 74) : null, c.ink);
+    const fg = w.pitch !== null ? woodwind(w.pitch, 74) : null;
+    setKeys(c, fg, c.ink);
+    const tw = fg ? fingerTwitch(c, f, fg.holes.join() + fg.octave) : 0;
     updatePuffs(c, f, { x: -100, y: 0 }, { x: -1, y: -0.3 }, lw);
-    f.arms.R = { hand: toWorld(-38, 5), bend: -12, pawRot: 0 };
-    f.arms.L = { hand: toWorld(-70, 5), bend: 16, pawRot: 0 };
+    f.arms.R = { hand: toWorld(-38, 5 + tw * 0.8), bend: -12, pawRot: tw * 6 };
+    f.arms.L = { hand: toWorld(-70, 5 + tw * 0.8), bend: 16, pawRot: -tw * 6 };
     f.look.lean = -2 + sway;
   },
 };

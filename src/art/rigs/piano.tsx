@@ -1,7 +1,7 @@
 import { L, S, ellipsePath, hash, mix, rectPath } from "../sketch";
 import { approach, clamp } from "../affine";
 import { isBlack, keyUnits } from "../fingering";
-import { type Rig, type RigCtx, type Frame, hit, nextWhere } from "./types";
+import { type Rig, type RigCtx, type Frame, damp, glide, hit, nextWhere } from "./types";
 
 // A little black-lacquer upright, cartoon-style: the keyboard faces the audience so
 // you can see which keys go down, and it sits low enough that the player's chest,
@@ -192,16 +192,27 @@ export const piano: Rig = {
       const ks = "hs" + h.key;
       if (m[kx] === undefined) m[kx] = h.home;
       if (m[ks] === undefined) m[ks] = 1;
-      const tau = target === null ? 0.9 : 0.035;
-      m[kx] += ((target ?? (m[kx] * 0.85 + h.home * 0.15)) - m[kx]) * approach(f.dt, tau);
+      // to a note: quick but eased in and out; with nothing to play, a slow drift toward home
+      if (target === null) damp(m, kx, m[kx] * 0.85 + h.home * 0.15, f.dt, 0.6);
+      else glide(m, kx, target, f.dt, 26000, 1500);
       m[ks] += (spread - m[ks]) * approach(f.dt, 0.05);
       const lastAge = last ? last.age : Infinity;
-      const press = hit(lastAge, 0.06) * (3 + 4 * (last?.vel ?? 0.5));
       const nextIn = nx ? nx.inSec : Infinity;
-      const prep = nextIn < 0.16 ? Math.sin(Math.PI * (1 - nextIn / 0.16)) * 6 : 0;
+      // A stroke from the wrist: the paw comes down into the keys and lands on the note, stays
+      // down while it's held, and rebounds after. Legato (still holding when the next comes) is
+      // a smaller lift: a change of fingers, not of hand.
+      const holding = act.length > 0;
+      const WIN = 0.12;
+      let up = holding ? 0 : Math.min(1, lastAge / 0.08);
+      if (nextIn < WIN) up = holding ? 0.5 * Math.sin(Math.PI * (1 - nextIn / WIN)) : Math.min(up, nextIn / WIN);
+      const depth = 2 + 3 * (last?.vel ?? 0.5);
       const resting = act.length === 0 && lastAge > 0.6 && nextIn > 0.6;
-      const y = KEY_TOP + 5 + press - prep - (resting ? 3 : 0);
-      f.arms[h.key] = { hand: { x: m[kx], y }, spread: m[ks], bend: 10, pawRot: h.key === "L" ? 12 : -12 };
+      // traveling far, the hand lifts in an arc over the keys
+      const arc = Math.min(8, Math.abs(m[kx + "V"] ?? 0) * 0.01);
+      const y = damp(m, "hy" + h.key, KEY_TOP + 4 + depth * (1 - up) - 6 * up - arc - (resting ? 3 : 0), f.dt, 0.012);
+      // the wrist rolls a little into each stroke
+      const roll = (h.key === "L" ? 12 : -12) + (h.key === "L" ? 1 : -1) * 6 * (1 - up) * (holding ? 0.5 : 1);
+      f.arms[h.key] = { hand: { x: m[kx], y }, spread: m[ks], bend: 10, pawRot: roll };
       const w = act.length + hit(lastAge, 0.2);
       leanSum += (m[kx] - 120) * w;
       leanW += w;
@@ -217,10 +228,12 @@ export const piano: Rig = {
     f.look.dip = clamp(big * 3.2, 0, 4.5);
     f.look.bliss = s.active.some((n) => n.durSec > 1.2 && n.progress > 0.15);
 
-    // Sustain pedal: down for long notes / held chords, up between harmonies.
+    // Sustain pedal, legato: down for long notes and held chords, and up for an instant as each
+    // new chord lands (clearing the old harmony), then straight back down.
     const sustained = s.active.some((n) => n.durSec > 0.6) || s.active.length >= 3;
-    const want = sustained && s.playing ? 1 : 0;
-    m.pedal = (m.pedal ?? 0) + (want - (m.pedal ?? 0)) * approach(f.dt, want ? 0.03 : 0.07);
+    const change = fresh >= 2 || (s.recent[0] && s.recent[0].age < 0.06 && s.active.length >= 3);
+    const want = sustained && s.playing && !(change && s.recent[0].age < 0.07) ? 1 : 0;
+    damp(m, "pedal", want, f.dt, want ? 0.04 : 0.025);
     c.bag.tf("pedal", `rotate(${(m.pedal * 8).toFixed(2)} 127 240) translate(0 ${(m.pedal * 1.4).toFixed(2)})`);
 
     // Candle flame flickers (a touch more when the music's loud).
