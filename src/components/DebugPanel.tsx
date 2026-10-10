@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { troopAudio, type LoadState, type PlaybackStats } from "@/audio/engine";
+import { callCost, fmtCost } from "@/ai/models";
 import { INSTRUMENTS } from "@/music/instruments";
 import { useDebug, type LlmCall } from "@/state/debug";
 import { useTroop } from "@/state/store";
@@ -110,6 +111,8 @@ function PipelineTab() {
   if (!run) return <p>No runs yet.</p>;
   const elapsed = (run.endedAt ?? Math.max(now, run.t0)) - run.t0;
   const tokens = runCalls.reduce((s, c) => s + (c.usage?.inputTokens ?? 0) + (c.usage?.outputTokens ?? 0), 0);
+  const costs = runCalls.map((c) => callCost(c.model, c.usage)).filter((x): x is number => x !== null);
+  const cost = costs.length && tokens > 0 ? costs.reduce((a, b) => a + b, 0) : null;
   return (
     <div>
       <div className="mb-xs flex flex-wrap items-center gap-xs">
@@ -122,6 +125,7 @@ function PipelineTab() {
         </select>
         <span>
           <b>{run.status}</b> · {fmtMs(elapsed)} wall · {runCalls.length} model calls · {tokens.toLocaleString()} tokens
+          {cost !== null && <span title="At list prices; your provider's bill is the real figure"> · ≈ {fmtCost(cost)}</span>}
         </span>
       </div>
       {Object.keys(run.timings).length > 0 && (

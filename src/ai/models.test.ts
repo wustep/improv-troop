@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { callParams, DEFAULT_DIRECTOR_MODEL, DEFAULT_PLAYER_MODEL, modelInfo, MODELS } from "./models";
+import { callCost, callParams, DEFAULT_DIRECTOR_MODEL, DEFAULT_PLAYER_MODEL, fmtCost, modelInfo, MODELS } from "./models";
 
 describe("model catalog", () => {
   it("keeps the defaults and has no duplicates", () => {
@@ -36,5 +36,27 @@ describe("model catalog", () => {
 
   it("sends nothing risky for unknown models", () => {
     expect(callParams("someone/new-model", { temperature: 0.7, reasoning: "low" })).toEqual({});
+  });
+});
+
+describe("what a take costs", () => {
+  it("prices every model, output dearer than input", () => {
+    for (const m of MODELS) {
+      expect(m.price[0], m.id).toBeGreaterThan(0);
+      expect(m.price[1], m.id).toBeGreaterThan(m.price[0]);
+    }
+  });
+
+  it("adds up a call at list price, and admits when it can't", () => {
+    // a 16-bar Haiku jam measured on Anthropic: 39,491 tokens over 16 calls
+    expect(callCost("anthropic/claude-haiku-4.5", { inputTokens: 36_513, outputTokens: 2_978 })).toBeCloseTo(0.0514, 4);
+    expect(callCost("anthropic/claude-haiku-4.5", undefined)).toBeNull();
+    expect(callCost("someone/unknown-model", { inputTokens: 100, outputTokens: 10 })).toBeNull();
+  });
+
+  it("reads as a rough figure", () => {
+    expect(fmtCost(0.004)).toBe("<$0.01");
+    expect(fmtCost(0.0514)).toBe("$0.05");
+    expect(fmtCost(1.2)).toBe("$1.20");
   });
 });

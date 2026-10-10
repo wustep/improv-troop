@@ -14,6 +14,7 @@ import { defaultSettings } from "@/music/local";
 import { isFeaturedRole } from "@/music/realize";
 import type { Member, Score, StyleId } from "@/music/types";
 import { useDebug } from "@/state/debug";
+import { callCost } from "./models";
 import { runComposer, type PipelineHooks } from "./composer";
 import { startImproviser } from "./improviser";
 
@@ -29,17 +30,6 @@ const DIRECTOR = process.env.EVAL_DIRECTOR ?? "";
 const STANDARD = process.env.EVAL_STANDARD ?? null;
 const SEEDS = (process.env.EVAL_SEEDS ?? process.env.EVAL_SEED ?? "11").split(",").map(Number);
 
-// Rough list prices, $ per million tokens (input, output), for the spend estimate only.
-const PRICE: Record<string, [number, number]> = {
-  "anthropic/claude-haiku-4.5": [1, 5],
-  "anthropic/claude-sonnet-4.6": [3, 15],
-  "anthropic/claude-sonnet-5.5": [3, 15],
-  "anthropic/claude-opus-5.5": [5, 25],
-  "google/gemini-2.5-flash": [0.3, 2.5],
-  "google/gemini-3.8-flash": [0.5, 3],
-  "openai/gpt-5.4-mini": [0.25, 2],
-  "openai/gpt-5.6-luna": [0.25, 2],
-};
 
 // Every /api/llm request goes straight into the route handler, which picks up the server key.
 // Anything else (the gateway provider's own requests) goes out on the real fetch.
@@ -111,11 +101,8 @@ function measure(model: string, mode: string, style: StyleId, runId: string, sco
   const run = runs.find((r) => r.id === runId);
   const tokIn = mine.reduce((a, c) => a + (c.usage?.inputTokens ?? 0), 0);
   const tokOut = mine.reduce((a, c) => a + (c.usage?.outputTokens ?? 0), 0);
-  // each call at its own model's price: a director and its players can differ
-  const usd = mine.reduce((a, c) => {
-    const [pi, po] = PRICE[c.model] ?? [3, 15];
-    return a + ((c.usage?.inputTokens ?? 0) * pi + (c.usage?.outputTokens ?? 0) * po) / 1e6;
-  }, 0);
+  // each call at its own model's list price: a director and its players can differ
+  const usd = mine.reduce((a, c) => a + (callCost(c.model, c.usage) ?? 0), 0);
   const repairs: Record<string, number> = {};
   for (const c of mine) for (const r of c.repairs) repairs[bucket(r)] = (repairs[bucket(r)] ?? 0) + 1;
   const issues: Record<string, number> = {};

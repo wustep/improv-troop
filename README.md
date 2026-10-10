@@ -51,12 +51,14 @@ For each call, the first of these that applies is used:
 
 So a visitor's own key always beats one the server lends, and at the same level the gateway beats a direct Anthropic key. With only Anthropic keys, GPT and Gemini models are greyed out in the pickers, and a run that still names one stops before calling anything, with a message saying to pick a Claude model. A rejected key is reported as the visitor's or the server's, by provider. The route never falls back to ambient credentials such as Vercel OIDC.
 
+**What a jam costs.** Measured on Anthropic directly with Claude Haiku 4.5 for every part: a 16-bar Improviser take is about 23 calls and 50,000 tokens, roughly $0.06–0.08 at list price; a Composer take is about 7 calls and $0.03. A Sonnet 5.5 leader adds its count-off (or the plan, in Composer) at twice Haiku's price. The debug panel (“peek under the hood”) shows each run's tokens and an estimate at list price.
+
 ### Real-model runs
 
-`pnpm eval:gateway` plays the composer and improviser on real models through the same route and scores each take with the app's own validators (repairs by kind, realize issues, structured-output rate, tokens, a rough cost). It uses the server keys above (`IMPROV_TROOP_SERVER_KEY`, or `ANTHROPIC_API_KEY` for Claude models) and spends credits, so it isn't part of `pnpm test`.
+`pnpm eval:gateway` plays the composer and improviser on real models through the same route and scores each take with the app's own validators (repairs by kind, realize issues, structured-output rate, how many accompanying bars came in short or long, tokens, cost at list price). It uses the server keys above (`IMPROV_TROOP_SERVER_KEY`, or `ANTHROPIC_API_KEY` for Claude models) and spends credits, so it isn't part of `pnpm test`.
 
 ```bash
 EVAL_MODELS=google/gemini-3.8-flash,anthropic/claude-haiku-4.5 \
 EVAL_STYLES=swing,funk EVAL_MODES=composer EVAL_OUT=/tmp/takes pnpm eval:gateway
-# also: EVAL_DIRECTOR (a separate director model), EVAL_STANDARD, EVAL_BARS, EVAL_SEED
+# also: EVAL_DIRECTOR (a separate director model), EVAL_STANDARD, EVAL_BARS, EVAL_SEEDS=11,12 (one take per seed)
 ```

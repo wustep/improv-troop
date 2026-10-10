@@ -20,32 +20,44 @@ export interface ModelInfo {
    * text); with thinking off, 8 in 8 at 350 tokens. Schema calls run without thinking.
    */
   noThinkingWithSchema?: boolean;
+  /** List price in dollars per million tokens, [input, output], from the gateway catalog on 2026-10-10. For an estimate only. */
+  price: [number, number];
 }
 
 export const MODELS: ModelInfo[] = [
-  { id: "anthropic/claude-sonnet-5.5", label: "Claude Sonnet 5.5", temperature: false, efforts: ["low", "medium", "high", "xhigh", "max"], canDisableReasoning: false },
-  { id: "anthropic/claude-haiku-4.5", label: "Claude Haiku 4.5", temperature: true, efforts: [], canDisableReasoning: true, noThinkingWithSchema: true },
-  { id: "anthropic/claude-opus-5.5", label: "Claude Opus 5.5", temperature: false, efforts: ["low", "medium", "high", "xhigh", "max"], canDisableReasoning: false },
-  { id: "anthropic/claude-fable-5.1", label: "Claude Fable 5.1", temperature: true, efforts: ["none", "low", "medium", "high", "xhigh", "max"], canDisableReasoning: true },
-  { id: "anthropic/claude-opus-5", label: "Claude Opus 5", temperature: false, efforts: ["none", "low", "medium", "high", "xhigh", "max"], canDisableReasoning: true },
-  { id: "anthropic/claude-sonnet-5", label: "Claude Sonnet 5", temperature: false, efforts: ["none", "low", "medium", "high", "xhigh", "max"], canDisableReasoning: true },
-  { id: "anthropic/claude-fable-5", label: "Claude Fable 5", temperature: false, efforts: ["none", "low", "medium", "high", "xhigh", "max"], canDisableReasoning: true },
-  { id: "anthropic/claude-opus-4.8", label: "Claude Opus 4.8", temperature: true, efforts: ["none", "low", "medium", "high", "xhigh", "max"], canDisableReasoning: true },
-  { id: "anthropic/claude-sonnet-4.6", label: "Claude Sonnet 4.6", temperature: true, efforts: ["none", "low", "medium", "high", "max"], canDisableReasoning: true },
-  { id: "openai/gpt-6.1-sol", label: "GPT-6.1 Sol", temperature: true, efforts: ["low", "medium", "high", "xhigh", "max"], canDisableReasoning: false },
-  { id: "openai/gpt-6-sol", label: "GPT-6 Sol", temperature: true, efforts: ["none", "low", "medium", "high", "xhigh", "max"], canDisableReasoning: true },
-  { id: "openai/gpt-6-luna", label: "GPT-6 Luna", temperature: true, efforts: ["none", "low", "medium", "high", "xhigh", "max"], canDisableReasoning: true },
-  { id: "openai/gpt-5.6-sol", label: "GPT-5.6 Sol", temperature: true, efforts: ["none", "minimal", "low", "medium", "high", "xhigh", "max"], canDisableReasoning: true },
-  { id: "openai/gpt-5.6-terra", label: "GPT-5.6 Terra", temperature: true, efforts: ["none", "minimal", "low", "medium", "high", "xhigh", "max"], canDisableReasoning: true },
-  { id: "openai/gpt-5.6-luna", label: "GPT-5.6 Luna", temperature: true, efforts: ["none", "low", "medium", "high", "xhigh", "max"], canDisableReasoning: true },
-  { id: "openai/gpt-5.5", label: "GPT-5.5", temperature: true, efforts: ["none", "minimal", "low", "medium", "high", "xhigh"], canDisableReasoning: true },
-  { id: "openai/gpt-5.4", label: "GPT-5.4", temperature: true, efforts: ["none", "minimal", "low", "medium", "high", "xhigh"], canDisableReasoning: true },
-  { id: "openai/gpt-5.4-mini", label: "GPT-5.4 mini", temperature: true, efforts: ["none", "minimal", "low", "medium", "high", "xhigh"], canDisableReasoning: true },
-  { id: "google/gemini-3.8-flash", label: "Gemini 3.8 Flash", temperature: true, efforts: ["low", "high"], canDisableReasoning: false },
-  { id: "google/gemini-3.1-pro-preview", label: "Gemini 3.1 Pro (preview)", temperature: true, efforts: ["low", "high"], canDisableReasoning: false },
-  { id: "google/gemini-2.5-pro", label: "Gemini 2.5 Pro", temperature: true, efforts: ["none", "low", "medium", "high"], canDisableReasoning: true },
-  { id: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash", temperature: true, efforts: ["none", "low", "medium", "high"], canDisableReasoning: true },
+  { id: "anthropic/claude-sonnet-5.5", label: "Claude Sonnet 5.5", price: [2, 10], temperature: false, efforts: ["low", "medium", "high", "xhigh", "max"], canDisableReasoning: false },
+  { id: "anthropic/claude-haiku-4.5", label: "Claude Haiku 4.5", price: [1, 5], temperature: true, efforts: [], canDisableReasoning: true, noThinkingWithSchema: true },
+  { id: "anthropic/claude-opus-5.5", label: "Claude Opus 5.5", price: [4, 20], temperature: false, efforts: ["low", "medium", "high", "xhigh", "max"], canDisableReasoning: false },
+  { id: "anthropic/claude-fable-5.1", label: "Claude Fable 5.1", price: [10, 50], temperature: true, efforts: ["none", "low", "medium", "high", "xhigh", "max"], canDisableReasoning: true },
+  { id: "anthropic/claude-opus-5", label: "Claude Opus 5", price: [5, 25], temperature: false, efforts: ["none", "low", "medium", "high", "xhigh", "max"], canDisableReasoning: true },
+  { id: "anthropic/claude-sonnet-5", label: "Claude Sonnet 5", price: [2, 10], temperature: false, efforts: ["none", "low", "medium", "high", "xhigh", "max"], canDisableReasoning: true },
+  { id: "anthropic/claude-fable-5", label: "Claude Fable 5", price: [10, 50], temperature: false, efforts: ["none", "low", "medium", "high", "xhigh", "max"], canDisableReasoning: true },
+  { id: "anthropic/claude-opus-4.8", label: "Claude Opus 4.8", price: [5, 25], temperature: true, efforts: ["none", "low", "medium", "high", "xhigh", "max"], canDisableReasoning: true },
+  { id: "anthropic/claude-sonnet-4.6", label: "Claude Sonnet 4.6", price: [3, 15], temperature: true, efforts: ["none", "low", "medium", "high", "max"], canDisableReasoning: true },
+  { id: "openai/gpt-6.1-sol", label: "GPT-6.1 Sol", price: [2, 10], temperature: true, efforts: ["low", "medium", "high", "xhigh", "max"], canDisableReasoning: false },
+  { id: "openai/gpt-6-sol", label: "GPT-6 Sol", price: [2, 10], temperature: true, efforts: ["none", "low", "medium", "high", "xhigh", "max"], canDisableReasoning: true },
+  { id: "openai/gpt-6-luna", label: "GPT-6 Luna", price: [0.1, 0.5], temperature: true, efforts: ["none", "low", "medium", "high", "xhigh", "max"], canDisableReasoning: true },
+  { id: "openai/gpt-5.6-sol", label: "GPT-5.6 Sol", price: [4, 20], temperature: true, efforts: ["none", "minimal", "low", "medium", "high", "xhigh", "max"], canDisableReasoning: true },
+  { id: "openai/gpt-5.6-terra", label: "GPT-5.6 Terra", price: [2, 12], temperature: true, efforts: ["none", "minimal", "low", "medium", "high", "xhigh", "max"], canDisableReasoning: true },
+  { id: "openai/gpt-5.6-luna", label: "GPT-5.6 Luna", price: [0.2, 1.2], temperature: true, efforts: ["none", "low", "medium", "high", "xhigh", "max"], canDisableReasoning: true },
+  { id: "openai/gpt-5.5", label: "GPT-5.5", price: [5, 30], temperature: true, efforts: ["none", "minimal", "low", "medium", "high", "xhigh"], canDisableReasoning: true },
+  { id: "openai/gpt-5.4", label: "GPT-5.4", price: [2.5, 15], temperature: true, efforts: ["none", "minimal", "low", "medium", "high", "xhigh"], canDisableReasoning: true },
+  { id: "openai/gpt-5.4-mini", label: "GPT-5.4 mini", price: [0.75, 4.5], temperature: true, efforts: ["none", "minimal", "low", "medium", "high", "xhigh"], canDisableReasoning: true },
+  { id: "google/gemini-3.8-flash", label: "Gemini 3.8 Flash", price: [0.75, 3.75], temperature: true, efforts: ["low", "high"], canDisableReasoning: false },
+  { id: "google/gemini-3.1-pro-preview", label: "Gemini 3.1 Pro (preview)", price: [2, 12], temperature: true, efforts: ["low", "high"], canDisableReasoning: false },
+  { id: "google/gemini-2.5-pro", label: "Gemini 2.5 Pro", price: [1.25, 10], temperature: true, efforts: ["none", "low", "medium", "high"], canDisableReasoning: true },
+  { id: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash", price: [0.3, 2.5], temperature: true, efforts: ["none", "low", "medium", "high"], canDisableReasoning: true },
 ];
+
+/** Roughly what a call cost at list price, in dollars; null when the model or its usage is unknown. */
+export function callCost(model: string, usage: { inputTokens?: number | null; outputTokens?: number | null } | undefined): number | null {
+  const price = modelInfo(model)?.price;
+  if (!price || !usage || (usage.inputTokens == null && usage.outputTokens == null)) return null;
+  return ((usage.inputTokens ?? 0) * price[0] + (usage.outputTokens ?? 0) * price[1]) / 1e6;
+}
+
+/** A take's estimated spend, for people paying with their own key: "<$0.01", "$0.06", "$1.20". */
+export const fmtCost = (usd: number) => (usd < 0.01 ? "<$0.01" : `$${usd.toFixed(2)}`);
 
 export const DEFAULT_DIRECTOR_MODEL = "anthropic/claude-sonnet-5.5";
 export const DEFAULT_PLAYER_MODEL = "anthropic/claude-haiku-4.5";
