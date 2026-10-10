@@ -124,16 +124,19 @@ export const trumpet: Rig = {
     valves.forEach((down, i) => c.bag.tf("v" + i, down ? "translate(0 4)" : ""));
     updatePuffs(c, f, { x: 106, y: 0 }, { x: 1, y: -0.2 }, lw);
     const pressDepth = valves.filter(Boolean).length;
-    // Right paw rests behind the valve block so the caps (and their presses) stay visible.
+    // Right paw rests behind the valve block so the caps (and their presses) stay visible. The
+    // left cradles the leadpipe by the first slide: reaching on to the valve casing laid that arm
+    // across the chest.
     f.arms.R = { hand: toWorld(62, -8 + pressDepth * 0.6), bend: -14, pawRot: -10 };
-    f.arms.L = { hand: toWorld(38, 13), bend: 16, pawRot: 30 };
+    f.arms.L = { hand: toWorld(22, 11), bend: 16, pawRot: 30 };
     f.look.lean = (w.blowing ? 2 : 0) - (m.tilt + 6) * 0.15;
   },
 };
 
 // ─── Trombone ────────────────────────────────────────────────────────────────
 
-const SLIDE_STEP = 10.5;
+/** Slide travel per position: the seventh is at the end of the arm's reach. */
+const SLIDE_STEP = 8.5;
 
 export const trombone: Rig = {
   follow: "head",
@@ -155,7 +158,7 @@ export const trombone: Rig = {
             <path d="M30 0 H96 M30 9 H96" stroke={BRASS_INK} strokeWidth={4.2} strokeLinecap="round" />
             <path d="M30 0 H96 M30 9 H96" stroke={BRASS} strokeWidth={2.2} strokeLinecap="round" />
             <S d="M96 -1 Q104 4.5 96 10" ink={BRASS_INK} seed={s + 5} w={2.6} />
-            <path d="M58 0 V9" stroke={BRASS_INK} strokeWidth={2} />
+            <path d="M50 0 V9" stroke={BRASS_INK} strokeWidth={2} />
           </g>
           {puffs(c)}
         </g>
@@ -167,13 +170,14 @@ export const trombone: Rig = {
     const m = c.mem;
     const pos = w.pitch !== null ? tromboneSlide(w.pitch) : m.pos ?? 1;
     if (w.pitch !== null) m.pos = pos;
-    m.slide = (m.slide ?? 0) + ((pos - 1) * SLIDE_STEP - (m.slide ?? 0)) * approach(f.dt, 0.045);
-    c.bag.tf("slide", `translate(${m.slide.toFixed(2)} 0)`);
     const lw = w.lowered;
+    // horn down, slide closed (locked in first, as players rest it)
+    m.slide = (m.slide ?? 0) + ((pos - 1) * SLIDE_STEP * (1 - lw) - (m.slide ?? 0)) * approach(f.dt, 0.045);
+    c.bag.tf("slide", `translate(${m.slide.toFixed(2)} 0)`);
     const local = chain(tr(c.mouth.x + lw * 2, c.mouth.y + lw * 30), rot(6 + lw * 40));
     const toWorld = placeInst(c, f, local);
     updatePuffs(c, f, { x: 72, y: -11 }, { x: 1, y: -0.3 }, lw);
-    f.arms.R = { hand: toWorld(58 + m.slide, 5), bend: -10, pawRot: -20 };
+    f.arms.R = { hand: toWorld(50 + m.slide, 5), bend: -10, pawRot: -20 };
     f.arms.L = { hand: toWorld(22, -6), bend: 18, pawRot: 20 };
     f.look.lean = w.blowing ? 1.5 + m.slide * 0.03 : 0;
   },

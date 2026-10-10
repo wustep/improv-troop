@@ -12,6 +12,7 @@ export function AnimalPortrait({ animal, size = 64, className }: { animal: Anima
   const r = art.face.eyeR;
   return (
     <svg viewBox="30 0 180 170" width={size} height={(size * 170) / 180} className={className} role="img" aria-label={`${def.name} the ${def.species}`}>
+      {art.ears?.map((e, i) => <g key={i}>{e.node}</g>)}
       {art.head}
       <Blush at={art.face.blush[0]} seed={sd} />
       <Blush at={art.face.blush[1]} seed={sd + 1} />

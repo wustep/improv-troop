@@ -69,6 +69,8 @@ export interface Look {
   lean: number;
   /** Forward dip (px) — e.g. pianist leaning into a big chord. */
   dip: number;
+  /** Slide sideways (px, + = toward viewer-right): a pianist along the bench, a vibist along the bars. */
+  shift?: number;
 }
 
 export interface Frame {

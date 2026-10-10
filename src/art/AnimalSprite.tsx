@@ -2,10 +2,11 @@
 
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef } from "react";
 import type { AnimalId, InstrumentId, MemberFrameState } from "@/music/types";
-import { ANIMALS } from "@/music/instruments";
+import { ANIMALS, INSTRUMENTS } from "@/music/instruments";
 import { ANCHOR, Blush, animalArt, mouthPath } from "./animals";
 import { L, PENCIL, S, ellipsePath, hash, mix, tint } from "./sketch";
-import { type Mat, type Pt, I, ap, approach, attr, chain, clamp, rot, scl, tr } from "./affine";
+import { type Pt, approach, attr, clamp } from "./affine";
+import { Motion, randAt } from "./motion";
 import { RIGS } from "./rigs";
 import { Bag, type Frame, type RigCtx } from "./rigs/types";
 
@@ -23,13 +24,6 @@ export interface SpriteHandle {
   cheer(): void;
 }
 
-/** How long the reactions last (s): a soloist's bow, a listener's nod, the end-of-take cheer. */
-const BOW_S = 1.1;
-const NOD_S = 0.7;
-const CHEER_S = 2.4;
-
-/** 0 → 1 → 0 over `len` seconds since `t0` (0 outside it). */
-const pulse = (t: number, t0: number, len: number) => (t >= t0 && t < t0 + len ? Math.sin((Math.PI * (t - t0)) / len) : 0);
 
 export interface AnimalSpriteProps {
   animal: AnimalId;
@@ -168,30 +162,24 @@ export const AnimalSprite = forwardRef<SpriteHandle, AnimalSpriteProps>(function
   const parts = useMemo(() => rig.render(ctx), [rig, ctx]);
   const me = useMemo(() => new Bag(), []);
 
+  const motion = useMemo(
+    () => new Motion({ follow: rig.follow, seated: !!rig.seated, ears: art.ears?.[0].kind ?? null, tail: art.tail?.kind ?? null, seed: hash(animal) }),
+    [rig, art, animal],
+  );
+
   const rt = useRef({
     last: 0,
     lastExternal: -1,
     state: IDLE_STATE as MemberFrameState,
-    lean: 0,
-    dip: 0,
-    cheeks: 0,
-    inhale: 0,
-    bliss: 0,
     blinkAt: 1.5 + (hash(animal) % 1000) / 400,
-    glance: 0,
+    lastCue: -Infinity,
+    gaze: { x: 0, y: 0 },
     glow: 0,
     oh: 0,
     brow: 0,
     browUp: 0,
     hands: { L: { x: 100, y: 205 }, R: { x: 140, y: 205 } } as Record<"L" | "R", Pt>,
     shoulders: { L: { ...ANCHOR.shoulderL }, R: { ...ANCHOR.shoulderR } } as Record<"L" | "R", Pt>,
-    // reactions: when each last started (s), and what last frame said, to spot the change
-    bowT: -Infinity,
-    nodT: -Infinity,
-    cheerT: -Infinity,
-    wasFeatured: false,
-    lastLook: 0,
-    soft: 0,
   });
 
   const step = useMemo(() => {
@@ -201,87 +189,43 @@ export const AnimalSprite = forwardRef<SpriteHandle, AnimalSpriteProps>(function
       if (clock?.reset) r.last = 0;
       const dt = r.last ? clamp(t - r.last, 0, 0.1) : 0.016;
       r.last = t;
-
-      // ── body & head motion (uses last frame's lean/dip from the rig) ──
       const playing = s.playing;
       const energy = clamp(s.energy, 0, 1);
-      const beatPulse = playing ? Math.pow(1 - clamp(s.beatPhase, 0, 1), 3) : 0;
-      const bobAmp = playing ? (1.5 + 3.5 * energy) * (s.role === "rest" ? 0.55 : 1) : 0;
-      const bob = playing ? bobAmp * beatPulse : Math.sin(t * 1.1) * 0.8;
-      const tilt = playing ? Math.sin(s.beat * Math.PI) * (0.8 + 2 * energy) : Math.sin(t * 0.6) * 2;
-      const feat = s.featured ? 1 : 0;
 
-      // ── reactions to the shape of the take ──
-      // A solo ends: the soloist takes a small bow. The spotlight moves on: the listeners nod
-      // it along, each a beat apart so the band doesn't move as one.
-      if (playing && r.wasFeatured && !s.featured) r.bowT = t;
-      const look0 = s.lookX ?? 0;
-      if (playing && !s.featured && look0 !== r.lastLook && Math.abs(look0 - r.lastLook) > 0.2 && t - r.bowT > BOW_S) r.nodT = t + (hash(animal) % 5) * 0.06;
-      r.wasFeatured = playing && s.featured;
-      r.lastLook = look0;
-      const bowing = pulse(t, r.bowT, BOW_S);
-      // two quick dips
-      const nod = t >= r.nodT && t < r.nodT + NOD_S ? Math.max(0, Math.sin((2 * Math.PI * (t - r.nodT)) / NOD_S)) : 0;
-      const cheerP = (t - r.cheerT) / CHEER_S;
-      const cheering = cheerP >= 0 && cheerP < 1 ? 1 - cheerP : 0;
-      // two hops, the second smaller
-      const hop = cheerP >= 0 && cheerP < 0.6 ? Math.abs(Math.sin(cheerP * Math.PI * (2 / 0.6))) * (cheerP < 0.3 ? 7 : 4) : 0;
-      // soft bars: eyes half-lidded, listening in
-      r.soft += ((playing && energy < 0.45 ? 1 : 0) - r.soft) * approach(dt, 0.4);
-
-      // ── listening: glance toward whoever has the spotlight, more while resting ──
-      const look = s.lookX ?? 0;
-      const resting = s.role === "rest" || (s.active.length === 0 && s.nextOnsetIn > 1);
-      const phase = (t * 0.21 + (hash(animal) % 97) / 97) % 1;
-      const window = resting ? 0.62 : 0.28;
-      // direction matters more than distance: even a neighbour gets a proper look
-      const lookAmt = Math.sign(look) * (0.55 + 0.45 * Math.min(1, Math.abs(look)));
-      const wantGlance = playing && !s.featured && look !== 0 && phase < window ? lookAmt : 0;
-      r.glance += (wantGlance - r.glance) * approach(dt, 0.28);
-      // wind players keep the mouthpiece where it is: only their eyes wander
-      const headTurn = r.glance * (rig.follow === "head" ? 0.25 : 1);
-
-      const charM: Mat = chain(
-        rot(r.lean * 0.9, 120, ANCHOR.ground),
-        tr(0, r.dip + bowing * 3 - hop),
-        scl(1 + feat * 0.025, 1 + feat * 0.025, 120, ANCHOR.ground),
-      );
-      const headDip = bowing * 4 + nod * 2.6;
-      const headM: Mat = chain(charM, tr(headTurn * 2.6, bob + headDip), rot(tilt + headTurn * 4 + bowing * 5, ANCHOR.neck.x, ANCHOR.neck.y));
-      const M = rig.follow === "world" ? I : rig.follow === "char" ? charM : headM;
-
-      me.tf("char", attr(charM));
-      me.tf("head", attr(chain(tr(headTurn * 2.6, bob + headDip), rot(tilt + headTurn * 4 + bowing * 5, ANCHOR.neck.x, ANCHOR.neck.y))));
-      me.tf("instFront", attr(M));
-      me.tf("instBack", attr(M));
+      // ── body & head (uses last frame's lean/dip from the rig) ──
+      const pose = motion.pose(s, t, dt);
+      me.tf("char", attr(pose.charM));
+      me.tf("body", attr(pose.bodyM));
+      me.tf("head", attr(pose.headM));
+      me.tf("instFront", attr(pose.M));
+      me.tf("instBack", attr(pose.M));
+      // ears behind the head, the tail behind the body: they swing about where they're attached
+      if (art.ears) {
+        for (const i of [0, 1] as const) {
+          const e = art.ears[i];
+          const sign = i === 0 ? -1 : 1;
+          const flap = 1 + pose.earFlap;
+          me.tf("ear" + i, `rotate(${(sign * pose.ears[i]).toFixed(2)} ${e.pivot.x} ${e.pivot.y})${e.kind === "flap" ? ` translate(${e.pivot.x} ${e.pivot.y}) scale(${flap.toFixed(3)} 1) translate(${-e.pivot.x} ${-e.pivot.y})` : ""}`);
+        }
+      }
+      if (art.tail) me.tf("tail", `rotate(${pose.tail.toFixed(2)} ${art.tail.pivot.x} ${art.tail.pivot.y})`);
 
       const f: Frame = {
         s,
         t,
         dt,
-        M,
+        M: pose.M,
         arms: { L: { hand: r.hands.L, bend: 12 }, R: { hand: r.hands.R, bend: 12 } },
         look: { mouthCovered: false, cheeks: 0, inhale: 0, bliss: false, lean: 0, dip: 0 },
       };
       rig.update(ctx, f);
-
-      // ── smooth look values ──
-      const k = approach(dt, 0.12);
-      r.lean += (clamp(f.look.lean, -8, 8) - r.lean) * k;
-      r.dip += (clamp(f.look.dip, 0, 6) - r.dip) * approach(dt, 0.05);
-      r.cheeks += (f.look.cheeks - r.cheeks) * approach(dt, 0.05);
-      r.inhale += (f.look.inhale - r.inhale) * approach(dt, 0.1);
-      r.bliss += ((f.look.bliss ? 1 : 0) - r.bliss) * approach(dt, 0.08);
-
-      // ── breathing ──
-      const breath = Math.sin(t * 1.8) * 0.012 + r.inhale * 0.03;
-      me.tf("body", `translate(120 ${ANCHOR.ground}) scale(${(1 + r.inhale * 0.015).toFixed(4)} ${(1 + breath).toFixed(4)}) translate(-120 ${-ANCHOR.ground})`);
+      motion.settle(f.look, dt);
 
       // ── arms ──
       for (const side of ["L", "R"] as const) {
         const a = f.arms[side];
         r.hands[side] = a.hand;
-        const sh = ap(charM, side === "L" ? ANCHOR.shoulderL.x : ANCHOR.shoulderR.x, ANCHOR.shoulderL.y);
+        const sh = pose.shoulders[side];
         r.shoulders[side] = sh;
         const arm = armShape(sh, a.hand, side === "L" ? -1 : 1, a.bend ?? 12);
         me.set("armFill" + side, "d", arm.fill);
@@ -294,61 +238,79 @@ export const AnimalSprite = forwardRef<SpriteHandle, AnimalSpriteProps>(function
 
       // ── face ──
       const [e1, e2] = art.face.eyes;
-      let blink = 1;
-      if (t > r.blinkAt) {
-        const p = (t - r.blinkAt) / 0.14;
-        // the next blink, pseudo-random from the time so a replayed frame blinks the same
-        if (p >= 1) r.blinkAt = t + 2.2 + (((Math.sin(t * 12.9898) * 43758.5453) % 1) + 1) % 1 * 3.2;
-        else blink = Math.abs(1 - 2 * p);
+      // a blink now and then, and one with every turn of the head or reaction
+      if (motion.blinkCue > r.lastCue) {
+        r.lastCue = motion.blinkCue;
+        if (t - r.blinkAt > 0.4 || t < r.blinkAt) r.blinkAt = Math.min(r.blinkAt, t);
       }
-      // happy shut eyes for a bow or a cheer; half-lidded in a soft passage
-      const happy = Math.max(r.bliss, Math.min(1, bowing * 1.6), Math.min(1, cheering * 2));
-      const open = Math.max(0.08, blink) * (1 - happy) * (1 - 0.3 * r.soft);
-      // pupils glance toward the hands, or across the stage at the soloist
+      let blink = 1;
+      if (t < r.blinkAt - 6) r.blinkAt = t + 1 + randAt(t) * 2; // the clock went back (a replay)
+      if (t > r.blinkAt) {
+        const p = (t - r.blinkAt) / 0.15;
+        // the next blink, pseudo-random from the time so a replayed frame blinks the same
+        if (p >= 1) r.blinkAt = t + 2.2 + randAt(t) * 3.2;
+        // shut quickly, open a little slower
+        else blink = p < 0.4 ? 1 - p / 0.4 : (p - 0.4) / 0.6;
+      }
+      const open = Math.max(0.08, blink) * (1 - pose.happy) * (1 - 0.3 * pose.soft);
+      // the pupils go where the hands are working, or across the stage at the soloist. They jump
+      // there and hold (a saccade), rather than drifting with every move of the paws.
       const hx = (r.hands.L.x + r.hands.R.x) / 2 - 120;
       const hy = (r.hands.L.y + r.hands.R.y) / 2 - 110;
       const gl = Math.hypot(hx, hy) || 1;
-      const g = Math.abs(r.glance);
-      const gx = (hx / gl) * 1.4 * (1 - g) + r.glance * 2.6;
-      const gy = (hy / gl) * 1.4 * (1 - g) - g * 0.6;
+      const g = Math.abs(pose.eyeTurn);
+      const want = { x: (hx / gl) * 1.4 * (1 - g) + pose.eyeTurn * 2.6, y: (hy / gl) * 1.4 * (1 - g) - g * 0.6 };
+      if (Math.hypot(want.x - r.gaze.x, want.y - r.gaze.y) > 0.45 || g > 0.05) {
+        r.gaze.x += (want.x - r.gaze.x) * approach(dt, 0.03);
+        r.gaze.y += (want.y - r.gaze.y) * approach(dt, 0.03);
+      }
+      const gx = r.gaze.x;
+      const gy = r.gaze.y;
       me.tf("eyeL", `translate(${(e1.x + gx).toFixed(2)} ${(e1.y + gy).toFixed(2)}) scale(1 ${open.toFixed(3)})`);
       me.tf("eyeR", `translate(${(e2.x + gx).toFixed(2)} ${(e2.y + gy).toFixed(2)}) scale(1 ${open.toFixed(3)})`);
-      me.op("shut", happy);
+      me.op("shut", pose.happy);
 
-      // ── expressions: an "o" on big accents, a focused brow on fast passages ──
+      // ── expressions: an "o" on big accents, a focused brow on fast passages, brows up for a high note ──
       const newest = s.recent[0];
       const accent = playing && newest !== undefined && newest.age < 0.35 && newest.vel >= 0.86;
       const peak = playing && s.featured && energy >= 0.88 && s.active.length > 0;
-      const wantOh = !f.look.mouthCovered && (accent || peak) ? 1 : 0;
+      const wantOh = !f.look.mouthCovered && (accent || peak) && pose.grin < 0.1 ? 1 : 0;
       r.oh += (wantOh - r.oh) * approach(dt, wantOh ? 0.04 : 0.16);
       let quick = 0;
       for (const o of s.recent) if (o.age < 0.7) quick++;
-      const focus = playing && quick >= 5 && !r.bliss ? 1 : 0;
-      r.brow += (Math.max(focus, wantOh) - r.brow) * approach(dt, 0.12);
-      r.browUp += (wantOh - r.browUp) * approach(dt, 0.06);
-      me.op("brows", r.brow * 0.85 * (1 - r.bliss));
+      const focus = playing && quick >= 5 && motion.bliss < 0.5 ? 1 : 0;
+      // a soloist reaching for the top of their range lifts their brows with it
+      const top = INSTRUMENTS[instrument].solo?.[1] ?? INSTRUMENTS[instrument].sweet[1];
+      const high = playing && s.featured && s.active.length > 0 && s.active[0].pitch >= top - 4 ? 1 : 0;
+      const up = Math.max(wantOh, high);
+      r.brow += (Math.max(focus, up) - r.brow) * approach(dt, 0.12);
+      r.browUp += (up - r.browUp) * approach(dt, 0.06);
+      me.op("brows", r.brow * 0.85 * (1 - motion.bliss) * (1 - pose.happy));
       const by = (-2.6 * r.browUp).toFixed(2);
       const ba = (7 * (1 - r.browUp)).toFixed(1);
       const er = art.face.eyeR;
       me.tf("browL", `translate(${(e1.x + gx * 0.4).toFixed(1)} ${(e1.y - er * 2.3).toFixed(1)}) translate(0 ${by}) rotate(${ba})`);
       me.tf("browR", `translate(${(e2.x + gx * 0.4).toFixed(1)} ${(e2.y - er * 2.3).toFixed(1)}) translate(0 ${by}) rotate(-${ba})`);
-      me.op("oh", r.oh * (f.look.mouthCovered ? 0 : 1));
-      me.op("mouth", f.look.mouthCovered ? 0 : 1 - r.oh);
-      const ch = r.cheeks;
+      // a grin for the cheer and the end of a bow (not round a mouthpiece)
+      const grin = f.look.mouthCovered ? 0 : pose.grin;
+      me.op("grin", grin);
+      me.op("oh", r.oh * (f.look.mouthCovered ? 0 : 1) * (1 - grin));
+      me.op("mouth", f.look.mouthCovered ? 0 : (1 - r.oh) * (1 - grin));
+      const ch = motion.cheeks;
       me.op("cheeks", ch > 0.02 ? 1 : 0);
       const cs = (0.35 + 0.65 * ch).toFixed(3);
       me.tf("cheekL", `translate(${art.face.mouth.x - 15} ${art.face.mouth.y - 1}) scale(${cs})`);
       me.tf("cheekR", `translate(${art.face.mouth.x + 15} ${art.face.mouth.y - 1}) scale(${cs})`);
 
-      // ── feet: tap on the beat while listening / playing standing up ──
-      if (!rig.seated) {
-        const tap = playing ? Math.pow(1 - clamp(s.beatPhase, 0, 1), 4) * (s.role === "rest" ? 10 : 6) : 0;
-        me.tf("footR", `rotate(${(-tap).toFixed(2)} ${ANCHOR.footR.x - 10} ${ANCHOR.footR.y + 4})`);
+      // ── feet: a tap that lifts through the back of the beat and lands on it; steps along the instrument ──
+      if (!rig.hideFeet) {
+        me.tf("footL", `rotate(${pose.feet[0].toFixed(2)} ${ANCHOR.footL.x + 10} ${ANCHOR.footL.y + 4})`);
+        me.tf("footR", `rotate(${(-pose.feet[1]).toFixed(2)} ${ANCHOR.footR.x - 10} ${ANCHOR.footR.y + 4})`);
       }
 
       // ── soloist sparkles ──
       // full while phrasing, a faint glimmer while the soloist breathes (eased, so choppy lines don't flicker)
-      const wantGlow = feat * (isPhrasing(s) ? 1 : 0.25);
+      const wantGlow = (s.featured ? 1 : 0) * (isPhrasing(s) ? 1 : 0.25);
       r.glow += (wantGlow - r.glow) * approach(dt, 0.15);
       for (let i = 0; i < SPARKS.length; i++) {
         const tw = r.glow > 0.01 ? r.glow * (0.45 + 0.55 * Math.sin(t * 4.2 + i * 2.1)) : 0;
@@ -356,13 +318,13 @@ export const AnimalSprite = forwardRef<SpriteHandle, AnimalSpriteProps>(function
         me.tf("spark" + i, `translate(${SPARKS[i].x} ${SPARKS[i].y}) scale(${(0.7 + 0.4 * Math.max(0, tw)).toFixed(2)}) rotate(${((t * 40 + i * 60) % 360).toFixed(1)})`);
       }
     };
-  }, [ctx, rig, me, art, animal]);
+  }, [ctx, rig, me, art, motion, instrument]);
 
   useImperativeHandle(
     ref,
     () => ({
       cheer() {
-        rt.current.cheerT = rt.current.last || performance.now() / 1000;
+        motion.cheer(rt.current.last || performance.now() / 1000);
       },
       update(state: MemberFrameState, clock?: { t: number; reset?: boolean }) {
         rt.current.lastExternal = performance.now();
@@ -376,7 +338,7 @@ export const AnimalSprite = forwardRef<SpriteHandle, AnimalSpriteProps>(function
         return { L: { ...rt.current.shoulders.L }, R: { ...rt.current.shoulders.R } };
       },
     }),
-    [step],
+    [step, motion],
   );
 
   // Arms and instrument placement are posed per frame, so the server-rendered sprite is only
@@ -431,10 +393,11 @@ export const AnimalSprite = forwardRef<SpriteHandle, AnimalSpriteProps>(function
       <g ref={me.r("instBack")}>{parts.back}</g>
       <g ref={me.r("char")}>
         {art.back}
+        {art.tail && <g ref={me.r("tail")}>{art.tail.node}</g>}
         <g ref={me.r("body")}>
           {!rig.hideFeet && (
             <>
-              <g>
+              <g ref={me.r("footL")}>
                 <S d={ellipsePath(ANCHOR.footL.x, ANCHOR.footL.y, 15, 8)} ink={ink} base={tint(feet, 0.25)} hatch={feet} seed={sd + 1} gap={3} />
               </g>
               <g ref={me.r("footR")}>
@@ -445,6 +408,11 @@ export const AnimalSprite = forwardRef<SpriteHandle, AnimalSpriteProps>(function
           {art.body}
         </g>
         <g ref={me.r("head")}>
+          {art.ears?.map((e, i) => (
+            <g key={i} ref={me.r("ear" + i)}>
+              {e.node}
+            </g>
+          ))}
           {art.head}
           <Blush at={art.face.blush[0]} seed={sd + 3} />
           <Blush at={art.face.blush[1]} seed={sd + 4} />
@@ -474,6 +442,16 @@ export const AnimalSprite = forwardRef<SpriteHandle, AnimalSpriteProps>(function
               <L d={mp} ink={PENCIL} seed={sd + 5} w={1.8} />
             </g>
           )}
+          <g ref={me.r("grin")} style={{ opacity: 0 }}>
+            <path
+              d={`M${art.face.mouth.x - 8} ${art.face.mouth.y - 1} Q${art.face.mouth.x} ${art.face.mouth.y + 1} ${art.face.mouth.x + 8} ${art.face.mouth.y - 1} Q${art.face.mouth.x + 7} ${art.face.mouth.y + 9} ${art.face.mouth.x} ${art.face.mouth.y + 10} Q${art.face.mouth.x - 7} ${art.face.mouth.y + 9} ${art.face.mouth.x - 8} ${art.face.mouth.y - 1} Z`}
+              fill="#5a2b2b"
+              stroke={PENCIL}
+              strokeWidth={1.5}
+              strokeLinejoin="round"
+            />
+            <path d={`M${art.face.mouth.x - 4} ${art.face.mouth.y + 7.5} Q${art.face.mouth.x} ${art.face.mouth.y + 4} ${art.face.mouth.x + 4} ${art.face.mouth.y + 7.5}`} fill="#e9858f" />
+          </g>
           <g ref={me.r("oh")} style={{ opacity: 0 }}>
             <ellipse cx={art.face.mouth.x} cy={art.face.mouth.y + 2} rx={3.6} ry={4.4} fill="#5a2b2b" stroke={PENCIL} strokeWidth={1.4} />
             <ellipse cx={art.face.mouth.x} cy={art.face.mouth.y + 4} rx={2} ry={1.4} fill="#e9858f" />

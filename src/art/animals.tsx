@@ -8,6 +8,7 @@ import type { AnimalId } from "@/music/types";
 import { ANIMALS } from "@/music/instruments";
 import { BLUSH, L, PENCIL, S, ellipsePath, hash, mix, tint } from "./sketch";
 import type { Pt } from "./affine";
+import type { EarKind, TailKind } from "./motion";
 
 export const ANCHOR = {
   ground: 246,
@@ -32,10 +33,20 @@ export interface FaceSpec {
   blush: [Pt, Pt];
 }
 
+/** A part that swings about a pivot: an ear (drawn behind the head) or a tail (behind the body). */
+export interface Swinger<K> {
+  node: ReactNode;
+  pivot: Pt;
+  kind: K;
+}
+
 export interface AnimalArt {
-  back: ReactNode; // behind body (tails, big ears)
+  back: ReactNode; // behind body
   body: ReactNode; // torso + feet
-  head: ReactNode; // head shape, ears, muzzle (not eyes/mouth)
+  head: ReactNode; // head shape, muzzle (not ears, eyes or mouth)
+  /** Viewer-left and viewer-right ears, drawn behind the head. */
+  ears?: [Swinger<EarKind>, Swinger<EarKind>];
+  tail?: Swinger<TailKind>;
   front?: ReactNode; // drawn over eyes (beaks, noses, trunks)
   face: FaceSpec;
   /** Foot color (feet are drawn by the sprite so they can tap). */
@@ -93,12 +104,30 @@ function bear(): AnimalArt {
   return {
     back: null,
     body: bodyAndFeet(a, ink, fill, "#f0d6b4"),
+    ears: [
+      {
+        node: (
+          <>
+            <S d={ellipsePath(79, 68, 18, 17)} ink={ink} base={tint(fill, 0.3)} hatch={fill} seed={sd(a, "el")} />
+            <S d={ellipsePath(80, 69, 9, 8)} ink={ink} base={inner} seed={sd(a, "eli")} w={1.2} />
+          </>
+        ),
+        pivot: { x: 88, y: 80 },
+        kind: "stiff",
+      },
+      {
+        node: (
+          <>
+            <S d={ellipsePath(161, 68, 18, 17)} ink={ink} base={tint(fill, 0.3)} hatch={fill} seed={sd(a, "er")} />
+            <S d={ellipsePath(160, 69, 9, 8)} ink={ink} base={inner} seed={sd(a, "eri")} w={1.2} />
+          </>
+        ),
+        pivot: { x: 152, y: 80 },
+        kind: "stiff",
+      },
+    ],
     head: (
       <>
-        <S d={ellipsePath(79, 68, 18, 17)} ink={ink} base={tint(fill, 0.3)} hatch={fill} seed={sd(a, "el")} />
-        <S d={ellipsePath(161, 68, 18, 17)} ink={ink} base={tint(fill, 0.3)} hatch={fill} seed={sd(a, "er")} />
-        <S d={ellipsePath(80, 69, 9, 8)} ink={ink} base={inner} seed={sd(a, "eli")} w={1.2} />
-        <S d={ellipsePath(160, 69, 9, 8)} ink={ink} base={inner} seed={sd(a, "eri")} w={1.2} />
         <S d={ellipsePath(120, 110, 55, 49)} ink={ink} base={tint(fill, 0.35)} hatch={fill} seed={sd(a, "head")} />
         <S d={ellipsePath(120, 129, 22, 16)} ink={ink} base="#f3dcbd" hatch="#e2bb8f" seed={sd(a, "muz")} gap={4} w={1.5} />
       </>
@@ -140,10 +169,12 @@ function owl(): AnimalArt {
         <L d="M108 194 l4 4 l4 -4 M124 194 l4 4 l4 -4 M116 207 l4 4 l4 -4 M108 220 l4 4 l4 -4 M124 220 l4 4 l4 -4" ink={mix(ink, fill, 0.35)} seed={sd(a, "scal")} w={1.2} />
       </>
     ),
+    ears: [
+      { node: <S d="M70 92 L66 50 L100 72 Z" ink={ink} base={tint(fill, 0.3)} hatch={fill} seed={sd(a, "tl")} />, pivot: { x: 84, y: 84 }, kind: "stiff" },
+      { node: <S d="M170 92 L174 50 L140 72 Z" ink={ink} base={tint(fill, 0.3)} hatch={fill} seed={sd(a, "tr")} />, pivot: { x: 156, y: 84 }, kind: "stiff" },
+    ],
     head: (
       <>
-        <S d="M70 92 L66 50 L100 72 Z" ink={ink} base={tint(fill, 0.3)} hatch={fill} seed={sd(a, "tl")} />
-        <S d="M170 92 L174 50 L140 72 Z" ink={ink} base={tint(fill, 0.3)} hatch={fill} seed={sd(a, "tr")} />
         <S d={ellipsePath(120, 110, 55, 50)} ink={ink} base={tint(fill, 0.3)} hatch={fill} seed={sd(a, "head")} />
         <S d={ellipsePath(99, 106, 16, 16)} ink={ink} base="#fffdf4" hatch="#e9e4f7" seed={sd(a, "rl")} gap={5} w={1.5} />
         <S d={ellipsePath(141, 106, 16, 16)} ink={ink} base="#fffdf4" hatch="#e9e4f7" seed={sd(a, "rr")} gap={5} w={1.5} />
@@ -162,20 +193,43 @@ function fox(): AnimalArt {
   const { ink, fill } = ANIMALS[a];
   const white = "#fbf3e4";
   return {
-    back: (
-      <>
-        <S d="M92 228 C60 236 30 214 36 180 C40 158 58 150 66 156 C60 176 70 204 100 214 Z" ink={ink} base={tint(fill, 0.3)} hatch={fill} seed={sd(a, "tail")} />
-        <S d="M36 180 C40 158 58 150 66 156 C62 166 60 174 62 182 C52 186 42 186 36 180 Z" ink={ink} base={white} seed={sd(a, "tip")} w={1.5} />
-      </>
-    ),
+    back: null,
+    tail: {
+      node: (
+        <>
+          <S d="M92 228 C60 236 30 214 36 180 C40 158 58 150 66 156 C60 176 70 204 100 214 Z" ink={ink} base={tint(fill, 0.3)} hatch={fill} seed={sd(a, "tail")} />
+          <S d="M36 180 C40 158 58 150 66 156 C62 166 60 174 62 182 C52 186 42 186 36 180 Z" ink={ink} base={white} seed={sd(a, "tip")} w={1.5} />
+        </>
+      ),
+      pivot: { x: 98, y: 222 },
+      kind: "bushy",
+    },
     body: bodyAndFeet(a, ink, fill, white),
     feet: "#7a3a18",
+    ears: [
+      {
+        node: (
+          <>
+            <S d="M70 92 L76 40 L108 70 Z" ink={ink} base={tint(fill, 0.3)} hatch={fill} seed={sd(a, "el")} />
+            <S d="M76 44 L80 60 L88 56 Z" ink={PENCIL} base="#4a2a1a" seed={sd(a, "elt")} w={1} />
+          </>
+        ),
+        pivot: { x: 89, y: 81 },
+        kind: "stiff",
+      },
+      {
+        node: (
+          <>
+            <S d="M170 92 L164 40 L132 70 Z" ink={ink} base={tint(fill, 0.3)} hatch={fill} seed={sd(a, "er")} />
+            <S d="M164 44 L160 60 L152 56 Z" ink={PENCIL} base="#4a2a1a" seed={sd(a, "ert")} w={1} />
+          </>
+        ),
+        pivot: { x: 151, y: 81 },
+        kind: "stiff",
+      },
+    ],
     head: (
       <>
-        <S d="M70 92 L76 40 L108 70 Z" ink={ink} base={tint(fill, 0.3)} hatch={fill} seed={sd(a, "el")} />
-        <S d="M170 92 L164 40 L132 70 Z" ink={ink} base={tint(fill, 0.3)} hatch={fill} seed={sd(a, "er")} />
-        <S d="M76 44 L80 60 L88 56 Z" ink={PENCIL} base="#4a2a1a" seed={sd(a, "elt")} w={1} />
-        <S d="M164 44 L160 60 L152 56 Z" ink={PENCIL} base="#4a2a1a" seed={sd(a, "ert")} w={1} />
         <S d={ellipsePath(120, 110, 55, 47)} ink={ink} base={tint(fill, 0.3)} hatch={fill} seed={sd(a, "head")} />
         <S d="M68 112 Q90 156 120 150 Q150 156 172 112 Q148 128 120 122 Q92 128 68 112 Z" ink={mix(ink, white, 0.3)} base={white} seed={sd(a, "mask")} w={1.4} />
       </>
@@ -189,14 +243,37 @@ function cat(): AnimalArt {
   const a: AnimalId = "cat";
   const { ink, fill } = ANIMALS[a];
   return {
-    back: <S d="M150 226 C180 228 196 206 188 182 C184 170 194 160 202 168 C196 172 196 180 200 190 C206 214 186 238 150 236 Z" ink={ink} base={tint(fill, 0.3)} hatch={fill} seed={sd(a, "tail")} />,
+    back: null,
+    tail: {
+      node: <S d="M150 226 C180 228 196 206 188 182 C184 170 194 160 202 168 C196 172 196 180 200 190 C206 214 186 238 150 236 Z" ink={ink} base={tint(fill, 0.3)} hatch={fill} seed={sd(a, "tail")} />,
+      pivot: { x: 152, y: 231 },
+      kind: "curl",
+    },
     body: bodyAndFeet(a, ink, fill, "#eef0f4"),
+    ears: [
+      {
+        node: (
+          <>
+            <S d="M72 94 L78 44 L110 72 Z" ink={ink} base={tint(fill, 0.3)} hatch={fill} seed={sd(a, "el")} />
+            <S d="M80 54 L84 74 L98 70 Z" ink={ink} base="#f4c4cf" seed={sd(a, "eli")} w={1} />
+          </>
+        ),
+        pivot: { x: 91, y: 83 },
+        kind: "stiff",
+      },
+      {
+        node: (
+          <>
+            <S d="M168 94 L162 44 L130 72 Z" ink={ink} base={tint(fill, 0.3)} hatch={fill} seed={sd(a, "er")} />
+            <S d="M160 54 L156 74 L142 70 Z" ink={ink} base="#f4c4cf" seed={sd(a, "eri")} w={1} />
+          </>
+        ),
+        pivot: { x: 149, y: 83 },
+        kind: "stiff",
+      },
+    ],
     head: (
       <>
-        <S d="M72 94 L78 44 L110 72 Z" ink={ink} base={tint(fill, 0.3)} hatch={fill} seed={sd(a, "el")} />
-        <S d="M168 94 L162 44 L130 72 Z" ink={ink} base={tint(fill, 0.3)} hatch={fill} seed={sd(a, "er")} />
-        <S d="M80 54 L84 74 L98 70 Z" ink={ink} base="#f4c4cf" seed={sd(a, "eli")} w={1} />
-        <S d="M160 54 L156 74 L142 70 Z" ink={ink} base="#f4c4cf" seed={sd(a, "eri")} w={1} />
         <S d={ellipsePath(120, 112, 55, 46)} ink={ink} base={tint(fill, 0.3)} hatch={fill} seed={sd(a, "head")} />
         <L d="M112 72 l2 10 M120 70 l0 11 M128 72 l-2 10" ink={ink} seed={sd(a, "stripe")} w={2} />
         <L d="M80 124 l-22 -4 M80 129 l-22 2 M160 124 l22 -4 M160 129 l22 2" ink={ink} seed={sd(a, "wh")} w={1.1} />
@@ -214,16 +291,30 @@ function bunny(): AnimalArt {
   return {
     back: null,
     body: bodyAndFeet(a, ink, fill, "#fff3f5"),
+    ears: [
+      {
+        node: (
+          <g transform="rotate(-9 100 78)">
+            <S d={ellipsePath(100, 42, 14, 40)} ink={ink} base={tint(fill, 0.3)} hatch={fill} seed={sd(a, "el")} />
+            <S d={ellipsePath(100, 46, 6, 28)} ink={ink} base={inner} seed={sd(a, "eli")} w={1} />
+          </g>
+        ),
+        pivot: { x: 101, y: 80 },
+        kind: "floppy",
+      },
+      {
+        node: (
+          <g transform="rotate(9 140 78)">
+            <S d={ellipsePath(140, 42, 14, 40)} ink={ink} base={tint(fill, 0.3)} hatch={fill} seed={sd(a, "er")} />
+            <S d={ellipsePath(140, 46, 6, 28)} ink={ink} base={inner} seed={sd(a, "eri")} w={1} />
+          </g>
+        ),
+        pivot: { x: 139, y: 80 },
+        kind: "floppy",
+      },
+    ],
     head: (
       <>
-        <g transform="rotate(-9 100 78)">
-          <S d={ellipsePath(100, 42, 14, 40)} ink={ink} base={tint(fill, 0.3)} hatch={fill} seed={sd(a, "el")} />
-          <S d={ellipsePath(100, 46, 6, 28)} ink={ink} base={inner} seed={sd(a, "eli")} w={1} />
-        </g>
-        <g transform="rotate(9 140 78)">
-          <S d={ellipsePath(140, 42, 14, 40)} ink={ink} base={tint(fill, 0.3)} hatch={fill} seed={sd(a, "er")} />
-          <S d={ellipsePath(140, 46, 6, 28)} ink={ink} base={inner} seed={sd(a, "eri")} w={1} />
-        </g>
         <S d={ellipsePath(120, 114, 52, 45)} ink={ink} base={tint(fill, 0.3)} hatch={fill} seed={sd(a, "head")} />
       </>
     ),
@@ -243,12 +334,30 @@ function elephant(): AnimalArt {
   return {
     back: null,
     body: bodyAndFeet(a, ink, fill, "#dbe7ee"),
+    ears: [
+      {
+        node: (
+          <>
+            <S d={ellipsePath(66, 110, 30, 38)} ink={ink} base={tint(fill, 0.3)} hatch={fill} seed={sd(a, "el")} />
+            <S d={ellipsePath(68, 112, 18, 25)} ink={ink} base="#f4c4cf" seed={sd(a, "eli")} w={1} />
+          </>
+        ),
+        pivot: { x: 90, y: 104 },
+        kind: "flap",
+      },
+      {
+        node: (
+          <>
+            <S d={ellipsePath(174, 110, 30, 38)} ink={ink} base={tint(fill, 0.3)} hatch={fill} seed={sd(a, "er")} />
+            <S d={ellipsePath(172, 112, 18, 25)} ink={ink} base="#f4c4cf" seed={sd(a, "eri")} w={1} />
+          </>
+        ),
+        pivot: { x: 150, y: 104 },
+        kind: "flap",
+      },
+    ],
     head: (
       <>
-        <S d={ellipsePath(66, 110, 30, 38)} ink={ink} base={tint(fill, 0.3)} hatch={fill} seed={sd(a, "el")} />
-        <S d={ellipsePath(174, 110, 30, 38)} ink={ink} base={tint(fill, 0.3)} hatch={fill} seed={sd(a, "er")} />
-        <S d={ellipsePath(68, 112, 18, 25)} ink={ink} base="#f4c4cf" seed={sd(a, "eli")} w={1} />
-        <S d={ellipsePath(172, 112, 18, 25)} ink={ink} base="#f4c4cf" seed={sd(a, "eri")} w={1} />
         <S d={ellipsePath(120, 108, 49, 47)} ink={ink} base={tint(fill, 0.3)} hatch={fill} seed={sd(a, "head")} />
       </>
     ),
@@ -292,24 +401,39 @@ function sheep(): AnimalArt {
   const faceHatch = "#8a6f58";
   const inner = "#e7a9a6";
   return {
-    back: <S d={scallopPath(166, 212, 11, 10, 6, 0.3)} ink={ink} base={wool} hatch={woolHatch} seed={sd(a, "tail")} gap={3.2} w={1.6} />,
+    back: null,
+    tail: { node: <S d={scallopPath(166, 212, 11, 10, 6, 0.3)} ink={ink} base={wool} hatch={woolHatch} seed={sd(a, "tail")} gap={3.2} w={1.6} />, pivot: { x: 157, y: 215 }, kind: "puff" },
     body: (
       <>
         <S d={scallopPath(120, 200, 43, 41, 13, 0.16)} ink={ink} base={wool} hatch={woolHatch} seed={sd(a, "body")} gap={3.6} />
         <L d={curls([[100, 186], [138, 182], [118, 204], [96, 218], [142, 214], [121, 228], [108, 170], [134, 166]])} ink={mix(ink, wool, 0.45)} seed={sd(a, "bcurl")} w={1.3} />
       </>
     ),
+    // floppy ears poke out sideways from under the wool
+    ears: [
+      {
+        node: (
+          <g transform="rotate(16 68 108)">
+            <S d={ellipsePath(62, 108, 22, 9)} ink={ink} base={face} hatch={faceHatch} seed={sd(a, "el")} gap={2.8} />
+            <S d={ellipsePath(60, 108, 13, 4.2)} ink={mix(ink, inner, 0.5)} base={inner} seed={sd(a, "eli")} w={1} />
+          </g>
+        ),
+        pivot: { x: 82, y: 104 },
+        kind: "floppy",
+      },
+      {
+        node: (
+          <g transform="rotate(-16 172 108)">
+            <S d={ellipsePath(178, 108, 22, 9)} ink={ink} base={face} hatch={faceHatch} seed={sd(a, "er")} gap={2.8} />
+            <S d={ellipsePath(180, 108, 13, 4.2)} ink={mix(ink, inner, 0.5)} base={inner} seed={sd(a, "eri")} w={1} />
+          </g>
+        ),
+        pivot: { x: 158, y: 104 },
+        kind: "floppy",
+      },
+    ],
     head: (
       <>
-        {/* floppy ears poke out sideways from under the wool */}
-        <g transform="rotate(16 68 108)">
-          <S d={ellipsePath(62, 108, 22, 9)} ink={ink} base={face} hatch={faceHatch} seed={sd(a, "el")} gap={2.8} />
-          <S d={ellipsePath(60, 108, 13, 4.2)} ink={mix(ink, inner, 0.5)} base={inner} seed={sd(a, "eli")} w={1} />
-        </g>
-        <g transform="rotate(-16 172 108)">
-          <S d={ellipsePath(178, 108, 22, 9)} ink={ink} base={face} hatch={faceHatch} seed={sd(a, "er")} gap={2.8} />
-          <S d={ellipsePath(180, 108, 13, 4.2)} ink={mix(ink, inner, 0.5)} base={inner} seed={sd(a, "eri")} w={1} />
-        </g>
         {/* wool cap behind the face */}
         <S d={scallopPath(120, 100, 52, 44, 12, 0.2)} ink={ink} base={wool} hatch={woolHatch} seed={sd(a, "wool")} gap={3.6} />
         <L d={curls([[84, 82], [158, 84], [80, 112], [162, 114], [102, 66], [140, 66]], 3)} ink={mix(ink, wool, 0.45)} seed={sd(a, "hcurl")} w={1.2} />

@@ -1,13 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { applyFeel, pocketOf } from "@/audio/feel";
-import { FrameComputer } from "@/components/stage/frames";
-import { DRUM, INSTRUMENT_LIST, defaultMembers } from "@/music/instruments";
-import { defaultSettings, generateLocal } from "@/music/local";
+import { DRUM, INSTRUMENT_LIST } from "@/music/instruments";
 import { STYLES } from "@/music/styles";
-import type { InstrumentId, Member, StyleId } from "@/music/types";
-import { I } from "../affine";
+import type { InstrumentId, StyleId } from "@/music/types";
 import { glitchesOf } from "../glitch";
+import { Motion } from "../motion";
 import { RIGS } from ".";
+import { rigTake } from "./take";
 import { barX } from "./vibes";
 import { Bag, type Frame, type RigCtx } from "./types";
 
@@ -30,30 +29,30 @@ function recordingBag() {
 
 const FPS = 60;
 
-function perform(inst: InstrumentId, style: StyleId, seed = 3, solo = false, record = true) {
-  const band: Member[] = defaultMembers();
-  if (!band.some((m) => m.instrument === inst)) band.push({ id: "guest", animal: "cat", name: "Guest", instrument: inst });
-  const id = band.find((m) => m.instrument === inst)!.id;
-  const st = STYLES[style];
-  const { score } = generateLocal({ ...defaultSettings(band), style, tempo: st.tempo.default, key: { ...st.key }, seed, ...(solo ? { soloists: [id] } : {}) }, band);
-  const spb = 60 / score.frame.tempo;
+function perform(inst: InstrumentId, style: StyleId, seed = 3, solo = false, record = true, tempo?: number) {
+  const { score, id, spb, beats, frames: fc } = rigTake(inst, style, { seed, solo, tempo });
   const pocket = pocketOf(score, id);
   // heard time: swing plus the player's pocket, as the audio engine schedules it
   const onsets = [...score.parts[id]].map((n) => ({ t: applyFeel(n.start, score.swing) * spb + pocket(n), pitch: n.pitch })).sort((a, b) => a.t - b.t);
-  const fc = new FrameComputer(score);
   const { bag, store } = recordingBag();
-  const ctx: RigCtx = { bag, animal: "cat", ink: "#000", fill: "#fff", light: "#fff", feet: "#000", seed: 1, mouth: { x: 120, y: 100 }, mem: {} };
-  const end = score.frame.bars * score.frame.meter.beats * spb;
+  // the mouth sits at y 130–141 across the cast
+  const ctx: RigCtx = { bag, animal: "cat", ink: "#000", fill: "#fff", light: "#fff", feet: "#000", seed: 1, mouth: { x: 120, y: 133 }, mem: {} };
+  const end = beats * spb;
   const frames: Attrs[] = [];
   const glitches: { beat: number; kinds: string[] }[] = [];
+  // the body moves as on stage (lean, slide, bounce), and the arms start where its shoulders are
+  const motion = new Motion({ follow: RIGS[inst].follow, seated: !!RIGS[inst].seated, ears: null, tail: null, seed: 7 });
   let hands: Frame["arms"] = { L: { hand: { x: 80, y: 190 } }, R: { hand: { x: 160, y: 190 } } };
   for (let i = 0; i * (1 / FPS) < end; i++) {
     const t = i / FPS + 0.004;
     const prev = { L: { ...hands.L.hand }, R: { ...hands.R.hand } };
-    const f: Frame = { s: fc.compute(id, t / spb, true, spb), t, dt: 1 / FPS, M: I, arms: { L: { hand: { ...prev.L } }, R: { hand: { ...prev.R } } }, look: { mouthCovered: false, cheeks: 0, inhale: 0, bliss: false, lean: 0, dip: 0 } };
+    const s = fc.compute(id, t / spb, true, spb);
+    const pose = motion.pose(s, t, 1 / FPS);
+    const f: Frame = { s, t, dt: 1 / FPS, M: pose.M, arms: { L: { hand: { ...prev.L } }, R: { hand: { ...prev.R } } }, look: { mouthCovered: false, cheeks: 0, inhale: 0, bliss: false, lean: 0, dip: 0 } };
     RIGS[inst].update(ctx, f);
+    motion.settle(f.look, 1 / FPS);
     // the first frames settle from the default pose
-    const kinds = i > 5 ? glitchesOf({ L: f.arms.L.hand, R: f.arms.R.hand }, prev) : [];
+    const kinds = i > 5 ? glitchesOf({ L: f.arms.L.hand, R: f.arms.R.hand }, prev, pose.shoulders) : [];
     if (kinds.length) glitches.push({ beat: +(t / spb).toFixed(2), kinds });
     hands = { L: { ...f.arms.L }, R: { ...f.arms.R } };
     if (record) frames.push(JSON.parse(JSON.stringify(store)));
@@ -106,16 +105,24 @@ describe("rigs follow the notes frame by frame", () => {
     }
   });
 
-  it("no arms cross and no paw teleports, for any instrument, soloing or comping", () => {
+  it("no arms cross, reach too far or lie across the chest, and no paw teleports, for any instrument, soloing or comping", () => {
     // what the art lab's "next glitch" stops on; drums crossed reaching for a hat under a crash,
-    // the bow jumped to the other end for a long note, the clarinet's lower hand reached across
+    // the bow jumped to the other end for a long note, the clarinet's lower hand reached across,
+    // the bassist's hand stretched over its head for the nut
     const found: string[] = [];
+    const runs: [StyleId, number | undefined][] = [
+      ["swing", undefined],
+      ["swing", STYLES.swing.tempo.max],
+      ["funk", undefined],
+      ["baroque", undefined],
+      ["ambient", STYLES.ambient.tempo.min],
+    ];
     for (const inst of INSTRUMENT_LIST)
-      for (const style of ["swing", "funk", "baroque", "ambient"] as StyleId[])
+      for (const [style, tempo] of runs)
         for (const solo of [false, true]) {
-          const { glitches } = perform(inst, style, 3, solo, false);
-          if (glitches.length) found.push(`${inst} ${style}${solo ? " solo" : ""}: ${glitches.slice(0, 3).map((g) => `${g.kinds.join("+")} @${g.beat}`).join(", ")}`);
+          const { glitches } = perform(inst, style, 3, solo, false, tempo);
+          if (glitches.length) found.push(`${inst} ${style}${tempo ? ` ${tempo}` : ""}${solo ? " solo" : ""}: ${glitches.length} frames, ${glitches.slice(0, 3).map((g) => `${g.kinds.join("+")} @${g.beat}`).join(", ")}`);
         }
     expect(found).toEqual([]);
-  }, 60_000);
+  }, 120_000);
 });

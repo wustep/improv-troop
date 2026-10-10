@@ -211,6 +211,9 @@ export const piano: Rig = {
     const fresh = s.recent.filter((o) => o.age < 0.03).length;
     const big = s.recent.length ? hit(s.recent[0].age, 0.14) * clamp(fresh / 3, 0, 1.6) : 0;
     f.look.lean = leanW > 0 ? clamp((leanSum / leanW) * 0.06 * (1 + big * 0.6), -6.5, 6.5) : 0;
+    // both hands far up or down the keyboard: slide along the bench toward them
+    const mid = (m.hxL + m.hxR) / 2 - 120;
+    f.look.shift = clamp((mid - Math.sign(mid) * 20) * 0.5, -12, 12) * (Math.abs(mid) > 20 ? 1 : 0);
     f.look.dip = clamp(big * 3.2, 0, 4.5);
     f.look.bliss = s.active.some((n) => n.durSec > 1.2 && n.progress > 0.15);
 

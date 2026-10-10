@@ -38,7 +38,13 @@ function grip(chord: number[], m: Record<string, number>): Partial<Record<Mallet
   const ps = [...new Set(chord)].sort((a, b) => a - b);
   if (ps.length >= 4) return { L0: ps[0], L1: ps[1], R1: ps[ps.length - 2], R0: ps[ps.length - 1] };
   if (ps.length === 3) return { L0: ps[0], L1: ps[1], R1: ps[2], R0: Math.max(m.pR0, ps[2] + 3) };
-  if (ps.length === 2) return { L1: ps[0], R1: ps[1], L0: Math.min(m.pL0, ps[0] - 3), R0: Math.max(m.pR0, ps[1] + 3) };
+  if (ps.length === 2) {
+    // a close pair at either end of the bars is one paw's two mallets: both paws down there
+    // laid the far arm across the body
+    if (ps[1] - ps[0] <= 9 && barX(ps[1]) < 76) return { L0: ps[0], L1: ps[1], R1: Math.max(m.pR1, ps[1] + 3), R0: Math.max(m.pR0, ps[1] + 7) };
+    if (ps[1] - ps[0] <= 9 && barX(ps[0]) > 164) return { R1: ps[0], R0: ps[1], L1: Math.min(m.pL1, ps[0] - 3), L0: Math.min(m.pL0, ps[0] - 7) };
+    return { L1: ps[0], R1: ps[1], L0: Math.min(m.pL0, ps[0] - 3), R0: Math.max(m.pR0, ps[1] + 3) };
+  }
   const p = ps[0];
   let arm: "L" | "R" = Math.abs(p - m.pL1) <= Math.abs(p - m.pR1) ? "L" : "R";
   // don't cross the other paw
@@ -194,7 +200,10 @@ export const vibes: Rig = {
       i++;
     }
     for (; i < POOL; i++) c.bag.op("bf" + i, 0);
-    f.look.lean = clamp(((m.xL + m.xR) / 2 - 120) * 0.05, -5, 5);
+    // the player walks along the bars toward where the mallets are, and leans the rest of the way
+    const mid = (m.xL + m.xR) / 2 - 120;
+    f.look.shift = clamp(mid * 0.6, -26, 26);
+    f.look.lean = clamp(mid * 0.05, -5, 5);
     f.look.bliss = s.active.some((n) => n.durSec > 1.2 && n.progress > 0.2);
   },
 };

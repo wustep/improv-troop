@@ -84,7 +84,8 @@ function bowedUpdate(geo: BowGeo, c: RigCtx, f: Frame) {
   const pos = pitch !== null ? stringFor(pitch, geo.open) : null;
   if (pos) {
     m.str = pos.string;
-    m.semis = pos.semis;
+    // an open string needs no stopping finger: the hand stays in position
+    if (pos.semis > 0) m.semis = pos.semis;
   }
   const str = m.str ?? 1;
   m.strS = (m.strS ?? str) + (str - (m.strS ?? str)) * approach(f.dt, 0.05);
@@ -194,7 +195,7 @@ const VIOLIN: BowGeo = {
   place: (c, f) => {
     const m = c.mem;
     const sway = Math.sin(f.t * 1.4) * (f.s.active.length ? 2 : 0.6);
-    return chain(tr(c.mouth.x + 30, c.mouth.y + 18), rot(-28 + sway + (m.strS ?? 1) * 0.8), scl(1.18));
+    return chain(tr(c.mouth.x + 27, c.mouth.y + 19), rot(-28 + sway + (m.strS ?? 1) * 0.8), scl(1.15));
   },
 };
 
@@ -465,8 +466,9 @@ export const cello: Rig = {
 
 // ─── Upright bass (pizzicato) ────────────────────────────────────────────────
 //
-// A double bass is taller than these animals: endpin on the floor, scroll above
-// head height, standing just in front of the player's left side (viewer-right).
+// A double bass is as tall as these animals: endpin on the floor, scroll level with the top of
+// the head, the nut at eye level where the hand can still reach it, standing just in front of
+// the player's left side (viewer-right) and leaning back toward them.
 // Local coords: body centre at the origin, neck along −y; string 0 = E (viewer-right).
 
 const CB = {
@@ -478,10 +480,10 @@ const CB = {
     return (3.3 - 2.2 * i) + ((5.6 - 3.7 * i) - (3.3 - 2.2 * i)) * t;
   },
 };
-const CB_TILT = 5;
+const CB_TILT = 2;
 const CB_ENDPIN: Pt = { x: 150, y: 251 };
 
-const CB_SCALE = 1.12;
+const CB_SCALE = 0.94;
 
 function cbPlace(f: Frame): Mat {
   const th = CB_TILT + Math.sin(f.t * 1.2) * 0.6;
@@ -543,7 +545,8 @@ export const bass: Rig = {
     if (pitch !== null) {
       const p = stringFor(pitch, OPEN.bass);
       m.str = p.string;
-      m.semis = p.semis;
+      // an open string needs no stopping finger: the hand stays where it is
+      if (p.semis > 0) m.semis = p.semis;
     }
     const str = m.str ?? 1;
     m.strS = (m.strS ?? str) + (str - (m.strS ?? str)) * approach(f.dt, 0.05);
@@ -554,11 +557,13 @@ export const bass: Rig = {
     const pull = age < 0.12 ? Math.sin((age / 0.12) * (Math.PI / 2)) : Math.exp(-(age - 0.12) / 0.12);
     const ready = f.s.nextOnsetIn < 0.15 ? 1 - f.s.nextOnsetIn / 0.15 : 0;
     const flick = Math.max(0, pull * (1 - ready)) * 12;
-    const py = CB.fbEnd - 10;
+    // pizz at the end of the fingerboard, the arm coming down across the belly
+    const py = CB.fbEnd + 3;
     const pluckLocal = { x: CB.sx(m.strS, py) - 4 + flick, y: py + flick * 0.3 };
     f.arms.L = { hand: ap(W, pluckLocal.x, pluckLocal.y), bend: 14, pawRot: 60 };
-    // a shift up or down the neck travels at a hand's speed, however far it goes
-    const wantY = CB.nut + (CB.bridge - CB.nut) * stopFrac(m.semisS);
+    // a shift up or down the neck travels at a hand's speed, however far it goes. The paw sits
+    // behind the neck just below the stopping finger, which reaches up to the note.
+    const wantY = CB.nut + (CB.bridge - CB.nut) * stopFrac(m.semisS) + 7;
     m.stopY = slewTo(m.stopY ?? wantY, wantY, f.dt, 0.02, 900);
     const stopY = m.stopY;
     f.arms.R = { hand: ap(W, CB.sx(m.strS, stopY) + 8, stopY), bend: -30, pawRot: -40 };

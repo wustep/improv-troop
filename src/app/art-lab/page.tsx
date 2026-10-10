@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import type { AnimalId, InstrumentId, MemberFrameState, NoteEvent } from "@/music/types";
+import type { AnimalId, InstrumentId, MemberFrameState, NoteEvent, StyleId } from "@/music/types";
 import { ANIMALS, ANIMAL_LIST, DRUM, INSTRUMENTS, INSTRUMENT_LIST } from "@/music/instruments";
 import { AnimalSprite, type SpriteHandle } from "@/art/AnimalSprite";
 import type { Pt } from "@/art/affine";
@@ -10,6 +10,8 @@ import { AnimalPortrait } from "@/art/AnimalPortrait";
 import { InstrumentIcon } from "@/art/InstrumentIcon";
 import { glitchesOf, type Glitch } from "@/art/glitch";
 import { DoodleDefs } from "@/art/DoodleDefs";
+import { rigTake } from "@/art/rigs/take";
+import { STYLES } from "@/music/styles";
 
 const BPM = 108;
 const BARS = 64;
@@ -184,20 +186,19 @@ export default function ArtLabPage() {
 }
 
 const FPS = 60;
-const SPB = 60 / BPM;
-const FRAME_BEATS = 1 / FPS / SPB;
-const END = BARS * 4;
 /** Frames replayed before a seek, so smoothed motion arrives settled rather than from rest. */
 const PREROLL_SEC = 1.5;
+const STYLE_IDS = Object.keys(STYLES) as StyleId[];
 
-function fmt(beat: number) {
-  const bar = Math.floor(beat / 4) + 1;
-  return `bar ${bar} · beat ${((beat % 4) + 1).toFixed(2)} · frame ${Math.round(beat / FRAME_BEATS)}`;
+function fmt(beat: number, frameBeats: number, perBar: number) {
+  const bar = Math.floor(beat / perBar) + 1;
+  return `bar ${bar} · beat ${((beat % perBar) + 1).toFixed(2)} · frame ${Math.round(beat / frameBeats)}`;
 }
 
 function ArtLab() {
   // ?speed=0.25&beat=12&inst=guitar,cello&paused=1&row=1&feat=3 for deterministic screenshots:
-  // paused holds the playing pose at that beat (add &stopped=1 for the band at rest)
+  // paused holds the playing pose at that beat (add &stopped=1 for the band at rest).
+  // &style=funk&tempo=120&seed=4 plays real takes from the local engine instead of the lab's phrases.
   const q = useSearchParams();
   const row = !!q.get("row");
   const [playing, setPlaying] = useState(() => !q.get("paused"));
@@ -208,13 +209,30 @@ function ArtLab() {
   });
   const [featured, setFeatured] = useState<number>(() => (q.get("feat") !== null ? Number(q.get("feat")) : 3));
   const [speed, setSpeed] = useState(() => Number(q.get("speed")) || 1);
+  const [music, setMusic] = useState<"lab" | StyleId>(() => (STYLE_IDS as string[]).includes(q.get("style") ?? "") ? (q.get("style") as StyleId) : "lab");
+  const [tempo, setTempo] = useState<number | null>(() => Number(q.get("tempo")) || null);
+  const [seed, setSeed] = useState(() => Number(q.get("seed")) || 3);
   const sprites = useRef<(SpriteHandle | null)[]>([]);
   const parts = useMemo(() => insts.map((i, k) => fakePart(i, k + 1)), [insts]);
+  // a style: each musician plays a real take of their instrument (the soloist's take has them solo)
+  const takes = useMemo(
+    () => (music === "lab" ? null : insts.map((inst, i) => rigTake(inst, music, { seed, tempo: tempo ?? undefined, solo: featured === i }))),
+    [music, insts, seed, tempo, featured],
+  );
+  const SPB = takes ? takes[0].spb : 60 / BPM;
+  const FRAME_BEATS = 1 / FPS / SPB;
+  const END = takes ? takes[0].beats : BARS * 4;
+  const perBar = takes ? takes[0].score.frame.meter.beats : 4;
   // the lab's own clock: the sprites see beat × seconds-per-beat as time, so a frame replays exactly
   const startBeat = Number(q.get("beat")) || 0;
   const clock = useRef<{ beat: number; last: number; seekTo: number | null }>({ beat: startBeat, last: 0, seekTo: startBeat });
   const prevHands = useRef<(Record<"L" | "R", Pt> | null)[]>([]);
   const [readout, setReadout] = useState({ beat: startBeat, glitches: [] as Glitch[][] });
+  const fpsRef = useRef<HTMLSpanElement>(null);
+  // new music: stay on the same beat when it still exists, so a pose can be compared across styles
+  useEffect(() => {
+    clock.current.seekTo = Math.min(clock.current.beat, END - FRAME_BEATS);
+  }, [takes, END, FRAME_BEATS]);
 
   /** Draw every sprite at `beat`; `step` says the previous frame was one frame before (for jump checks). */
   const draw = useCallback(
@@ -224,7 +242,8 @@ function ArtLab() {
         const sp = sprites.current[i];
         if (!sp) return;
         const look = featured < 0 || featured === i ? 0 : Math.max(-1, Math.min(1, (featured - i) / 4));
-        const s = stateAt(notes, beat, true, featured === i, look);
+        const tk = takes?.[i];
+        const s = tk ? tk.frames.compute(tk.id, beat, true, SPB) : stateAt(notes, beat, true, featured === i, look);
         sp.update(stopped ? { ...s, playing: false, active: [], nextOnsetIn: Infinity, nextPitch: null, upcoming: [] } : s, { t: 10 + beat * SPB, reset: opts.reset });
         const h = sp.hands();
         glitches[i] = glitchesOf(h, opts.step ? prevHands.current[i] : null, sp.shoulders());
@@ -232,7 +251,7 @@ function ArtLab() {
       });
       return glitches;
     },
-    [parts, featured, stopped],
+    [parts, featured, stopped, takes, SPB],
   );
 
   /** Jump to a beat, replaying the frames just before it so eased motion is where it would be. */
@@ -247,7 +266,7 @@ function ArtLab() {
       clock.current.beat = target;
       setReadout({ beat: target, glitches });
     },
-    [draw],
+    [draw, END, FRAME_BEATS, SPB],
   );
 
   const stepFrames = useCallback(
@@ -259,7 +278,7 @@ function ArtLab() {
       for (let k = 0; k < n; k++) glitches = draw((c.beat = Math.min(END - FRAME_BEATS, c.beat + FRAME_BEATS)), { step: true });
       setReadout({ beat: c.beat, glitches });
     },
-    [draw, seek],
+    [draw, seek, END, FRAME_BEATS],
   );
 
   /** Step forward until some sprite shows a glitch (up to 16 bars), and stop on that frame. */
@@ -273,15 +292,25 @@ function ArtLab() {
       if (glitches.some((g) => g?.length)) break;
     }
     setReadout({ beat: c.beat, glitches });
-  }, [draw]);
+  }, [draw, END, FRAME_BEATS]);
 
   useEffect(() => {
     let raf = 0;
     let shown = -1;
+    let frames = 0;
+    let since = 0;
     const loop = (now: number) => {
       const c = clock.current;
       const dt = c.last ? Math.min(0.1, (now - c.last) / 1000) : 0;
       c.last = now;
+      // the frame rate the page actually draws at, twice a second
+      frames++;
+      if (!since) since = now;
+      else if (now - since > 500) {
+        if (fpsRef.current) fpsRef.current.textContent = `${Math.round((frames * 1000) / (now - since))} fps`;
+        frames = 0;
+        since = now;
+      }
       if (c.seekTo !== null) {
         seek(c.seekTo);
         c.seekTo = null;
@@ -302,11 +331,11 @@ function ArtLab() {
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [draw, seek, playing, speed]);
+  }, [draw, seek, playing, speed, END, SPB]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement).closest("select, input[type=text]")) return;
+      if ((e.target as HTMLElement).closest("select, input:not([type=checkbox]):not([type=radio])")) return;
       if (e.key === "ArrowRight" || e.key === ".") stepFrames(e.shiftKey ? Math.round(1 / FRAME_BEATS) : 1);
       else if (e.key === "ArrowLeft" || e.key === ",") stepFrames(e.shiftKey ? -Math.round(1 / FRAME_BEATS) : -1);
       else if (e.key === " ") setPlaying((p) => !p);
@@ -341,6 +370,37 @@ function ArtLab() {
           </select>
         </label>
         <label className="text-l">
+          music{" "}
+          <select value={music} onChange={(e) => setMusic(e.target.value as "lab" | StyleId)} data-testid="music">
+            <option value="lab">lab phrases, {BPM} bpm</option>
+            {STYLE_IDS.map((st) => (
+              <option key={st} value={st}>
+                {STYLES[st].name}
+              </option>
+            ))}
+          </select>
+        </label>
+        {music !== "lab" && (
+          <>
+            <label className="text-l">
+              tempo{" "}
+              <select value={tempo ?? ""} onChange={(e) => setTempo(Number(e.target.value) || null)}>
+                <option value="">default ({STYLES[music].tempo.default})</option>
+                {[STYLES[music].tempo.min, STYLES[music].tempo.max].map((b) => (
+                  <option key={b} value={b}>
+                    {b} bpm
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-l">
+              seed{" "}
+              <input type="number" min={1} className="w-14" value={seed} onChange={(e) => setSeed(Math.max(1, Number(e.target.value) || 1))} />
+            </label>
+          </>
+        )}
+        <span ref={fpsRef} className="text-m tabular-nums text-ink-soft" data-testid="fps" />
+        <label className="text-l">
           <input type="checkbox" checked={stopped} onChange={(e) => setStopped(e.target.checked)} /> band stopped
         </label>
         <div className="flex gap-2">
@@ -368,7 +428,7 @@ function ArtLab() {
         <button className={btn} onClick={() => stepFrames(Math.round(1 / FRAME_BEATS))} title="Forward a beat (shift + →)">
           beat ⏭
         </button>
-        <button className={btn} onClick={nextGlitch} title="Step until a pose looks wrong: crossed arms, or a paw jumping (g)" data-testid="next-glitch">
+        <button className={btn} onClick={nextGlitch} title="Step until a pose looks wrong: crossed arms, an arm out of reach or across the chest, or a paw jumping (g)" data-testid="next-glitch">
           next glitch
         </button>
         <button className={btn} onClick={() => sprites.current.forEach((sp) => sp?.cheer())} title="What the band does when a take plays to its end" data-testid="cheer">
@@ -388,7 +448,7 @@ function ArtLab() {
           aria-label="Scrub"
         />
         <span className="text-m tabular-nums" data-testid="readout">
-          {fmt(readout.beat)}
+          {fmt(readout.beat, FRAME_BEATS, perBar)}
         </span>
       </div>
       <div className={row ? "flex items-end justify-center gap-1" : "grid grid-cols-2 gap-6 md:grid-cols-3"}>
