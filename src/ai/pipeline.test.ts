@@ -145,6 +145,23 @@ describe("accompanying grooves", () => {
   });
 });
 
+describe("the opening phrase", () => {
+  it("the band starts writing at the count-off instead of waiting to hear the head", async () => {
+    installFakeFetch(40);
+    const settings = { ...defaultSettings(band), mode: "improviser" as const, soloists: ["bear"] };
+    const score = await startImproviser(settings, band, hooks("t-opening")).promise;
+    expect(score.frame.sections[0].kind).toMatch(/intro|head/);
+    const calls = useDebug.getState().calls.filter((c) => c.runId === "t-opening");
+    const countOff = calls.find((c) => c.label === "count-off")!;
+    const firstRound = calls.filter((c) => /^bars /.test(c.label) && c.startedAt < countOff.startedAt + countOff.ms! + 30);
+    const leader = settings.leaderId ?? score.frame.leaderId;
+    // the leader's head and the band's answer go out together, right after the count-off
+    expect(firstRound.some((c) => c.agent === leader)).toBe(true);
+    expect(firstRound.some((c) => c.agent !== leader)).toBe(true);
+    expect(score.plan.length).toBe(score.frame.bars);
+  });
+});
+
 describe("when the count-off call fails", () => {
   const failCountOff = (status: number) =>
     vi.stubGlobal(

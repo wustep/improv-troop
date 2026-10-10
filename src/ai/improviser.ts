@@ -468,9 +468,10 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
       dbg.timing(runId, `phrase ${pi + 1} featured`, performance.now() - tPhrase);
     };
 
-    const accompanimentPhase = async (pi: number) => {
+    // `featured`: the featured phase this band doesn't wait to hear (the opening head, see below).
+    const accompanimentPhase = async (pi: number, featured?: Promise<void>) => {
       if (signal.aborted) throw new DOMException("Aborted", "AbortError");
-      if (stage[pi] !== "featured") return; // autopilot took it (or nobody was featured and it was realized already)
+      if (stage[pi] !== (featured ? "none" : "featured")) return; // autopilot took it (or nobody was featured and it was realized already)
       const bars = phrases[pi];
       const last = frame.bars - 1;
       const prevBars = pi > 0 ? phrases[pi - 1] : [];
@@ -480,7 +481,27 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
         .map((m) => m.id);
       // 2) everyone else listens to the featured line and answers
       const listenIds = featuredIds.length ? featuredIds : [leader.id];
-      const listening = playedBlock(members, parts, plan, frame, bars[0], bars.at(-1)!, listenIds);
+      const listening = featured
+        ? playedBlock(
+            members,
+            realize({
+              frame,
+              members,
+              plan,
+              motif,
+              seed: settings.seed,
+              bars,
+              memories: new Map([...memories].map(([k, v]) => [k, structuredClone(v)])),
+              priorFeatured: new Map(featuredByBar),
+              filter: (mid, bar) => listenIds.includes(mid) && isFeaturedRole(plan[bar]?.roles[mid]),
+            }).parts,
+            plan,
+            frame,
+            bars[0],
+            bars.at(-1)!,
+            listenIds,
+          ) + "\n  (the head as the motif lays it out; the leader is writing the real thing now)"
+        : playedBlock(members, parts, plan, frame, bars[0], bars.at(-1)!, listenIds);
       const accIds = members
         .filter((m) => bars.some((b) => b !== last && !isFeaturedRole(plan[b].roles[m.id]) && plan[b].directives?.[m.id] !== "@end"))
         .map((m) => m.id);
@@ -557,8 +578,10 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
           }
         }),
       );
+      // the featured parts are realized first, and the bandmates' go-to textures are in
+      if (featured) await Promise.all([featured, repliesDone]);
       // re-read: autopilot may have taken this phrase while the band was thinking
-      if ((stage[pi] as Stage) === "done") return;
+      if ((stage[pi] as Stage) !== "featured") return;
       plan = enforceSlots(plan, frame, members, []);
       realizeStage(pi, "rest");
       stage[pi] = "done";
@@ -568,6 +591,12 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
     };
 
     let nextFeatured = featuredPhase(0);
+    // The opening phrase is an intro or the head: the leader states the motif they just counted
+    // off, so the band needn't wait to hear it. They start writing now, alongside the leader and
+    // the replies, and the first sound comes one model round sooner.
+    const opening = phrases[0].every((b) => ["intro", "head"].includes(sectionAt(frame, b).kind));
+    const firstBand = opening ? accompanimentPhase(0, nextFeatured) : null;
+    firstBand?.catch(() => {}); // awaited in the loop; a cancel before then isn't an unhandled rejection
     await repliesDone;
     plan = enforceSlots(plan, frame, members, []);
     dbg.timing(runId, "count-off", performance.now() - tStart);
@@ -575,7 +604,7 @@ export function startImproviser(settings: TroopSettings, members: Member[], hook
     hooks.onScore(snapshot(false), false);
     for (let pi = 0; pi < phrases.length; pi++) {
       await nextFeatured;
-      const band = accompanimentPhase(pi);
+      const band = pi === 0 && firstBand ? firstBand : accompanimentPhase(pi);
       nextFeatured = pi + 1 < phrases.length ? featuredPhase(pi + 1) : Promise.resolve();
       await band;
     }
