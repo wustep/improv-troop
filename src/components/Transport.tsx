@@ -135,6 +135,7 @@ export function Transport() {
           tone="primary"
           className="px-l py-xs font-brand text-xl font-heavy text-on-accent"
           onClick={() => void generate()}
+          data-after-key
           title={hasKey ? "Ask the band (calls the model)" : "Add an AI Gateway or Anthropic key in “Brains & sounds” to let the animals think — until then they play from their sketchbook."}
         >
           {goLabel}

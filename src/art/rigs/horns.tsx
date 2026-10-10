@@ -354,7 +354,8 @@ export const flute: Rig = {
     setKeys(c, fg, c.ink);
     const tw = fg ? fingerTwitch(c, f, fg.holes.join() + fg.octave) : 0;
     updatePuffs(c, f, { x: -100, y: 0 }, { x: -1, y: -0.3 }, lw);
-    f.arms.R = { hand: toWorld(-38, 5 + tw * 0.8), bend: -12, pawRot: tw * 6 };
+    // the upper hand sits by the embouchure keys: farther along, its arm lay across the chest
+    f.arms.R = { hand: toWorld(-32, 5 + tw * 0.8), bend: -12, pawRot: tw * 6 };
     f.arms.L = { hand: toWorld(-70, 5 + tw * 0.8), bend: 16, pawRot: -tw * 6 };
     f.look.lean = -2 + sway;
   },

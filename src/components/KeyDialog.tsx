@@ -36,7 +36,11 @@ export function KeyDialog() {
       d.querySelector("input")?.focus();
     } else if (!open && d.open) {
       d.close();
-      opener.current?.focus?.();
+      // back where they were; if that's gone (the "add an AI key" link goes once there's a key)
+      // or was nowhere (a first visit), on to the band's main button
+      const back = opener.current;
+      if (back && back.isConnected && back !== document.body) back.focus();
+      else document.querySelector<HTMLElement>("[data-after-key]")?.focus();
     }
   }, [open]);
 
@@ -55,6 +59,19 @@ export function KeyDialog() {
     >
       {open && <KeyForm />}
     </dialog>
+  );
+}
+
+/** Key prefixes (sk-ant-…, vck_…) kept on one line: "sk-ant-" broke at its hyphen on a phone. */
+function keepPrefixes(text: string) {
+  return text.split(/((?:sk-ant-|vck_)[\w…-]*)/).map((part, i) =>
+    i % 2 ? (
+      <span key={i} className="whitespace-nowrap">
+        {part}
+      </span>
+    ) : (
+      part
+    ),
   );
 }
 
@@ -174,7 +191,7 @@ function KeyForm() {
               <span aria-hidden className="text-(--error)">
                 ✗{" "}
               </span>
-              {problem}
+              {keepPrefixes(problem)}
             </span>
           ) : checking && guess.provider ? (
             <span className="text-ink-soft">Checking with {KEY_PROVIDER_LABEL[guess.provider]}…</span>
@@ -187,7 +204,7 @@ function KeyForm() {
             </span>
           ) : (
             <span className="text-ink-soft">
-              Anthropic keys start with sk-ant-, AI Gateway keys with vck_. Get one from{" "}
+              Anthropic keys start with {keepPrefixes("sk-ant-")}, AI Gateway keys with {keepPrefixes("vck_")}. Get one from{" "}
               <a className="text-action" href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer">
                 Anthropic
               </a>{" "}
