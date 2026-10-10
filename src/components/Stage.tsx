@@ -6,7 +6,6 @@ import { troopAudio } from "@/audio/engine";
 import { ANIMALS, INSTRUMENTS } from "@/music/instruments";
 import { useDebug } from "@/state/debug";
 import { canThink, useTroop } from "@/state/store";
-import { openBrains } from "./ControlPanel";
 import { FormMap } from "./FormMap";
 import { Bunting } from "./stage/Bunting";
 import { FrameComputer } from "./stage/frames";
@@ -68,7 +67,7 @@ function IntroNote({ onClose }: { onClose: () => void }) {
           </li>
         ) : (
           <li>
-            <button type="button" className="text-action" onClick={openBrains}>
+            <button type="button" className="text-action" onClick={() => useTroop.getState().openKeyDialog()} aria-haspopup="dialog">
               Add a gateway or Anthropic key
             </button>
             , then <b>Let them jam!</b> to make them think it through

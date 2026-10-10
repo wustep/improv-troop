@@ -50,6 +50,62 @@ export const canThinkWith = (a: KeyAccess) => a.gateway || a.anthropic;
 /** Some key can reach this model. */
 export const canRun = (model: string, a: KeyAccess) => a.gateway || (a.anthropic && isClaude(model));
 
+export type KeyProvider = keyof KeySet;
+
+export const KEY_PROVIDER_LABEL: Record<KeyProvider, string> = { gateway: "Vercel AI Gateway", anthropic: "Anthropic" };
+
+const KEY_PREFIX: Record<KeyProvider, string> = { gateway: "vck_", anthropic: "sk-ant-" };
+
+/** Shorter than this after its prefix, a key was cut off on the way over (real ones are far longer). */
+const MIN_KEY_BODY = 20;
+
+/**
+ * What someone pasted, minus what came along with it: surrounding quotes, a `Bearer ` prefix, or a
+ * whole line from an env file (`ANTHROPIC_API_KEY="sk-ant-…"`, with or without `export`).
+ */
+export function cleanKey(raw: string) {
+  let k = raw.trim();
+  k = k.replace(/^export\s+/, "").replace(/^[A-Z][A-Z0-9_]*\s*[=:]\s*/, "");
+  k = k.replace(/^bearer\s+/i, "");
+  k = k.replace(/^(["'`])(.*)\1$/, "$2").trim();
+  return k;
+}
+
+export interface KeyGuess {
+  /** The cleaned-up key, as it would be saved. */
+  key: string;
+  /** Whose key it looks like, from its prefix (null when nobody's yet). */
+  provider: KeyProvider | null;
+  /** Well-formed enough to save. */
+  ok: boolean;
+  /** Why it can't be saved yet; null while the field is empty or still being typed. */
+  problem: string | null;
+}
+
+/**
+ * One field for either key: the prefix says whose it is. Anthropic API keys start `sk-ant-`
+ * (`sk-ant-api03-…`); Vercel AI Gateway keys start `vck_`. Both are then URL-safe base64.
+ * This only checks the shape; whether the provider takes it is the server's check (/api/key).
+ */
+export function detectKey(raw: string): KeyGuess {
+  const key = cleanKey(raw);
+  const none = (problem: string | null, provider: KeyProvider | null = null): KeyGuess => ({ key, provider, ok: false, problem });
+  if (!key) return none(null);
+  const provider = (Object.keys(KEY_PREFIX) as KeyProvider[]).find((p) => key.startsWith(KEY_PREFIX[p])) ?? null;
+  if (!provider) {
+    // still typing one of the prefixes: nothing to complain about yet
+    if (Object.values(KEY_PREFIX).some((p) => p.startsWith(key))) return none(null);
+    if (key.startsWith("sk-")) return none("That looks like an OpenAI key. Jamming takes an Anthropic key (sk-ant-…) or a Vercel AI Gateway key (vck_…).");
+    return none("Not a key Jamming knows. Anthropic keys start with sk-ant-, Vercel AI Gateway keys with vck_.");
+  }
+  const body = key.slice(KEY_PREFIX[provider].length);
+  if (/\s/.test(key)) return none("There’s a space in the middle. Paste just the key, in one piece.", provider);
+  if (!/^[A-Za-z0-9_-]*$/.test(body)) return none("That has characters a key never has. Copy it again from the provider.", provider);
+  if (provider === "anthropic" && body.startsWith("admin")) return none("That’s an Anthropic admin key, which can’t call models. Use a regular API key (sk-ant-api…).", provider);
+  if (body.length < MIN_KEY_BODY) return none(`That looks cut short. Copy the whole ${KEY_PROVIDER_LABEL[provider]} key.`, provider);
+  return { key, provider, ok: true, problem: null };
+}
+
 /** A gentle warning when a pasted key looks like it belongs in the other field. */
 export function keyMismatch(field: keyof KeySet, key: string): string | null {
   const k = key.trim();

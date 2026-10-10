@@ -27,6 +27,7 @@ export function Transport() {
   const bestOf = useTroop((s) => s.settings.bestOf);
   const set = useTroop((s) => s.setSettings);
   const hasKey = useTroop(canThink);
+  const heuristic = useTroop((s) => s.heuristic);
   const current = useTroop((s) => s.current);
   const isSketch = useTroop((s) => s.isSketch);
   const audioError = useTroop((s) => s.audioError);
@@ -141,8 +142,8 @@ export function Transport() {
       )}
 
       {!hasKey && !gen.running && (
-        <button type="button" className="text-action text-s" onClick={openBrains}>
-          add an AI key
+        <button type="button" className="text-action text-s" onClick={() => useTroop.getState().openKeyDialog()} aria-haspopup="dialog">
+          {heuristic ? "use an AI key" : "add an AI key"}
         </button>
       )}
 

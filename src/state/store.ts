@@ -4,7 +4,7 @@ import { create } from "zustand";
 import { runComposer, type PipelineHooks } from "@/ai/composer";
 import { insertByBar } from "@/ai/talk";
 import { startImproviser, type ImprovController } from "@/ai/improviser";
-import { canRun, canThinkWith, type KeyAccess } from "@/ai/keys";
+import { canRun, canThinkWith, type KeyAccess, type KeyProvider } from "@/ai/keys";
 import { modelInfo } from "@/ai/models";
 import { notesHintFromScore, troopAudio } from "@/audio/engine";
 import { DEFAULT_SOUNDS, readSounds, type Sounds } from "@/audio/packs";
@@ -38,6 +38,10 @@ interface TroopState {
   serverKey: boolean;
   /** The server has its own Anthropic key (ANTHROPIC_API_KEY), so Claude models work without one here. */
   serverAnthropicKey: boolean;
+  /** The visitor chose the heuristic band: no model calls, even with a key saved or lent (saved in this browser). */
+  heuristic: boolean;
+  /** The welcome dialog that asks for a key is open. */
+  keyDialog: boolean;
   /** Which piano and drum kit the band plays (saved in this browser). */
   sounds: Sounds;
   current: Score | null;
@@ -73,6 +77,15 @@ interface TroopState {
   setMembers(members: Member[]): void;
   setApiKey(key: string): void;
   setAnthropicKey(key: string): void;
+  openKeyDialog(): void;
+  /** Close the key dialog without changing anything (Esc, ×). It won't come back by itself. */
+  closeKeyDialog(): void;
+  /** From the key dialog: save a key for its provider and let the band think with it. */
+  saveKey(provider: KeyProvider, key: string): void;
+  /** From the key dialog: the heuristic band, no model calls. */
+  chooseHeuristic(): void;
+  /** The heuristic band on or off, keeping whatever keys are saved. */
+  setHeuristic(on: boolean): void;
   setSounds(patch: Partial<Sounds>): void;
   generate(): Promise<void>;
   cancel(): void;
@@ -85,8 +98,38 @@ interface TroopState {
 
 const LS = "improv-troop:v1";
 const LS_INTRO = "jamming:intro-seen";
+/** Set once the key dialog has been answered (a key, the heuristic band, or just closed). */
+const LS_KEY_ASKED = "jamming:key-asked";
 
-function load(): Partial<Pick<TroopState, "members" | "settings" | "apiKey" | "anthropicKey" | "sounds">> & { pianoPack?: unknown } {
+type Saved = Pick<TroopState, "members" | "settings" | "apiKey" | "anthropicKey" | "sounds" | "heuristic">;
+
+/**
+ * Open the key dialog on arrival? Only for a first visit with nothing to go on: not once it's been
+ * answered, not for someone who's been here before (saved settings, the intro dismissed) or already
+ * has a key in this browser, not when the server lends a key (the band can think already), and not
+ * over a shared take someone came to hear.
+ */
+export function shouldAskForKey(v: { asked: boolean; returning: boolean; browserKey: boolean; serverKey: boolean; sharedArrival: boolean }) {
+  return !v.asked && !v.returning && !v.browserKey && !v.serverKey && !v.sharedArrival;
+}
+
+function readFlag(key: string) {
+  try {
+    return localStorage.getItem(key) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeFlag(key: string) {
+  try {
+    localStorage.setItem(key, "1");
+  } catch {
+    /* ignore */
+  }
+}
+
+function load(): Partial<Saved> & { pianoPack?: unknown } {
   try {
     const raw = localStorage.getItem(LS);
     return raw ? JSON.parse(raw) : {};
@@ -95,9 +138,12 @@ function load(): Partial<Pick<TroopState, "members" | "settings" | "apiKey" | "a
   }
 }
 
-function save(s: Pick<TroopState, "members" | "settings" | "apiKey" | "anthropicKey" | "sounds">) {
+function save(s: Saved) {
   try {
-    localStorage.setItem(LS, JSON.stringify({ members: s.members, settings: s.settings, apiKey: s.apiKey, anthropicKey: s.anthropicKey || undefined, sounds: s.sounds }));
+    localStorage.setItem(
+      LS,
+      JSON.stringify({ members: s.members, settings: s.settings, apiKey: s.apiKey, anthropicKey: s.anthropicKey || undefined, sounds: s.sounds, heuristic: s.heuristic || undefined }),
+    );
   } catch {
     /* private mode etc. */
   }
@@ -204,6 +250,8 @@ export const useTroop = create<TroopState>((set, get) => {
     anthropicKey: "",
     serverKey: false,
     serverAnthropicKey: false,
+    heuristic: false,
+    keyDialog: false,
     sounds: DEFAULT_SOUNDS,
     current: null,
     isSketch: true,
@@ -221,6 +269,12 @@ export const useTroop = create<TroopState>((set, get) => {
 
     hydrate() {
       if (get().hydrated) return;
+      let returning = false;
+      try {
+        returning = localStorage.getItem(LS) !== null;
+      } catch {
+        /* ignore */
+      }
       const saved = load();
       const members = saved.members?.length ? saved.members.filter((m) => ANIMALS[m.animal] && INSTRUMENTS[m.instrument]) : get().members;
       const settings = reconcile({ ...defaultSettings(members), ...(saved.settings ?? {}) }, members);
@@ -230,11 +284,31 @@ export const useTroop = create<TroopState>((set, get) => {
       } catch {
         /* ignore */
       }
-      set({ hydrated: true, members, settings, apiKey: saved.apiKey ?? "", anthropicKey: saved.anthropicKey ?? "", sounds: readSounds(saved.sounds, saved.pianoPack), takes: loadTakes(), seenIntro });
+      set({
+        hydrated: true,
+        members,
+        settings,
+        apiKey: saved.apiKey ?? "",
+        anthropicKey: saved.anthropicKey ?? "",
+        heuristic: !!saved.heuristic,
+        sounds: readSounds(saved.sounds, saved.pianoPack),
+        takes: loadTakes(),
+        seenIntro,
+      });
+      // the key dialog waits to hear whether the server lends a key (if the server can't say, ask)
+      let arrivedShared = false;
+      const offerKey = (serverKey: boolean) => {
+        const s = get();
+        if (shouldAskForKey({ asked: readFlag(LS_KEY_ASKED), returning: returning || seenIntro, browserKey: !!(s.apiKey || s.anthropicKey), serverKey, sharedArrival: arrivedShared }))
+          set({ keyDialog: true });
+      };
       void fetch("/api/llm")
         .then((r) => (r.ok ? r.json() : null))
-        .then((d: { serverKey?: boolean; serverAnthropicKey?: boolean } | null) => set({ serverKey: !!d?.serverKey, serverAnthropicKey: !!d?.serverAnthropicKey }))
-        .catch(() => {});
+        .then((d: { serverKey?: boolean; serverAnthropicKey?: boolean } | null) => {
+          set({ serverKey: !!d?.serverKey, serverAnthropicKey: !!d?.serverAnthropicKey });
+          offerKey(!!d?.serverKey || !!d?.serverAnthropicKey);
+        })
+        .catch(() => offerKey(false));
       endedUnsub?.();
       endedUnsub = troopAudio.onEnded(() => {
         stopLiveWatch();
@@ -253,6 +327,7 @@ export const useTroop = create<TroopState>((set, get) => {
         void troopAudio.prepare(top.score.members, { sounds: get().sounds, notesHint: notesHintFromScore(top.score) });
       }
       openSharedLink();
+      arrivedShared = !!get().sharedArrival;
       // a link pasted into a tab that's already open only changes the hash
       window.addEventListener("hashchange", openSharedLink);
     },
@@ -316,16 +391,46 @@ export const useTroop = create<TroopState>((set, get) => {
     },
 
     setApiKey(apiKey) {
-      // a new key answers the error the old one caused
-      set((s) => ({ apiKey: apiKey.trim(), gen: s.gen.error && apiKey.trim() !== s.apiKey ? { ...s.gen, error: null } : s.gen }));
+      // a new key answers the error the old one caused, and means they want the band to think with it
+      set((s) => ({
+        apiKey: apiKey.trim(),
+        heuristic: apiKey.trim() ? false : s.heuristic,
+        gen: s.gen.error && apiKey.trim() !== s.apiKey ? { ...s.gen, error: null } : s.gen,
+      }));
       persist();
     },
 
     setAnthropicKey(anthropicKey) {
       set((s) => ({
         anthropicKey: anthropicKey.trim(),
+        heuristic: anthropicKey.trim() ? false : s.heuristic,
         gen: s.gen.error && anthropicKey.trim() !== s.anthropicKey ? { ...s.gen, error: null } : s.gen,
       }));
+      persist();
+    },
+
+    openKeyDialog() {
+      set({ keyDialog: true });
+    },
+
+    closeKeyDialog() {
+      writeFlag(LS_KEY_ASKED);
+      set({ keyDialog: false });
+    },
+
+    saveKey(provider, key) {
+      if (provider === "gateway") get().setApiKey(key);
+      else get().setAnthropicKey(key);
+      get().closeKeyDialog();
+    },
+
+    chooseHeuristic() {
+      get().setHeuristic(true);
+      get().closeKeyDialog();
+    },
+
+    setHeuristic(heuristic) {
+      set({ heuristic });
       persist();
     },
 
@@ -551,10 +656,11 @@ export const useTroop = create<TroopState>((set, get) => {
   };
 });
 
-type Keys = Pick<TroopState, "apiKey" | "anthropicKey" | "serverKey" | "serverAnthropicKey">;
+type Keys = Pick<TroopState, "apiKey" | "anthropicKey" | "serverKey" | "serverAnthropicKey" | "heuristic">;
 
-/** Which providers the band can reach, from keys in this browser or ones the server lends. */
-export const keyAccess = (s: Keys): KeyAccess => ({ gateway: !!s.apiKey || s.serverKey, anthropic: !!s.anthropicKey || s.serverAnthropicKey });
+/** Which providers the band can reach, from keys in this browser or ones the server lends (none for the heuristic band). */
+export const keyAccess = (s: Keys): KeyAccess =>
+  s.heuristic ? { gateway: false, anthropic: false } : { gateway: !!s.apiKey || s.serverKey, anthropic: !!s.anthropicKey || s.serverAnthropicKey };
 
 /** The band can call models: a key in this browser, or one the server lends. */
 export const canThink = (s: Keys) => canThinkWith(keyAccess(s));

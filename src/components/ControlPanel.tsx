@@ -249,7 +249,8 @@ export function ControlPanel() {
   const anthropicKey = useTroop((x) => x.anthropicKey);
   const serverKey = useTroop((x) => x.serverKey);
   const serverAnthropicKey = useTroop((x) => x.serverAnthropicKey);
-  const access = keyAccess({ apiKey, anthropicKey, serverKey, serverAnthropicKey });
+  const heuristic = useTroop((x) => x.heuristic);
+  const access = keyAccess({ apiKey, anthropicKey, serverKey, serverAnthropicKey, heuristic });
   const thinks = access.gateway || access.anthropic;
   const sounds = useTroop((x) => x.sounds);
   const set = useTroop((x) => x.setSettings);
@@ -259,6 +260,8 @@ export function ControlPanel() {
   const setApiKey = useTroop((x) => x.setApiKey);
   const setAnthropicKey = useTroop((x) => x.setAnthropicKey);
   const setSounds = useTroop((x) => x.setSounds);
+  const openKeyDialog = useTroop((x) => x.openKeyDialog);
+  const setHeuristic = useTroop((x) => x.setHeuristic);
   const std = getStandard(s.standard);
   const lengths = lengthOptions(s.standard);
   const free = ANIMAL_LIST.filter((a) => !members.some((m) => m.animal === a));
@@ -450,13 +453,42 @@ export function ControlPanel() {
         </summary>
         <div className="mt-xs space-y-s">
           <div>
+            <Label>Brain</Label>
+            <div className="flex flex-wrap items-baseline justify-between gap-x-s gap-y-xxs">
+              <p className="text-m">
+                {heuristic
+                  ? "The heuristic band: no model calls."
+                  : apiKey
+                    ? "Your Vercel AI Gateway key."
+                    : anthropicKey
+                      ? "Your Anthropic key (Claude models)."
+                      : serverKey || serverAnthropicKey
+                        ? "A key this server lends."
+                        : "The heuristic band, until you add a key."}
+              </p>
+              <button type="button" className="text-action text-s" onClick={openKeyDialog} aria-haspopup="dialog">
+                {apiKey || anthropicKey ? "Change key" : "Add a key"}
+              </button>
+            </div>
+            {heuristic && (apiKey || anthropicKey || serverKey || serverAnthropicKey) && (
+              <p className="mt-xxs text-xs text-ink-soft">
+                {apiKey || anthropicKey ? "Your key is still saved here." : "This server lends a key."}{" "}
+                <button type="button" className="text-action" onClick={() => setHeuristic(false)}>
+                  Let them think with it
+                </button>
+              </p>
+            )}
+          </div>
+          <div>
             <Label hint="stays in this browser">AI Gateway key</Label>
             <KeyField id="gateway-key" label="Vercel AI Gateway key" placeholder="vck_…" value={apiKey} onChange={setApiKey} mismatch={keyMismatch("gateway", apiKey)} />
-            {apiKey ? (
+            {apiKey && !heuristic ? (
               <p className="mt-xxs text-xs text-ink-soft">
                 Saved in this browser. The big button now says <b>{s.mode === "composer" ? "Compose!" : "Let them jam!"}</b>, and models are only called when you press it.
               </p>
-            ) : serverKey ? (
+            ) : apiKey ? (
+              <p className="mt-xxs text-xs text-ink-soft">Saved in this browser.</p>
+            ) : serverKey && !heuristic ? (
               <p className="mt-xxs text-xs text-ink-soft">
                 This server lends the band its own key, so they can think already. Add yours to spend your own credits.
               </p>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { anthropicModelId, canRun, canThinkWith, keyMismatch, pickRoute, runErrorText } from "./keys";
+import { anthropicModelId, canRun, canThinkWith, cleanKey, detectKey, keyMismatch, pickRoute, runErrorText } from "./keys";
 import { MODELS } from "./models";
 
 const CLAUDE = "anthropic/claude-sonnet-5.5";
@@ -69,5 +69,42 @@ describe("run errors", () => {
   it("says the band lost the thread for anything else", () => {
     expect(runErrorText("Rate limited by Anthropic — try again in a moment.")).toBe("The band lost the thread: Rate limited by Anthropic — try again in a moment.");
     expect(runErrorText("monkeys on the keyboard")).toMatch(/^The band lost the thread/);
+  });
+});
+
+// Obviously fake keys, shaped like the real thing.
+const FAKE_ANTHROPIC = "sk-ant-api03-FAKE-test-key-not-real-0000000000000000";
+const FAKE_GATEWAY = "vck_FAKE_test_key_not_real_0000000000000000";
+
+describe("one field for either key", () => {
+  it("tells an Anthropic key from a Vercel AI Gateway key by its prefix", () => {
+    expect(detectKey(FAKE_ANTHROPIC)).toEqual({ key: FAKE_ANTHROPIC, provider: "anthropic", ok: true, problem: null });
+    expect(detectKey(FAKE_GATEWAY)).toEqual({ key: FAKE_GATEWAY, provider: "gateway", ok: true, problem: null });
+  });
+
+  it("cleans up what comes along with a pasted key", () => {
+    expect(cleanKey(`  ${FAKE_ANTHROPIC}\n`)).toBe(FAKE_ANTHROPIC);
+    expect(cleanKey(`"${FAKE_GATEWAY}"`)).toBe(FAKE_GATEWAY);
+    expect(cleanKey(`ANTHROPIC_API_KEY=${FAKE_ANTHROPIC}`)).toBe(FAKE_ANTHROPIC);
+    expect(cleanKey(`export AI_GATEWAY_API_KEY='${FAKE_GATEWAY}'`)).toBe(FAKE_GATEWAY);
+    expect(cleanKey(`Bearer ${FAKE_GATEWAY}`)).toBe(FAKE_GATEWAY);
+    expect(detectKey(`AI_GATEWAY_API_KEY="${FAKE_GATEWAY}"`)).toMatchObject({ key: FAKE_GATEWAY, provider: "gateway", ok: true });
+  });
+
+  it("stays quiet while the field is empty or a prefix is still being typed", () => {
+    for (const partial of ["", "  ", "s", "sk-", "sk-an", "v", "vck"]) expect(detectKey(partial)).toMatchObject({ provider: null, ok: false, problem: null });
+  });
+
+  it("names the provider as soon as the prefix is there, even before the key is whole", () => {
+    expect(detectKey("sk-ant-api03-abc")).toMatchObject({ provider: "anthropic", ok: false, problem: expect.stringMatching(/cut short/) });
+    expect(detectKey("vck_abc")).toMatchObject({ provider: "gateway", ok: false, problem: expect.stringMatching(/cut short/) });
+  });
+
+  it("explains keys it can't use", () => {
+    expect(detectKey("sk-proj-FAKEFAKEFAKEFAKEFAKEFAKE").problem).toMatch(/OpenAI/);
+    expect(detectKey("hello there").problem).toMatch(/sk-ant-.*vck_/);
+    expect(detectKey("sk-ant-admin01-FAKE-test-key-not-real-00000000")).toMatchObject({ provider: "anthropic", ok: false, problem: expect.stringMatching(/admin key/) });
+    expect(detectKey("sk-ant-api03-FAKE test key not real 0000000000")).toMatchObject({ provider: "anthropic", ok: false, problem: expect.stringMatching(/space/) });
+    expect(detectKey("vck_FAKE+test/key=not.real.0000000000000")).toMatchObject({ provider: "gateway", ok: false, problem: expect.stringMatching(/characters/) });
   });
 });

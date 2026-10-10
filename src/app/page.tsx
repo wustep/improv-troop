@@ -6,6 +6,7 @@ import { troopAudio } from "@/audio/engine";
 import { BandTalk } from "@/components/BandTalk";
 import { ControlPanel } from "@/components/ControlPanel";
 import { DebugPanel } from "@/components/DebugPanel";
+import { KeyDialog } from "@/components/KeyDialog";
 import { Stage } from "@/components/Stage";
 import { Takes, Transport } from "@/components/Transport";
 import { RoughBox, Squiggle } from "@/components/ui/rough";
@@ -45,6 +46,7 @@ export default function Home() {
   return (
     <div className="mx-auto w-full max-w-[1400px] px-m pb-xxl pt-m sm:px-l">
       <DoodleDefs />
+      <KeyDialog />
       <header className="mb-s flex flex-wrap items-end justify-between gap-xs">
         <div>
           <h1 className="font-brand text-xxl font-heavy">Jamming</h1>

@@ -500,10 +500,44 @@ body {
   outline-offset: 2px;
 }
 
+/* the welcome dialog that asks for a key (KeyDialog.tsx): a sheet of paper over a dimmed page */
+.key-dialog {
+  width: min(34rem, calc(100vw - 2 * var(--space-m)));
+  max-width: none;
+  max-height: calc(100dvh - 2 * var(--space-m));
+  margin: auto;
+  padding: var(--space-xxs);
+  border: 0;
+  background: transparent;
+  color: var(--cte-text);
+  overflow: auto;
+}
+.key-dialog[open] {
+  animation: bubble-in var(--motion-large-duration) var(--motion-large-easing);
+}
+.key-dialog::backdrop {
+  background: color-mix(in srgb, var(--neutral-9) 35%, transparent);
+}
+.key-dialog-paper {
+  background: var(--cte-canvas);
+  box-shadow: var(--shadow-l);
+}
+/* the provider the pasted key belongs to, in highlighter */
+.key-badge {
+  border-radius: var(--radius-full);
+  line-height: var(--line-m);
+  white-space: nowrap;
+  background: var(--color-2-transparent);
+}
+.key-badge[data-provider="gateway"] {
+  background: var(--color-3-transparent);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .bubble,
   .chord-ink,
-  .thinking-dots i {
+  .thinking-dots i,
+  .key-dialog[open] {
     animation: none;
   }
 }
